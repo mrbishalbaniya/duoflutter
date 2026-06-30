@@ -44,7 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     api.setOnAuthFailed(() => setUser(null));
-    void fetchUser();
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
+    void fetchUser().finally(() => clearTimeout(timeout));
+
+    return () => clearTimeout(timeout);
   }, [fetchUser]);
 
   const login = async (username: string, password: string) => {

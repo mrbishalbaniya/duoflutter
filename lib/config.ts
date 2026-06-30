@@ -42,7 +42,7 @@ function resolveApiBase(): string {
 
   const resolved = fromEnv || DEFAULT_API;
 
-  if (isLocalWebDev()) {
+  if (isLocalWebDev() && (!fromEnv || /localhost|127\.0\.0\.1/.test(fromEnv))) {
     return DEFAULT_API;
   }
 

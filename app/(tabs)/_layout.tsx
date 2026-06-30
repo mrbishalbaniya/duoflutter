@@ -13,7 +13,7 @@ export default function TabLayout() {
           ? () => null
           : (props) => <DuoTabBar state={props.state} navigation={props.navigation} />
       }
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, lazy: true }}
     >
       <Tabs.Screen name="discover" options={{ title: "Discover" }} />
       <Tabs.Screen name="chat" options={{ title: "Chat" }} />

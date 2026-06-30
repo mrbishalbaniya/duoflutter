@@ -11,6 +11,7 @@ import { fonts } from "@/constants/theme";
 
 const MARKER_FOCUS_DELTA = 0.04;
 const FIT_PADDING = 50;
+const HAS_GOOGLE_MAPS_KEY = Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim());
 
 function isValidCoord(c: unknown): c is [number, number] {
   return (
@@ -160,6 +161,17 @@ export function FriendsMapView({
     );
   }, [focusProfileId, mappableProfiles]);
 
+  if (Platform.OS === "android" && !HAS_GOOGLE_MAPS_KEY) {
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.mapFallback]}>
+        <Text style={styles.mapFallbackTitle}>Map unavailable</Text>
+        <Text style={styles.mapFallbackBody}>
+          Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to enable Google Maps on Android.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <MapView
       ref={mapRef}
@@ -254,5 +266,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a84ff",
     borderWidth: 2.5,
     borderColor: "#fff",
+  },
+  mapFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#151618",
+    paddingHorizontal: 24,
+  },
+  mapFallbackTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  mapFallbackBody: {
+    color: "#b0b3b8",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
 });
