@@ -1,114 +1,96 @@
-# Duo Mobile
+# duoflutter
 
-React Native (Expo) mobile app for **Duo** — mirrors the DuoFrontend web experience and connects to **DuoBackend**.
+Flutter client for **DuoBackend** (`DuoMobile` repo).
 
-## Stack
+> **Note:** The Expo/React Native app lives in [`../DuoMobileRN`](../DuoMobileRN). This folder is Flutter only.
 
-- **Expo SDK 56** + **Expo Router** (file-based navigation)
-- **TypeScript**
-- **Plus Jakarta Sans** + **Inter** (same as web)
-- Design tokens from `DuoFrontend/app/globals.css` (`#e84a7a` primary, dark luxury palette)
+## Architecture
 
-## Screens
+- **Clean Architecture** (feature-first)
+- **Riverpod** state management
+- **GoRouter** navigation + auth guards
+- **Dio** networking (JWT interceptors, refresh, retry queue)
+- **Hive** + **flutter_secure_storage** (settings + JWT)
 
-| Screen | Route | Web equivalent |
-|--------|-------|----------------|
-| Login | `/login` | `app/login/page.tsx` |
-| Register | `/register` | `app/register/page.tsx` |
-| Match (swipe) | `/(tabs)/match` | `DiscoverExperience.tsx` |
-| Discover lists | `/(tabs)/discover` | `DiscoverMatchesPage.tsx` |
-| Chat list | `/(tabs)/chat` | `message.tsx` sidebar |
-| Chat thread | `/chat/[id]` | `message.tsx` thread |
-| Map | `/(tabs)/map` | `app/map/page.tsx` |
-| Profile | `/(tabs)/profile` | `app/profile/page.tsx` |
-| Settings | `/settings` | `SettingsPage.tsx` |
-| Verify | `/verify` | `VerificationFlow.tsx` (stub) |
-| Match celebration | `/celebration` | `match/celebration/page.tsx` |
-
-Bottom tab bar matches web: **Discover · Chat · Match (FAB) · Map · Profile**
-
-## Setup
-
-### 1. Start DuoBackend
+## Run
 
 ```bash
-cd D:\8sem\DuoBackend
-# activate venv, then:
-python manage.py runserver 8001
+cd DuoMobile
+flutter pub get
+flutter run
 ```
 
-### 2. Configure API URL
+Defaults to production API: `https://duobackend.onrender.com/api`
 
-Create `.env` in `DuoMobile`:
+Or use `run_prod.ps1` / `run_prod.bat`.
 
-```env
-# Physical device: use your PC's LAN IP
-EXPO_PUBLIC_API_URL=http://192.168.1.100:8001/api
-
-# Android emulator:
-# EXPO_PUBLIC_API_URL=http://10.0.2.2:8001/api
-
-# iOS simulator / same machine:
-EXPO_PUBLIC_API_URL=http://localhost:8001/api
-```
-
-Also add your machine IP to Django `CORS_ALLOWED_ORIGINS` and `ALLOWED_HOSTS`.
-
-### 3. Run the app
+### Local backend
 
 ```bash
-cd D:\8sem\DuoMobile
-npm install
-npm start
+# Android emulator
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api --dart-define=WS_BASE_URL=ws://10.0.2.2:8000
+
+# Physical device (LAN IP)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000/api --dart-define=WS_BASE_URL=ws://192.168.1.10:8000
 ```
 
-Press `a` for Android emulator, `i` for iOS simulator, or scan QR with Expo Go.
+## Phase 1 — Analysis Summary
 
-## Project structure
+Backend is the single source of truth. Auth uses **JWT Bearer** (`access` + `refresh`). Web uses HTTP-only cookies; mobile stores tokens in secure storage.
 
+### Integrated APIs (Phase 1)
+
+| Domain | Endpoints |
+|--------|-----------|
+| Auth | login, register, refresh, logout, me, OTP, password reset/change |
+| Profile | me GET/PUT, discover, visit |
+| Matching | swipe, matches, liked-by-you, likes-you, profile-visitors, insights |
+| Chat | conversations, messages, typing, ws-ticket, upload, react, delete, settings |
+| Wallet | balance, top-up initiate, purchase, subscription plans/status |
+
+### Phase 1 Screens
+
+- Splash, Login, Register, Forgot password
+- Bottom nav shell (Discover, Chat, Match, Map placeholder, Profile)
+- Match swipe deck + celebration
+- Discover tabs (visited / sent / liked you) with premium gating
+- Chat list + thread (REST + WebSocket)
+- Profile view + edit
+- Wallet + Settings
+
+## Remaining (Phase 2+)
+
+- Full 11-step registration wizard (web parity)
+- MapLibre globe, layers, activity heatmap WebSocket
+- Verification liveness camera flow
+- eSewa in-app WebView + deep link return
+- FCM push notifications
+- Voice messages, reactions UI, reply/delete UX
+- Match insights screen
+- 3D avatars API integration
+- Google Sign-In native
+- Photo upload + AI analysis
+- SUPERLIKE polish, filters sheet
+- Widget/repository test coverage expansion
+
+## Missing / Mobile Gaps
+
+- **eSewa**: backend returns HTML form POST — needs WebView form submit (currently opens payment URL externally)
+- **Google OAuth**: backend supports `id_token`; native Google Sign-In not wired yet
+- **Map**: no Flutter map implementation yet (placeholder screen)
+- **Verification**: camera/liveness not implemented
+- **FCM**: device registration endpoints exist; Firebase not configured in app
+- **Weather / Avatars / Activity**: APIs analyzed, not yet in UI
+
+## Inconsistencies (Web vs Backend)
+
+- `POST /subscriptions/initiate/` deprecated (410) — web migrated to wallet; mobile follows wallet flow
+- Some errors use `detail`, others `error` — Dio client handles both
+- Chat conversation IDs should use `public_id` (10-digit), not internal DB id
+- Web auth uses Next.js cookie BFF; mobile talks to Django directly with Bearer tokens
+
+## Tests
+
+```bash
+flutter test
 ```
-DuoMobile/
-├── app/                    # Expo Router screens
-│   ├── (tabs)/             # Main tab navigation
-│   ├── chat/[id].tsx       # Chat thread
-│   ├── login.tsx
-│   ├── register.tsx
-│   ├── settings.tsx
-│   └── verify.tsx
-├── components/
-│   ├── navigation/         # Custom Duo tab bar
-│   └── ui/                 # Buttons, avatars, etc.
-├── constants/theme.ts      # Colors, fonts, spacing
-├── contexts/               # Auth + Theme
-├── lib/
-│   ├── api.ts              # DuoBackend REST client (SecureStore tokens)
-│   ├── config.ts
-│   └── mediaUrl.ts
-└── types/index.ts
-```
-
-## API coverage
-
-The mobile client implements the core flows:
-
-- Auth: login, register, JWT refresh, logout
-- Profiles: get/update, discover feed
-- Matching: swipe, matches, liked-by-you, likes-you
-- Chat: conversations, messages, send
-- Verification: status (camera flow stub)
-- Settings: theme, password change
-
-## Next steps (not yet implemented)
-
-- [ ] `expo-camera` liveness verification (port `VerificationFlow.tsx`)
-- [ ] `react-native-maps` on Map screen
-- [ ] WebSocket chat (`lib/chatWebSocket.ts`)
-- [ ] Full 11-step registration wizard
-- [ ] Gesture-based swipe cards (Reanimated)
-- [ ] eSewa premium subscription
-- [ ] Google Sign-In
-
-## Related projects
-
-- `D:\8sem\DuoFrontend` — Next.js web app
-- `D:\8sem\DuoBackend` — Django REST API (`/api/docs/`)
