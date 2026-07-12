@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/providers/core_providers.dart';
 import '../data/update_local_store.dart';
 import '../models/update_models.dart';
@@ -110,14 +111,33 @@ class UpdateController extends StateNotifier<UpdateUiState> {
   }
 
   String _formatCheckError(Object error) {
+    if (error is ApiException) {
+      if (kDebugMode) {
+        debugPrint(
+          '[UpdateCheck] HTTP ${error.statusCode ?? '?'}: ${error.message}',
+        );
+      }
+      final status = error.statusCode;
+      if (status == 503 || status == 500) {
+        return 'Unable to check for updates at the moment. Please try again later.';
+      }
+      if (status == 404) {
+        return 'Update service is not available on the server yet. Please try again later.';
+      }
+      return error.message;
+    }
+
     final message = error.toString();
+    if (kDebugMode) {
+      debugPrint('[UpdateCheck] $message');
+    }
     if (message.contains('404')) {
-      return 'Update service is not available on the server yet. Ask your admin to deploy the latest backend and run migrations.';
+      return 'Update service is not available on the server yet. Please try again later.';
     }
-    if (message.contains('500') || message.contains('unexpected error')) {
-      return 'Update service failed on the server. The backend may need the update migration: python manage.py migrate update';
+    if (message.contains('500') || message.contains('503')) {
+      return 'Unable to check for updates at the moment. Please try again later.';
     }
-    return message;
+    return 'Unable to check for updates at the moment. Please try again later.';
   }
 
   Future<void> ignoreCurrentVersion() async {

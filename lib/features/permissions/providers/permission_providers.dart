@@ -19,15 +19,23 @@ final permissionServiceProvider = Provider<PermissionService>((ref) {
 });
 
 Future<DuoPermissionStatus> requestAppNotificationsAccess(Ref ref) async {
+  final permissionService = ref.read(permissionServiceProvider);
+
+  // 1. Always show the OS push notification permission dialog first.
+  final osStatus = await permissionService.request(DuoPermissionType.notifications);
+  if (!osStatus.isGranted) {
+    return osStatus;
+  }
+
+  // 2. Register this device for Duo push alerts after permission is granted.
   try {
-    await ref.read(pushNotificationServiceProvider).register();
+    await ref.read(pushNotificationServiceProvider).register(requestPermissions: false);
     try {
       await ref.read(pushMessagingCoordinatorProvider).reinitialize();
     } catch (_) {}
-    return DuoPermissionStatus.granted;
-  } catch (_) {
-    return ref.read(permissionServiceProvider).request(DuoPermissionType.notifications);
-  }
+  } catch (_) {}
+
+  return osStatus;
 }
 
 final permissionSetupCompleteProvider =

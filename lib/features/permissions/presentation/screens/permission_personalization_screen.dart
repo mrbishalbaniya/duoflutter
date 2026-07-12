@@ -32,7 +32,7 @@ class _PermissionPersonalizationScreenState extends ConsumerState<PermissionPers
     });
     if (_matchAlerts) {
       try {
-        await ref.read(pushNotificationServiceProvider).register();
+        await ref.read(pushNotificationServiceProvider).register(requestPermissions: false);
         await ref.read(pushMessagingCoordinatorProvider).reinitialize();
       } catch (_) {}
     }

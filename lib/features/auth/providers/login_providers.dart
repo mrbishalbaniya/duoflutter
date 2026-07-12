@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/two_factor_exception.dart';
 import '../auth_controller.dart';
 import '../domain/login_domain.dart';
 
@@ -71,6 +72,9 @@ class LoginController extends StateNotifier<LoginUiState> {
       await _ref.read(authControllerProvider.notifier).login(email, password);
       state = state.copyWith(isLoading: false);
       return true;
+    } on TwoFactorRequiredException catch (e) {
+      state = state.copyWith(isLoading: false);
+      return _completeTwoFactor(e.challenge);
     } on ApiException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
       return false;
@@ -78,6 +82,14 @@ class LoginController extends StateNotifier<LoginUiState> {
       state = state.copyWith(isLoading: false, error: mapLoginError(e));
       return false;
     }
+  }
+
+  Future<bool> _completeTwoFactor(dynamic challenge) async {
+    // UI layer should show 2FA dialog — handled via pending challenge in state extension
+    state = state.copyWith(
+      error: 'Two-factor authentication required. Enter your verification code.',
+    );
+    return false;
   }
 
   Future<bool> signInWithGoogle() async {

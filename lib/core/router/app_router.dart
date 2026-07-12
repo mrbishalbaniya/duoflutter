@@ -27,6 +27,13 @@ import '../../features/permissions/providers/permission_providers.dart';
 import '../../features/permissions/presentation/screens/permission_welcome_screen.dart';
 import '../../features/permissions/presentation/screens/permission_setup_screen.dart';
 import '../../features/permissions/presentation/screens/permission_personalization_screen.dart';
+import '../../features/security/presentation/screens/active_devices_screen.dart';
+import '../../features/security/presentation/screens/biometric_login_screen.dart';
+import '../../features/security/presentation/screens/change_password_screen.dart';
+import '../../features/security/presentation/screens/login_history_screen.dart';
+import '../../features/security/presentation/screens/security_alerts_screen.dart';
+import '../../features/security/presentation/screens/security_center_screen.dart';
+import '../../features/security/presentation/screens/two_factor_screen.dart';
 
 abstract final class AppRoutes {
   static const splash = '/';
@@ -43,6 +50,13 @@ abstract final class AppRoutes {
   static const profile = '/profile';
   static const wallet = '/wallet';
   static const settings = '/settings';
+  static const security = '/security';
+  static const securityTwoFactor = '/security/two-factor';
+  static const securityBiometric = '/security/biometric';
+  static const securityDevices = '/security/devices';
+  static const securityLoginHistory = '/security/login-history';
+  static const securityAlerts = '/security/alerts';
+  static const securityChangePassword = '/security/change-password';
   static const notifications = '/notifications';
   static const verify = '/verify';
   static const verifyDevice = '/verify/device';
@@ -222,6 +236,36 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const SettingsScreen(),
       ),
       GoRoute(
+        path: AppRoutes.security,
+        builder: (_, __) => const SecurityCenterScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.securityTwoFactor,
+        builder: (_, __) => const TwoFactorScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.securityBiometric,
+        builder: (_, __) => const BiometricLoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.securityDevices,
+        builder: (context, state) => ActiveDevicesScreen(
+          trustedOnly: state.uri.queryParameters['trusted'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.securityLoginHistory,
+        builder: (_, __) => const LoginHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.securityAlerts,
+        builder: (_, __) => const SecurityAlertsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.securityChangePassword,
+        builder: (_, __) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.notifications,
         builder: (_, __) => const NotificationsScreen(),
       ),
@@ -278,7 +322,11 @@ class _AuthRefreshListenable extends ChangeNotifier {
   _AuthRefreshListenable(this._ref) {
     _ref.listen(authControllerProvider, (_, __) => notifyListeners());
     _ref.listen(splashControllerProvider, (_, __) => notifyListeners());
-    _ref.listen(onboardingControllerProvider, (_, __) => notifyListeners());
+    _ref.listen(onboardingControllerProvider, (previous, next) {
+      if (previous?.isComplete != next.isComplete) {
+        notifyListeners();
+      }
+    });
     _ref.listen(permissionSetupCompleteProvider, (_, __) => notifyListeners());
   }
 

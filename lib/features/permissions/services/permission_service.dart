@@ -68,17 +68,30 @@ class PermissionService {
   Future<DuoPermissionStatus> _requestNotifications() async {
     if (Platform.isAndroid) {
       await _localNotifications.ensureAndroidPermission();
+      final handlerStatus = await Permission.notification.request();
+      if (handlerStatus.isGranted) {
+        return DuoPermissionStatus.granted;
+      }
+      final pluginGranted = await _localNotifications.androidPermissionGranted();
+      if (pluginGranted) {
+        return DuoPermissionStatus.granted;
+      }
+      return _map(handlerStatus);
+    }
+
+    if (Platform.isIOS) {
+      if (Firebase.apps.isNotEmpty) {
+        final settings = await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
+        return _mapFirebase(settings.authorizationStatus);
+      }
       return _map(await Permission.notification.request());
     }
-    if (Firebase.apps.isNotEmpty) {
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-      return _mapFirebase(settings.authorizationStatus);
-    }
+
     return _map(await Permission.notification.request());
   }
 

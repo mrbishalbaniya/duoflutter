@@ -53,7 +53,7 @@ class PushNotificationService {
     }
   }
 
-  Future<void> register() async {
+  Future<void> register({bool requestPermissions = true}) async {
     if (!Platform.isAndroid && !Platform.isIOS) {
       throw Exception('Push notifications are not supported on this device.');
     }
@@ -67,23 +67,14 @@ class PushNotificationService {
     }
 
     await _ensureFirebase(config.firebase!);
-    await _localNotifications.ensureAndroidPermission();
+
+    if (requestPermissions) {
+      await _ensureNotificationPermission();
+    } else {
+      await _assertNotificationPermissionGranted();
+    }
 
     final messaging = FirebaseMessaging.instance;
-
-    final settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    final authorized = settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional;
-
-    if (!authorized) {
-      throw Exception('Notification permission was denied.');
-    }
 
     if (Platform.isAndroid) {
       await messaging.setForegroundNotificationPresentationOptions(
@@ -178,6 +169,44 @@ class PushNotificationService {
       AuthorizationStatus.denied => PushPermissionState.denied,
       AuthorizationStatus.notDetermined => PushPermissionState.notDetermined,
     };
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    await _localNotifications.ensureAndroidPermission();
+
+    final messaging = FirebaseMessaging.instance;
+    final settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    final authorized = settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+
+    if (!authorized) {
+      throw Exception('Notification permission was denied.');
+    }
+  }
+
+  Future<void> _assertNotificationPermissionGranted() async {
+    if (Platform.isAndroid) {
+      final granted = await _localNotifications.androidPermissionGranted();
+      if (!granted) {
+        throw Exception('Notification permission was denied.');
+      }
+      return;
+    }
+
+    if (Firebase.apps.isEmpty) return;
+
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+    final authorized = settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+    if (!authorized) {
+      throw Exception('Notification permission was denied.');
+    }
   }
 
   Future<void> _ensureFirebase(FirebasePublicConfig config) async {

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/user_models.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/network/two_factor_exception.dart';
 import '../../core/providers/core_providers.dart';
 import '../../repositories/auth_repository.dart';
 import '../settings/providers/settings_providers.dart';
@@ -61,6 +62,8 @@ class AuthController extends StateNotifier<AuthState> {
       final user = await _auth.login(email: email, password: password);
       state = AuthState(status: AuthStatus.authenticated, user: user);
       await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
+    } on TwoFactorRequiredException {
+      rethrow;
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
       rethrow;

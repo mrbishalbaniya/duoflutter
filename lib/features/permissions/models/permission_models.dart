@@ -69,13 +69,13 @@ class DuoPermissionDefinition {
 const permissionSetupOrder = <DuoPermissionDefinition>[
   DuoPermissionDefinition(
     type: DuoPermissionType.notifications,
-    title: 'Notifications',
+    title: 'Push notifications',
     description:
-        'Enable Duo notifications on this device to get alerts for messages, matches, likes, and important updates.',
+        'Allow Duo to send push notifications on this device for messages, matches, likes, and important alerts.',
     benefits: ['Messages', 'Matches', 'Likes', 'Calls', 'Important alerts'],
     icon: Icons.notifications_active_rounded,
     accent: Color(0xFFE84A7A),
-    allowLabel: 'Enable notifications',
+    allowLabel: 'Allow push notifications',
   ),
   DuoPermissionDefinition(
     type: DuoPermissionType.camera,

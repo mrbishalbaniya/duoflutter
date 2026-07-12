@@ -1,16 +1,27 @@
 import '../core/models/user_models.dart';
 import '../core/network/dio_client.dart';
+import '../core/network/two_factor_exception.dart';
 import '../core/storage/token_storage.dart';
+import '../features/security/models/security_models.dart';
+import '../features/security/services/device_fingerprint_service.dart';
 
 class AuthRepository {
   AuthRepository({
     required DioClient client,
     required TokenStorage tokenStorage,
+    DeviceFingerprintService? deviceService,
   })  : _client = client,
-        _tokenStorage = tokenStorage;
+        _tokenStorage = tokenStorage,
+        _deviceService = deviceService ?? DeviceFingerprintService();
 
   final DioClient _client;
   final TokenStorage _tokenStorage;
+  final DeviceFingerprintService _deviceService;
+
+  Future<Map<String, dynamic>> _devicePayload() async {
+    final fp = await _deviceService.getFingerprint();
+    return fp.toPayload();
+  }
 
   Future<DuoUser> login({
     required String email,
@@ -18,7 +29,54 @@ class AuthRepository {
   }) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/auth/login/',
-      data: {'username': email.trim(), 'password': password},
+      data: {
+        'username': email.trim(),
+        'password': password,
+        ...(await _devicePayload()),
+      },
+    );
+    final data = response.data!;
+    if (data['requires_2fa'] == true) {
+      throw TwoFactorRequiredException(TwoFactorLoginChallenge.fromJson(data));
+    }
+    await _tokenStorage.saveTokens(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+    );
+    return getMe();
+  }
+
+  Future<DuoUser> completeTwoFactorLogin({
+    required String challengeToken,
+    required String code,
+  }) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/security/2fa/login/',
+      data: {
+        'challenge_token': challengeToken,
+        'code': code,
+        ...(await _devicePayload()),
+      },
+    );
+    final data = response.data!;
+    await _tokenStorage.saveTokens(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+    );
+    return getMe();
+  }
+
+  Future<void> sendTwoFactorLoginOtp(String challengeToken) async {
+    await _client.post('/security/2fa/login/send-otp/', data: {
+      'challenge_token': challengeToken,
+    });
+  }
+
+  Future<DuoUser> loginWithBiometric(String token) async {
+    final fp = await _deviceService.getFingerprint();
+    final response = await _client.post<Map<String, dynamic>>(
+      '/security/biometric/login/',
+      data: {'token': token, 'device_id': fp.deviceId},
     );
     final data = response.data!;
     await _tokenStorage.saveTokens(
@@ -133,7 +191,12 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
-      await _client.post('/auth/logout/');
+      final refresh = await _tokenStorage.getRefreshToken();
+      final payload = await _devicePayload();
+      await _client.post('/auth/logout/', data: {
+        if (refresh != null) 'refresh': refresh,
+        ...payload,
+      });
     } finally {
       await _tokenStorage.clear();
     }

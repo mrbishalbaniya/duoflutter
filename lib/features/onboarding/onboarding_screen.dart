@@ -20,6 +20,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late final PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -33,14 +34,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  bool get _isLastPage => _currentPage >= introOnboardingPages.length - 1;
+
   void _onPageChanged(int index) {
     HapticFeedback.selectionClick();
-    ref.read(onboardingControllerProvider.notifier).setPage(index);
+    if (_currentPage == index) return;
+    setState(() => _currentPage = index);
   }
 
   void _goToPage(int index) {
+    final clamped = index.clamp(0, introOnboardingPages.length - 1);
+    if (_currentPage == clamped) return;
+
+    setState(() => _currentPage = clamped);
     _pageController.animateToPage(
-      index,
+      clamped,
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
     );
@@ -52,22 +60,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     context.go(AppRoutes.login);
   }
 
-  void _next(OnboardingState state) {
+  void _next() {
     HapticFeedback.mediumImpact();
-    if (state.isLastPage) {
+    if (_isLastPage) {
       ref.read(onboardingControllerProvider.notifier).complete();
       context.go(AppRoutes.login);
       return;
     }
-    _goToPage(state.currentPage + 1);
+    _goToPage(_currentPage + 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final onboarding = ref.watch(onboardingControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final pages = introOnboardingPages;
-    final current = pages[onboarding.currentPage];
+    final current = pages[_currentPage];
 
     return Scaffold(
       body: Stack(
@@ -103,7 +110,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onPageChanged: _onPageChanged,
                     itemBuilder: (context, index) {
                       final page = pages[index];
-                      final active = index == onboarding.currentPage;
+                      final active = index == _currentPage;
                       return _OnboardingSlide(page: page, isActive: active);
                     },
                   ),
@@ -114,18 +121,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     children: [
                       OnboardingPageIndicator(
                         count: pages.length,
-                        currentIndex: onboarding.currentPage,
+                        currentIndex: _currentPage,
                         accent: current.accent,
                       ),
                       const SizedBox(height: 22),
                       Row(
                         children: [
-                          if (onboarding.currentPage > 0)
+                          if (_currentPage > 0)
                             Expanded(
                               child: OutlinedButton(
                                 onPressed: () {
                                   HapticFeedback.selectionClick();
-                                  _goToPage(onboarding.currentPage - 1);
+                                  _goToPage(_currentPage - 1);
                                 },
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size.fromHeight(56),
@@ -134,15 +141,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 child: const Text('Back'),
                               ),
                             ),
-                          if (onboarding.currentPage > 0) const SizedBox(width: 12),
+                          if (_currentPage > 0) const SizedBox(width: 12),
                           Expanded(
-                            flex: onboarding.currentPage > 0 ? 2 : 1,
+                            flex: _currentPage > 0 ? 2 : 1,
                             child: DuoGradientButton(
-                              label: onboarding.isLastPage ? 'Get Started' : 'Next',
-                              icon: onboarding.isLastPage
+                              label: _isLastPage ? 'Get Started' : 'Next',
+                              icon: _isLastPage
                                   ? Icons.arrow_forward_rounded
                                   : Icons.chevron_right_rounded,
-                              onPressed: () => _next(onboarding),
+                              onPressed: _next,
                             ),
                           ),
                         ],

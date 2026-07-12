@@ -47,6 +47,8 @@ dependencies:
   share_plus: ^10.1.4
   flutter_cache_manager: ^3.4.1
   crypto: ^3.0.6
+  local_auth: ^2.3.0
+  device_info_plus: ^11.3.3
   open_filex: ^4.7.0
   esewa_flutter_sdk:
     path: ./esewa_flutter_sdk
