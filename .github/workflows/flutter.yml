@@ -68,6 +68,8 @@ jobs:
     needs: analyze-test
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -127,6 +129,35 @@ jobs:
           name: duo-android-aab
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
+
+      - name: Read app version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: app_version
+        run: |
+          FULL=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          NAME="${FULL%%+*}"
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "App version: $FULL"
+
+      - name: Publish APK to GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.app_version.outputs.name }}-build.${{ github.run_number }}
+          name: Duo Mobile v${{ steps.app_version.outputs.name }} (build ${{ github.run_number }})
+          body: |
+            Automated release from `main` @ ${{ github.sha }}.
+
+            - APK: `app-release.apk` (install on Android)
+            - AAB: `app-release.aab` (Play Store upload)
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          make_latest: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

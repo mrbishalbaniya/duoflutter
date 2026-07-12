@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag (e.g. v1.0.0)
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -30,6 +35,27 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Read app version
+        id: app_version
+        run: |
+          FULL=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          NAME="${FULL%%+*}"
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [[ -n "${{ inputs.tag_name }}" ]]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="v${{ steps.app_version.outputs.name }}-manual.${{ github.run_number }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
 
       - name: Configure signing
         env:
@@ -61,16 +87,18 @@ jobs:
             --dart-define=WS_BASE_URL=${WS_BASE_URL} \
             --dart-define=GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID:-599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com}
 
-      - run: bash .github/scripts/generate-changelog.sh RELEASE_NOTES.md "${{ github.event.release.tag_name }}"
+      - run: bash .github/scripts/generate-changelog.sh RELEASE_NOTES.md "${{ steps.release_tag.outputs.tag }}"
 
       - name: Upload APK to GitHub Release
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Duo Mobile ${{ steps.release_tag.outputs.tag }}
+          body_path: RELEASE_NOTES.md
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
-            RELEASE_NOTES.md
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -85,7 +113,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: bash .github/scripts/notify.sh success "Mobile Release" "Release ${{ github.event.release.tag_name }} APK/AAB published."
+        run: bash .github/scripts/notify.sh success "Mobile Release" "Release ${{ steps.release_tag.outputs.tag }} APK/AAB published."
 
   ios-release:
     name: iOS Release Build
