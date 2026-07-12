@@ -6,8 +6,11 @@ class NotificationRepository {
 
   final DioClient _client;
 
-  Future<PushConfig> getConfig() async {
-    final response = await _client.get<Map<String, dynamic>>('/notifications/config/');
+  Future<PushConfig> getConfig({String platform = 'android'}) async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/notifications/config/',
+      queryParameters: {'platform': platform},
+    );
     return PushConfig.fromJson(response.data ?? const {});
   }
 

@@ -16,11 +16,26 @@ class PushNotificationBridge extends ConsumerStatefulWidget {
   ConsumerState<PushNotificationBridge> createState() => _PushNotificationBridgeState();
 }
 
-class _PushNotificationBridgeState extends ConsumerState<PushNotificationBridge> {
+class _PushNotificationBridgeState extends ConsumerState<PushNotificationBridge>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncBinding());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncBinding();
+    }
   }
 
   void _syncBinding() {
@@ -48,6 +63,11 @@ class _PushNotificationBridgeState extends ConsumerState<PushNotificationBridge>
   Widget build(BuildContext context) {
     ref.listen(authControllerProvider, (_, __) => _syncBinding());
     ref.listen(pushNotificationServiceProvider, (_, __) => _syncBinding());
+    ref.listen(settingsControllerProvider, (previous, next) {
+      if (previous?.pushStatus.enabled != next.pushStatus.enabled) {
+        _syncBinding();
+      }
+    });
     return widget.child;
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../repositories/notification_repository.dart';
 import '../../auth/auth_controller.dart';
+import '../../notifications/providers/notifications_providers.dart';
 import '../domain/settings_domain.dart';
 import '../services/push_notification_service.dart';
 
@@ -116,6 +117,7 @@ class SettingsController extends StateNotifier<SettingsUiState> {
         );
       } else {
         await _push.register();
+        await _ref.read(pushMessagingCoordinatorProvider).reinitialize();
         state = state.copyWith(
           pushSaving: false,
           pushMessage: 'Push notifications enabled.',

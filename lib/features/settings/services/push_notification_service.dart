@@ -2,20 +2,26 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../../core/models/notification_models.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../repositories/notification_repository.dart';
+import '../../notifications/services/firebase_bootstrap.dart';
+import '../../notifications/services/push_debug_log.dart';
 
 class PushNotificationService {
   PushNotificationService({
     required NotificationRepository repository,
     required LocalStorage storage,
+    LocalNotificationServiceDelegate? localNotifications,
   })  : _repository = repository,
-        _storage = storage;
+        _storage = storage,
+        _localNotifications = localNotifications ?? LocalNotificationServiceDelegate();
 
   final NotificationRepository _repository;
   final LocalStorage _storage;
+  final LocalNotificationServiceDelegate _localNotifications;
   FirebaseApp? _firebaseApp;
 
   Future<PushStatus> getStatus() async {
@@ -24,7 +30,7 @@ class PushNotificationService {
     }
 
     try {
-      final config = await _repository.getConfig();
+      final config = await _repository.getConfig(platform: _platformName());
       final permission = await _resolvePermission();
       final enabled = _storage.pushEnabled &&
           permission == PushPermissionState.granted &&
@@ -36,7 +42,8 @@ class PushNotificationService {
         permission: permission,
         enabled: enabled,
       );
-    } catch (_) {
+    } catch (e) {
+      PushDebugLog.error('Push status check failed', e);
       return PushStatus(
         supported: true,
         configured: false,
@@ -51,20 +58,24 @@ class PushNotificationService {
       throw Exception('Push notifications are not supported on this device.');
     }
 
-    final config = await _repository.getConfig();
+    final config = await _repository.getConfig(platform: _platformName());
     if (!config.isConfigured || config.firebase == null) {
       throw Exception(
-        'Push is not configured yet. Ask an admin to enable Firebase in integration settings.',
+        'Push is not configured yet. Ask an admin to enable Firebase and add the '
+        '${Platform.isIOS ? "iOS" : "Android"} app ID in integration settings.',
       );
     }
 
     await _ensureFirebase(config.firebase!);
+    await _localNotifications.ensureAndroidPermission();
+
     final messaging = FirebaseMessaging.instance;
 
     final settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
+      provisional: false,
     );
 
     final authorized = settings.authorizationStatus == AuthorizationStatus.authorized ||
@@ -74,18 +85,29 @@ class PushNotificationService {
       throw Exception('Notification permission was denied.');
     }
 
+    if (Platform.isAndroid) {
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: false,
+        badge: true,
+        sound: false,
+      );
+    }
+
     final token = await messaging.getToken();
     if (token == null || token.isEmpty) {
       throw Exception('Could not obtain an FCM device token.');
     }
 
+    PushDebugLog.info('FCM token obtained (${token.substring(0, 12)}…)');
+
     await _repository.registerDeviceToken(
       token: token,
-      platform: Platform.isIOS ? 'ios' : 'android',
+      platform: _platformName(),
     );
 
     _storage.pushToken = token;
     _storage.pushEnabled = true;
+    PushDebugLog.info('Device token registered with backend');
   }
 
   Future<void> unregister() async {
@@ -104,14 +126,15 @@ class PushNotificationService {
 
     _storage.pushToken = null;
     _storage.pushEnabled = false;
+    PushDebugLog.info('Push notifications disabled');
   }
 
   Future<void> syncIfEnabled() async {
     if (!_storage.pushEnabled) return;
     try {
       await register();
-    } catch (_) {
-      // Silent sync on login — user can retry from Settings.
+    } catch (e) {
+      PushDebugLog.warn('Silent push sync failed: $e');
     }
   }
 
@@ -119,16 +142,28 @@ class PushNotificationService {
     if (Firebase.apps.isNotEmpty) return;
     if (!_storage.pushEnabled) return;
     try {
-      final config = await _repository.getConfig();
+      final cached = _storage.firebaseOptions;
+      if (cached != null && cached.isComplete) {
+        await _ensureFirebase(cached);
+        return;
+      }
+      final config = await _repository.getConfig(platform: _platformName());
       if (config.firebase != null) {
         await _ensureFirebase(config.firebase!);
       }
-    } catch (_) {}
+    } catch (e) {
+      PushDebugLog.warn('ensureMessagingReady failed: $e');
+    }
   }
 
   Future<PushPermissionState> _resolvePermission() async {
     if (!Platform.isAndroid && !Platform.isIOS) {
       return PushPermissionState.unsupported;
+    }
+
+    if (Platform.isAndroid) {
+      final granted = await _localNotifications.androidPermissionGranted();
+      if (!granted) return PushPermissionState.denied;
     }
 
     if (Firebase.apps.isEmpty) {
@@ -157,5 +192,30 @@ class PushNotificationService {
         authDomain: config.authDomain.isNotEmpty ? config.authDomain : null,
       ),
     );
+    await FirebaseBootstrap.cacheOptions(_storage, config);
+    PushDebugLog.info('Firebase messaging ready');
+  }
+
+  String _platformName() => Platform.isIOS ? 'ios' : 'android';
+}
+
+/// Thin wrapper so push service can request Android permissions without a circular import.
+class LocalNotificationServiceDelegate {
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+
+  Future<void> ensureAndroidPermission() async {
+    if (!Platform.isAndroid) return;
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final granted = await android?.requestNotificationsPermission();
+    PushDebugLog.info('Android POST_NOTIFICATIONS granted=$granted');
+  }
+
+  Future<bool> androidPermissionGranted() async {
+    if (!Platform.isAndroid) return true;
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final enabled = await android?.areNotificationsEnabled();
+    return enabled ?? false;
   }
 }

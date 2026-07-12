@@ -1,18 +1,19 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
+import 'firebase_bootstrap.dart';
+import 'push_debug_log.dart';
 import 'push_messaging_coordinator.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (kIsWeb) return;
+  WidgetsFlutterBinding.ensureInitialized();
   try {
-    if (Firebase.apps.isEmpty) {
-      // Firebase may not be initialized in background isolate; local store still works.
-    }
+    await FirebaseBootstrap.ensureInitialized();
     await PushMessagingCoordinator.handleBackgroundMessage(message);
-  } catch (e) {
-    debugPrint('Background FCM handler failed: $e');
+  } catch (e, stack) {
+    PushDebugLog.error('Background FCM handler failed', '$e\n$stack');
   }
 }
