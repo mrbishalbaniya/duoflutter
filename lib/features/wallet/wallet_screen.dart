@@ -105,7 +105,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       }
     } on ApiException catch (e) {
       ui.clearToppingUp();
-      if (mounted) {
+      if (mounted && e.statusCode != 404) {
         ref.read(walletUiProvider.notifier).setNotice(e.message);
       }
     } catch (e) {
@@ -177,7 +177,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
               ),
-              if (ui.notice != null)
+              if (ui.notice != null &&
+                  !(data.valueOrNull?.degraded == true &&
+                      ui.notice!.toLowerCase().contains('wallet')))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   child: Material(

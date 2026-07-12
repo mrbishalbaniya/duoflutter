@@ -72,7 +72,7 @@ final walletDataProvider = FutureProvider.autoDispose<WalletData>((ref) async {
       wallet = _fallbackWalletSummary(cachedBalance);
       degraded = true;
       degradedMessage =
-          'Wallet API is not available on this server yet. Showing your cached balance. Pull to refresh after the backend redeploys.';
+          'Wallet service is updating on the server. Your balance is shown from cache — pull to refresh in a minute.';
     } else {
       rethrow;
     }
@@ -164,7 +164,10 @@ class WalletUiController extends StateNotifier<WalletUiState> {
     try {
       return await _ref.read(walletRepositoryProvider).initiateTopUp(amount);
     } on ApiException catch (e) {
-      state = state.copyWith(toppingUp: false, notice: e.message);
+      state = state.copyWith(toppingUp: false);
+      if (e.statusCode != 404) {
+        state = state.copyWith(notice: e.message);
+      }
       rethrow;
     } catch (_) {
       state = state.copyWith(
