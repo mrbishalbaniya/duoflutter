@@ -1,4 +1,6 @@
-/// Validation and navigation helpers aligned with DuoFrontend `/login`.
+// Validation and navigation helpers aligned with DuoFrontend `/login`.
+import 'package:flutter/services.dart';
+
 String? validateLoginEmail(String? value) {
   final email = value?.trim() ?? '';
   if (email.isEmpty) return 'Email is required';
@@ -21,6 +23,15 @@ String? sanitizeNextPath(String? path) {
 }
 
 String mapLoginError(Object error) {
+  if (error is PlatformException) {
+    final message = error.message ?? '';
+    if (error.code == 'sign_in_failed' && message.contains('ApiException: 10')) {
+      return 'Google sign-in is misconfigured. Add your Android SHA-1 fingerprint '
+          'to Google Cloud Console, or rebuild after the latest app update.';
+    }
+    if (message.isNotEmpty) return message;
+  }
+
   if (error is Exception) {
     final message = error.toString().replaceFirst('Exception: ', '');
     if (message.isNotEmpty) return message;

@@ -60,6 +60,24 @@ class AppConfig {
         '599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com',
   );
 
+  /// Custom URL scheme used by [flutter_web_auth_2] on Android/iOS.
+  static const googleOAuthCallbackScheme = 'com.duo.duo_mobile';
+
+  /// OAuth `state` value that tells DuoBackend to return to the mobile app.
+  static const googleMobileOAuthState = 'duo_mobile';
+
+  /// Google OAuth redirect URI — must match DuoBackend `/api/auth/google/callback/`
+  /// and be listed under the Web client in Google Cloud Console.
+  static String get googleOAuthRedirectUri {
+    final api = Uri.parse(apiBaseUrl);
+    final origin = Uri(
+      scheme: api.scheme,
+      host: api.host,
+      port: api.hasPort ? api.port : null,
+    );
+    return '${origin.toString()}/api/auth/google/callback'.replaceAll(RegExp(r'/$'), '');
+  }
+
   static const appName = 'Duo';
 
   static bool get isGoogleAuthConfigured => googleWebClientId.isNotEmpty;

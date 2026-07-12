@@ -12,7 +12,6 @@ import 'map_utils.dart';
 import 'providers/map_providers.dart';
 import 'widgets/duo_map_view.dart';
 import 'widgets/map_focus_card.dart';
-import 'widgets/map_floating_controls.dart';
 import 'widgets/match_friends_sheet.dart';
 import 'widgets/zone_detail_sheet.dart';
 
@@ -84,6 +83,13 @@ class MapScreen extends ConsumerWidget {
             SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
           }
         },
+        onLocateMe: isFullscreen
+            ? null
+            : () {
+                ref.invalidate(userLocationProvider);
+                notifier.locateMe();
+              },
+        locateLoading: userLocation.isLoading,
       );
     }
 
@@ -186,18 +192,6 @@ class MapScreen extends ConsumerWidget {
                 onRetry: () {
                   ref.invalidate(mapMatchesProvider);
                   ref.invalidate(rawMatchesProvider);
-                },
-              ),
-            ),
-          if (!isFullscreen)
-            Positioned(
-              right: 16,
-              bottom: MediaQuery.paddingOf(context).bottom + 92,
-              child: MapLocateButton(
-                loading: userLocation.isLoading,
-                onPressed: () {
-                  ref.invalidate(userLocationProvider);
-                  notifier.locateMe();
                 },
               ),
             ),

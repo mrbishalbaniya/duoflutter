@@ -72,5 +72,14 @@
 	<string>Duo uses your location to show matches and activity on the Friends Map.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Duo needs microphone access so you can send voice messages in chat.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.duo.duo_mobile</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -71,10 +71,19 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(error: null);
     try {
       final google = _ref.read(googleAuthServiceProvider);
-      final idToken = await google.signInAndGetIdToken();
-      if (idToken == null) return;
+      final credentials = await google.signIn();
+      if (credentials == null) return;
 
-      final user = await _auth.loginWithGoogle(idToken);
+      final DuoUser user;
+      if (credentials.idToken != null) {
+        user = await _auth.loginWithGoogle(credentials.idToken!);
+      } else {
+        user = await _auth.loginWithGoogleCode(
+          code: credentials.code!,
+          redirectUri: credentials.redirectUri!,
+        );
+      }
+
       state = AuthState(status: AuthStatus.authenticated, user: user);
       await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } on ApiException catch (e) {

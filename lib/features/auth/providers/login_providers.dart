@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../auth_controller.dart';
 import '../domain/login_domain.dart';
@@ -88,21 +90,29 @@ class LoginController extends StateNotifier<LoginUiState> {
       state = state.copyWith(isGoogleLoading: false, error: e.message);
       return false;
     } catch (e) {
-      final message = e.toString().replaceFirst('StateError: ', '');
-      if (message.contains('cancelled') || message.contains('canceled')) {
-        state = state.copyWith(
-          isGoogleLoading: false,
-          error: 'Google sign-in was cancelled or failed.',
-        );
-      } else {
-        state = state.copyWith(
-          isGoogleLoading: false,
-          error: message.isNotEmpty ? message : 'Google sign-in failed.',
-        );
-      }
+      state = state.copyWith(
+        isGoogleLoading: false,
+        error: mapGoogleSignInError(e),
+      );
       return false;
     }
   }
+}
+
+String mapGoogleSignInError(Object error) {
+  if (error is PlatformException && error.code == 'CANCELED') {
+    return 'Google sign-in was cancelled.';
+  }
+
+  final message = error.toString().replaceFirst('StateError: ', '');
+  if (message.contains('cancelled') || message.contains('canceled')) {
+    return 'Google sign-in was cancelled.';
+  }
+  if (message.contains('redirect_uri_mismatch')) {
+    return 'Google redirect URI is not allowed. Add '
+        '${AppConfig.googleOAuthRedirectUri} to Google Cloud Console.';
+  }
+  return message.isNotEmpty ? message : 'Google sign-in failed.';
 }
 
 final loginControllerProvider =

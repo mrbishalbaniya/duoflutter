@@ -147,6 +147,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final loading = headerSlice.$2;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       appBar: convo == null
           ? AppBar(

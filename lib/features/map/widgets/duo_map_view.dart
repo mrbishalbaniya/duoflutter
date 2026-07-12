@@ -27,6 +27,8 @@ class DuoMapView extends ConsumerStatefulWidget {
     this.isFullscreen = false,
     this.onToggleFollowMe,
     this.onToggleFullscreen,
+    this.onLocateMe,
+    this.locateLoading = false,
   });
 
   final List<MapProfile> profiles;
@@ -40,6 +42,8 @@ class DuoMapView extends ConsumerStatefulWidget {
   final bool isFullscreen;
   final VoidCallback? onToggleFollowMe;
   final VoidCallback? onToggleFullscreen;
+  final VoidCallback? onLocateMe;
+  final bool locateLoading;
 
   @override
   ConsumerState<DuoMapView> createState() => _DuoMapViewState();
@@ -324,6 +328,8 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
             child: MapFloatingControls(
               onRecenterNorth: () => _issueCamera(GlobeCameraAction.resetNorth),
               onOpenSettings: _openSettingsSheet,
+              onLocateMe: widget.onLocateMe,
+              locateLoading: widget.locateLoading,
             ),
           ),
         ),

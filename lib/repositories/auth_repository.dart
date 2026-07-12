@@ -41,6 +41,25 @@ class AuthRepository {
     return DuoUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
+  Future<DuoUser> loginWithGoogleCode({
+    required String code,
+    required String redirectUri,
+  }) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/auth/google/',
+      data: {
+        'code': code,
+        'redirect_uri': redirectUri,
+      },
+    );
+    final data = response.data!;
+    await _tokenStorage.saveTokens(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+    );
+    return DuoUser.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
   Future<DuoUser> register({
     required String email,
     required String password,

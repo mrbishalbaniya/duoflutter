@@ -47,7 +47,10 @@ class ChatThreadComposerPane extends ConsumerWidget {
       onPickCamera: () => notifier.pickImage(source: ImageSource.camera),
       showEmojiPicker: slice.$2,
       onToggleEmojiPicker: notifier.toggleEmojiPicker,
-      onEmojiSelected: (emoji) => controller.text += emoji,
+      onEmojiSelected: (emoji) {
+        controller.text += emoji;
+        notifier.toggleEmojiPicker();
+      },
       sending: slice.$3,
       uploading: slice.$4,
       isVoiceComposeActive: slice.$5,

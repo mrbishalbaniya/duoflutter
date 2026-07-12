@@ -13,10 +13,14 @@ class MapFloatingControls extends ConsumerStatefulWidget {
     super.key,
     required this.onRecenterNorth,
     required this.onOpenSettings,
+    this.onLocateMe,
+    this.locateLoading = false,
   });
 
   final VoidCallback onRecenterNorth;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onLocateMe;
+  final bool locateLoading;
 
   @override
   ConsumerState<MapFloatingControls> createState() => _MapFloatingControlsState();
@@ -100,6 +104,13 @@ class _MapFloatingControlsState extends ConsumerState<MapFloatingControls> {
             widget.onRecenterNorth();
           },
         ),
+        if (widget.onLocateMe != null) ...[
+          const SizedBox(height: 8),
+          MapLocateButton(
+            loading: widget.locateLoading,
+            onPressed: widget.onLocateMe!,
+          ),
+        ],
       ],
     ).animate().fadeIn(duration: 280.ms).slideX(begin: 0.08, end: 0);
   }
