@@ -145,7 +145,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.app_version.outputs.name }}-build.${{ github.run_number }}
-          name: Duo Mobile v${{ steps.app_version.outputs.name }} (build ${{ github.run_number }})
+          name: Duo v${{ steps.app_version.outputs.name }} (build ${{ github.run_number }})
           body: |
             Automated release from `main` @ ${{ github.sha }}.
 

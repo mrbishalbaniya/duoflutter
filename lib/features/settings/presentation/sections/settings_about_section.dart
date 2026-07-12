@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../../core/config/app_config.dart';
 import '../dialogs/settings_dialogs.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
@@ -56,7 +57,7 @@ class SettingsAboutSection extends ConsumerWidget {
             error: (_, __) => SettingsRow(
               icon: Icons.info_outline,
               title: 'Version',
-              description: 'Duo Mobile',
+              description: AppConfig.appName,
               showChevron: false,
             ),
             data: (info) => SettingsRow(
