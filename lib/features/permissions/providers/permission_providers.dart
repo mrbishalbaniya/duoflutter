@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
+import '../../notifications/providers/notifications_providers.dart';
+import '../../settings/providers/settings_providers.dart';
 import '../data/permission_local_store.dart';
 import '../models/permission_models.dart';
 import '../services/permission_service.dart';
@@ -16,11 +18,46 @@ final permissionServiceProvider = Provider<PermissionService>((ref) {
   return PermissionService();
 });
 
-final permissionSetupCompleteProvider = Provider<bool>((ref) {
-  if (kIsWeb) return true;
-  if (!Platform.isAndroid && !Platform.isIOS) return true;
-  return ref.watch(permissionLocalStoreProvider).isSetupComplete;
+Future<DuoPermissionStatus> requestAppNotificationsAccess(Ref ref) async {
+  try {
+    await ref.read(pushNotificationServiceProvider).register();
+    try {
+      await ref.read(pushMessagingCoordinatorProvider).reinitialize();
+    } catch (_) {}
+    return DuoPermissionStatus.granted;
+  } catch (_) {
+    return ref.read(permissionServiceProvider).request(DuoPermissionType.notifications);
+  }
+}
+
+final permissionSetupCompleteProvider =
+    StateNotifierProvider<PermissionSetupGateController, bool>((ref) {
+  return PermissionSetupGateController(ref);
 });
+
+class PermissionSetupGateController extends StateNotifier<bool> {
+  PermissionSetupGateController(Ref ref)
+      : _ref = ref,
+        super(_readInitial(ref));
+
+  final Ref _ref;
+
+  static bool _readInitial(Ref ref) {
+    if (kIsWeb) return true;
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+    return ref.read(permissionLocalStoreProvider).isSetupComplete;
+  }
+
+  Future<void> markComplete() async {
+    await _ref.read(permissionLocalStoreProvider).markSetupComplete();
+    state = true;
+  }
+
+  Future<void> reset() async {
+    await _ref.read(permissionLocalStoreProvider).resetSetup();
+    state = false;
+  }
+}
 
 final permissionStatusesSnapshotProvider =
     FutureProvider<Map<DuoPermissionType, DuoPermissionStatus>>((ref) async {
@@ -45,7 +82,9 @@ class PermissionSetupController extends StateNotifier<PermissionSetupState> {
     final definition = state.currentDefinition;
     state = state.copyWith(isRequesting: true, showSuccess: false);
 
-    final status = await _service.request(definition.type);
+    final status = definition.type == DuoPermissionType.notifications
+        ? await requestAppNotificationsAccess(_ref)
+        : await _service.request(definition.type);
     final nextStatuses = Map<DuoPermissionType, DuoPermissionStatus>.from(state.statuses)
       ..[definition.type] = status;
 
@@ -85,7 +124,7 @@ class PermissionSetupController extends StateNotifier<PermissionSetupState> {
   }
 
   Future<void> completeSetup() async {
-    await _ref.read(permissionLocalStoreProvider).markSetupComplete();
+    await _ref.read(permissionSetupCompleteProvider.notifier).markComplete();
   }
 }
 
@@ -110,7 +149,9 @@ class PermissionManagementController extends StateNotifier<PermissionManagementS
   }
 
   Future<DuoPermissionStatus> request(DuoPermissionType type) async {
-    final status = await _service.request(type);
+    final status = type == DuoPermissionType.notifications
+        ? await requestAppNotificationsAccess(_ref)
+        : await _service.request(type);
     final next = Map<DuoPermissionType, DuoPermissionStatus>.from(state.statuses)..[type] = status;
     state = state.copyWith(statuses: next);
     return status;
@@ -119,7 +160,7 @@ class PermissionManagementController extends StateNotifier<PermissionManagementS
   Future<void> openSettings() => _service.openSystemSettings();
 
   Future<void> resetSetupFlow() async {
-    await _ref.read(permissionLocalStoreProvider).resetSetup();
+    await _ref.read(permissionSetupCompleteProvider.notifier).reset();
   }
 }
 

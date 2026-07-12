@@ -66,7 +66,12 @@ class PermissionCard extends StatelessWidget {
                           height: 22,
                           child: CircularProgressIndicator(strokeWidth: 2.2),
                         )
-                      : Text(definition.optional ? 'Allow access' : 'Allow ${definition.title.toLowerCase()}'),
+                      : Text(
+                          definition.allowLabel ??
+                              (definition.optional
+                                  ? 'Allow access'
+                                  : 'Allow ${definition.title.toLowerCase()}'),
+                        ),
                 ),
                 if (definition.optional && onSkip != null) ...[
                   const SizedBox(height: 10),

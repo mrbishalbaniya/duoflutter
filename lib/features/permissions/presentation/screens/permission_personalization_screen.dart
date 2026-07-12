@@ -8,6 +8,8 @@ import '../../../../core/router/app_router.dart';
 import '../../../../widgets/duo_ui.dart';
 import '../../../splash/widgets/splash_brand.dart';
 import '../../providers/permission_providers.dart';
+import '../../../notifications/providers/notifications_providers.dart';
+import '../../../settings/providers/settings_providers.dart';
 
 class PermissionPersonalizationScreen extends ConsumerStatefulWidget {
   const PermissionPersonalizationScreen({super.key});
@@ -28,7 +30,13 @@ class _PermissionPersonalizationScreenState extends ConsumerState<PermissionPers
       'match_alerts': _matchAlerts,
       'discover_visibility': _discoverVisibility,
     });
-    await ref.read(permissionLocalStoreProvider).markSetupComplete();
+    if (_matchAlerts) {
+      try {
+        await ref.read(pushNotificationServiceProvider).register();
+        await ref.read(pushMessagingCoordinatorProvider).reinitialize();
+      } catch (_) {}
+    }
+    await ref.read(permissionSetupCompleteProvider.notifier).markComplete();
     if (!mounted) return;
     context.go(AppRoutes.match);
   }

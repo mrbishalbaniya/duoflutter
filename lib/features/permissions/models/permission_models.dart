@@ -53,6 +53,7 @@ class DuoPermissionDefinition {
     required this.icon,
     required this.accent,
     this.optional = false,
+    this.allowLabel,
   });
 
   final DuoPermissionType type;
@@ -62,16 +63,19 @@ class DuoPermissionDefinition {
   final IconData icon;
   final Color accent;
   final bool optional;
+  final String? allowLabel;
 }
 
 const permissionSetupOrder = <DuoPermissionDefinition>[
   DuoPermissionDefinition(
     type: DuoPermissionType.notifications,
     title: 'Notifications',
-    description: 'Stay in the loop when someone likes you, matches with you, or sends a message.',
+    description:
+        'Enable Duo notifications on this device to get alerts for messages, matches, likes, and important updates.',
     benefits: ['Messages', 'Matches', 'Likes', 'Calls', 'Important alerts'],
     icon: Icons.notifications_active_rounded,
     accent: Color(0xFFE84A7A),
+    allowLabel: 'Enable notifications',
   ),
   DuoPermissionDefinition(
     type: DuoPermissionType.camera,

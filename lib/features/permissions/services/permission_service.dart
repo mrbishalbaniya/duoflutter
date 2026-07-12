@@ -6,9 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../settings/services/push_notification_service.dart';
 import '../models/permission_models.dart';
 
 class PermissionService {
+  PermissionService({LocalNotificationServiceDelegate? localNotifications})
+      : _localNotifications = localNotifications ?? LocalNotificationServiceDelegate();
+
+  final LocalNotificationServiceDelegate _localNotifications;
   Future<Map<DuoPermissionType, DuoPermissionStatus>> checkAll() async {
     if (kIsWeb) return _unsupportedAll();
 
@@ -49,6 +54,8 @@ class PermissionService {
 
   Future<DuoPermissionStatus> _checkNotifications() async {
     if (Platform.isAndroid) {
+      final enabled = await _localNotifications.androidPermissionGranted();
+      if (enabled) return DuoPermissionStatus.granted;
       return _map(await Permission.notification.status);
     }
     if (Platform.isIOS && Firebase.apps.isNotEmpty) {
@@ -60,6 +67,7 @@ class PermissionService {
 
   Future<DuoPermissionStatus> _requestNotifications() async {
     if (Platform.isAndroid) {
+      await _localNotifications.ensureAndroidPermission();
       return _map(await Permission.notification.request());
     }
     if (Firebase.apps.isNotEmpty) {
