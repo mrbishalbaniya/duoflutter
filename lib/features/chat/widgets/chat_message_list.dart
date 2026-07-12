@@ -143,6 +143,7 @@ class _ChatMessageListState extends State<ChatMessageList>
     return ListView.builder(
       controller: widget.scrollController,
       reverse: true,
+      // ignore: deprecated_member_use
       cacheExtent: 720,
       addAutomaticKeepAlives: true,
       addRepaintBoundaries: true,

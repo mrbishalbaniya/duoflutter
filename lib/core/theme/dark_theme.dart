@@ -111,7 +111,7 @@ ThemeData buildDuoTheme(ColorScheme scheme, DuoThemeTokens tokens, Color scaffol
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
         TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
       },
     ),
     splashColor: scheme.primary.withValues(alpha: 0.12),
