@@ -6,9 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/chat_models.dart';
 
-import '../../../core/theme/duo_theme.dart';
-
 import '../chat_utils.dart';
+import 'chat_typing_indicator.dart';
 
 
 
@@ -36,6 +35,8 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
     this.onNickname,
 
+    this.onPrivacy,
+
     this.onClearHistory,
 
     this.onReport,
@@ -62,6 +63,8 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
   final VoidCallback? onNickname;
 
+  final VoidCallback? onPrivacy;
+
   final VoidCallback? onClearHistory;
 
   final VoidCallback? onReport;
@@ -81,7 +84,7 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
     final photo = conversation.otherUserProfile.displayPhoto;
 
     final subtitle = isOtherUserTyping
-        ? 'Typing…'
+        ? null
         : matchSubtitle(conversation.matchCreatedAt);
 
 
@@ -203,25 +206,16 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
                 ),
 
                 AnimatedSwitcher(
-
                   duration: const Duration(milliseconds: 200),
-
-                  child: Text(
-
-                    subtitle,
-
-                    key: ValueKey(subtitle),
-
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isOtherUserTyping
-                              ? DuoColors.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight:
-                              isOtherUserTyping ? FontWeight.w600 : FontWeight.w400,
+                  child: isOtherUserTyping
+                      ? const ChatTypingLabel(key: ValueKey('typing'))
+                      : Text(
+                          subtitle ?? '',
+                          key: ValueKey(subtitle),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
                         ),
-
-                  ),
-
                 ),
 
               ],
@@ -286,6 +280,10 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
                 onNickname?.call();
 
+              case 'privacy':
+
+                onPrivacy?.call();
+
               case 'mute':
 
                 onMute?.call();
@@ -313,6 +311,8 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
           itemBuilder: (_) => [
 
             const PopupMenuItem(value: 'nickname', child: Text('Set nickname')),
+
+            const PopupMenuItem(value: 'privacy', child: Text('Privacy & security')),
 
             PopupMenuItem(
 

@@ -9,6 +9,7 @@ class ChatMessageListEntry {
     this.dateLabel = '',
     this.showAvatar = true,
     this.isGrouped = false,
+    this.isSystemMessage = false,
   });
 
   final ChatMessage message;
@@ -16,6 +17,7 @@ class ChatMessageListEntry {
   final String dateLabel;
   final bool showAvatar;
   final bool isGrouped;
+  final bool isSystemMessage;
 
   String get stableKey =>
       chatMessageStableKey(message);

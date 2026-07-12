@@ -358,7 +358,7 @@ packages:
     source: hosted
     version: "4.5.2"
   flutter_cache_manager:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_cache_manager
       sha256: "400b6592f16a4409a7f2bb929a9a7e38c72cceb8ffb99ee57bbf2cb2cecf8386"
@@ -575,6 +575,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  gal:
+    dependency: "direct main"
+    description:
+      name: gal
+      sha256: "969598f986789127fd407a750413249e1352116d4c2be66e81837ffeeaafdfee"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.2"
   geoclue:
     dependency: transitive
     description:
@@ -1287,6 +1295,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.28.0"
+  screen_capture_event:
+    dependency: "direct main"
+    description:
+      name: screen_capture_event
+      sha256: adfe2f17273d562f5b3dcc04f8731dff2bd7e9b7230c7a7372be1e10aecd1004
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  share_plus:
+    dependency: "direct main"
+    description:
+      name: share_plus
+      sha256: fce43200aa03ea87b91ce4c3ac79f0cecd52e2a7a56c7a4185023c271fbfa6da
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.1.4"
+  share_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: share_plus_platform_interface
+      sha256: cc012a23fc2d479854e6c80150696c4a5f5bb62cb89af4de1c505cf78d0a5d0b
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.2"
   shimmer:
     dependency: "direct main"
     description:

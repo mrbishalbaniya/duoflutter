@@ -18,6 +18,14 @@ ChatMessage? chatMessageForKey(List<ChatMessage> messages, String messageKey) {
   return null;
 }
 
+Map<String, ChatMessage> buildMessagesByKey(List<ChatMessage> messages) {
+  final map = <String, ChatMessage>{};
+  for (final message in messages) {
+    map[chatMessageStableKey(message)] = message;
+  }
+  return map;
+}
+
 /// Lightweight structural fingerprint — list rebuilds only when layout changes.
 int chatListStructureRevision(List<ChatMessageListEntry> entries) {
   var hash = entries.length;

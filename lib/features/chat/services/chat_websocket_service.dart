@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../repositories/chat_repository.dart';
+import 'chat_debug_log.dart';
 
 /// Parsed WebSocket payloads from DuoBackend chat consumer.
 class ChatWsEvent {
@@ -102,6 +103,7 @@ class ChatWebSocketService {
     final sw = Stopwatch()..start();
     try {
       _log('connecting', {'conversation': _conversationId});
+      ChatDebugLog.wsStatus(status: 'connecting', conversationId: _conversationId!);
       final ticket = await _repository.getWsTicket(_conversationId!);
       if (_disposed) return;
 
@@ -129,6 +131,11 @@ class ChatWebSocketService {
         'conversation': _conversationId,
         'latencyMs': sw.elapsedMilliseconds,
       });
+      ChatDebugLog.wsStatus(
+        status: 'connected',
+        conversationId: _conversationId!,
+        latencyMs: sw.elapsedMilliseconds,
+      );
 
       send({'type': 'mark_read'});
 
@@ -138,6 +145,10 @@ class ChatWebSocketService {
             final data = jsonDecode(raw as String) as Map<String, dynamic>;
             final type = data['type'] as String? ?? '';
             _log('event_in', {'type': type});
+            ChatDebugLog.messageIn(
+              type: type,
+              conversationId: _conversationId ?? '',
+            );
             _eventsController.add(ChatWsEvent(type, data));
           } catch (error) {
             _log('event_parse_error', {'error': '$error'});

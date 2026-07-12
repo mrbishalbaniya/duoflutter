@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/chat_message_selectors.dart';
 import '../providers/chat_thread_controller.dart';
 import 'chat_message_list.dart';
+import 'chat_media_viewer.dart';
 import 'chat_shimmer.dart';
+import 'chat_typing_indicator.dart';
 
 /// Message list body — watches only list-related state slices.
 class ChatThreadMessagePane extends ConsumerStatefulWidget {
@@ -39,6 +41,7 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
           s.loadingEarlier,
           s.error,
           s.conversation?.otherUserProfile.displayPhoto,
+          s.isOtherUserTyping,
         ),
       ),
     );
@@ -48,6 +51,7 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
     final loadingEarlier = listSlice.$3;
     final error = listSlice.$4;
     final otherPhoto = listSlice.$5;
+    final isOtherUserTyping = listSlice.$6;
     final notifier =
         ref.read(chatThreadControllerProvider(widget.conversationId).notifier);
 
@@ -70,28 +74,48 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
       return const _ChatEmptyState();
     }
 
-    return ChatMessageList(
-      key: ValueKey('chat-list-$structureRevision'),
-      conversationId: widget.conversationId,
-      entries: entries,
-      loadingEarlier: loadingEarlier,
-      otherPhoto: otherPhoto,
-      scrollController: widget.scrollController,
-      onReply: (entry) => notifier.setReplyingTo(entry.message),
-      onReact: (entry, emoji) => notifier.react(entry.message, emoji),
-      onDeleteForMe: (entry) => notifier.deleteMessage(entry.message, 'for_me'),
-      onDeleteForEveryone: (entry) =>
-          notifier.deleteMessage(entry.message, 'for_everyone'),
-      onRetry: (entry) => notifier.retryFailed(
-        entry.message,
-        widget.onSetRetryText,
-      ),
-      onImageTap: (entry) {
-        final msg = entry.message;
-        if (msg.imageUrl?.isNotEmpty ?? false) {
-          openChatImagePreview(context, msg.imageUrl!);
-        }
-      },
+    return Stack(
+      alignment: Alignment.bottomLeft,
+      children: [
+        ChatMessageList(
+          key: ValueKey('chat-list-$structureRevision'),
+          conversationId: widget.conversationId,
+          entries: entries,
+          loadingEarlier: loadingEarlier,
+          otherPhoto: otherPhoto,
+          scrollController: widget.scrollController,
+          onReply: (entry) => notifier.setReplyingTo(entry.message),
+          onReact: (entry, emoji) => notifier.react(entry.message, emoji),
+          onDeleteForMe: (entry) => notifier.deleteMessage(entry.message, 'for_me'),
+          onDeleteForEveryone: (entry) =>
+              notifier.deleteMessage(entry.message, 'for_everyone'),
+          onRetry: (entry) => notifier.retryFailed(
+            entry.message,
+            widget.onSetRetryText,
+          ),
+          onImageTap: (entry) {
+            final msg = entry.message;
+            if (msg.imageUrl?.isNotEmpty ?? false) {
+              openChatMediaViewer(
+                context,
+                message: msg,
+                onReply: () => notifier.setReplyingTo(msg),
+                onDeleteForMe: () => notifier.deleteMessage(msg, 'for_me'),
+                onDeleteForEveryone: () =>
+                    notifier.deleteMessage(msg, 'for_everyone'),
+              );
+            }
+          },
+        ),
+        if (isOtherUserTyping)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: ChatTypingIndicator(
+              compact: true,
+              avatarUrl: otherPhoto?.isNotEmpty == true ? otherPhoto : null,
+            ),
+          ),
+      ],
     );
   }
 }

@@ -40,17 +40,17 @@ class ChatRepository {
         if (before != null) 'before': before,
       },
     );
-    return _parseMessagesPage(response.data);
+    return _parseMessagesPage(response.data, limit: limit);
   }
 
-  ChatMessagesPage _parseMessagesPage(dynamic data) {
+  ChatMessagesPage _parseMessagesPage(dynamic data, {int limit = 50}) {
     if (data is List) {
       final results = data
           .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
           .toList();
       return ChatMessagesPage(
         results: results,
-        hasMore: results.length >= 50,
+        hasMore: results.length >= limit,
       );
     }
 
@@ -121,13 +121,28 @@ class ChatRepository {
     bool? archived,
     bool? muted,
     bool? pinned,
+    bool? notifyScreenshots,
+    bool? secureChat,
   }) async {
     await _client.patch('/chat/conversations/$conversationId/settings/', data: {
       if (nickname != null) 'nickname': nickname,
       if (archived != null) 'is_archived': archived,
       if (muted != null) 'is_muted': muted,
       if (pinned != null) 'is_pinned': pinned,
+      if (notifyScreenshots != null) 'notify_screenshots': notifyScreenshots,
+      if (secureChat != null) 'secure_chat': secureChat,
     });
+  }
+
+  Future<ChatMessage> reportSecurityEvent(
+    String conversationId, {
+    required String eventCode,
+  }) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/chat/conversations/$conversationId/security-events/',
+      data: {'event_code': eventCode},
+    );
+    return ChatMessage.fromJson(response.data!);
   }
 
   Future<void> unmatch(String conversationId) async {

@@ -1,17 +1,14 @@
 import 'package:intl/intl.dart';
 
 import '../../core/models/chat_models.dart';
+import 'domain/chat_emoji_constants.dart';
 import 'domain/chat_message_list_entry.dart';
 
-const voiceMessageLabel = '🎤 Voice message';
+const voiceMessageLabel = ChatEmojiConstants.voiceMessageLabel;
 
-const quickReactionEmojis = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+const quickReactionEmojis = ChatEmojiConstants.quickReactions;
 
-const composerEmojis = [
-  '😀', '😂', '🥰', '😍', '😘', '😊',
-  '😎', '🤔', '😭', '😡', '👍', '👏',
-  '🔥', '❤️', '💯', '🎉',
-];
+const composerEmojis = ChatEmojiConstants.composerPicker;
 
 List<ChatMessage> sortMessages(List<ChatMessage> messages) {
   final copy = List<ChatMessage>.from(messages);
@@ -33,6 +30,8 @@ bool isVoiceMessage(ChatMessage msg) {
 bool isImageOnlyMessage(ChatMessage msg) {
   if (!msg.isMine || msg.isDeletedForEveryone) return false;
   if (isVoiceMessage(msg)) return false;
+  if (msg.messageType == 'image') return true;
+  if (msg.localMediaPath != null && msg.localMediaPath!.isNotEmpty) return true;
   return (msg.imageUrl?.isNotEmpty ?? false) && msg.content.trim().isEmpty;
 }
 
@@ -46,6 +45,9 @@ bool isVoiceOnlyMessage(ChatMessage msg) {
 String lastMessagePreview(Conversation convo) {
   final last = convo.lastMessage;
   if (last == null) return 'Start the conversation!';
+  if (last.isSystemMessage) {
+    return last.content.isNotEmpty ? last.content : 'Security event';
+  }
   if (last.isDeletedForEveryone) return 'Message deleted';
   if (isVoiceMessage(last)) return voiceMessageLabel;
   if (last.imageUrl?.isNotEmpty ?? false) {
@@ -133,6 +135,7 @@ bool shouldShowDateSeparator(ChatMessage current, ChatMessage? previous) {
 
 bool isGroupedWithPrevious(ChatMessage current, ChatMessage? previous) {
   if (previous == null) return false;
+  if (current.isSystemMessage || previous.isSystemMessage) return false;
   if (current.isMine != previous.isMine) return false;
   final a = _parseDate(current.timestamp);
   final b = _parseDate(previous.timestamp);
@@ -148,7 +151,7 @@ List<ChatMessageListEntry> buildMessageListEntries(List<ChatMessage> messages) {
   for (final message in messages) {
     if (!message.isVisible) continue;
 
-    final grouped = isGroupedWithPrevious(message, previous);
+    final grouped = message.isSystemMessage ? false : isGroupedWithPrevious(message, previous);
     final showDate = shouldShowDateSeparator(message, previous);
 
     entries.add(
@@ -156,8 +159,9 @@ List<ChatMessageListEntry> buildMessageListEntries(List<ChatMessage> messages) {
         message: message,
         showDateSeparator: showDate,
         dateLabel: showDate ? dateSeparatorLabel(message.timestamp) : '',
-        showAvatar: !grouped,
+        showAvatar: !grouped && !message.isSystemMessage,
         isGrouped: grouped,
+        isSystemMessage: message.isSystemMessage,
       ),
     );
     previous = message;

@@ -7,6 +7,7 @@ class ChatThreadState {
     this.messages = const [],
     this.visibleMessages = const [],
     this.listEntries = const [],
+    this.messagesByKey = const {},
     this.loading = true,
     this.loadingEarlier = false,
     this.sending = false,
@@ -30,6 +31,7 @@ class ChatThreadState {
   final List<ChatMessage> messages;
   final List<ChatMessage> visibleMessages;
   final List<ChatMessageListEntry> listEntries;
+  final Map<String, ChatMessage> messagesByKey;
   final bool loading;
   final bool loadingEarlier;
   final bool sending;
@@ -59,6 +61,7 @@ class ChatThreadState {
     List<ChatMessage>? messages,
     List<ChatMessage>? visibleMessages,
     List<ChatMessageListEntry>? listEntries,
+    Map<String, ChatMessage>? messagesByKey,
     bool? loading,
     bool? loadingEarlier,
     bool? sending,
@@ -84,6 +87,7 @@ class ChatThreadState {
       messages: messages ?? this.messages,
       visibleMessages: visibleMessages ?? this.visibleMessages,
       listEntries: listEntries ?? this.listEntries,
+      messagesByKey: messagesByKey ?? this.messagesByKey,
       loading: loading ?? this.loading,
       loadingEarlier: loadingEarlier ?? this.loadingEarlier,
       sending: sending ?? this.sending,

@@ -1,8 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'chat_media_viewer.dart';
 import 'package:flutter/material.dart';
 
 import '../domain/chat_message_list_entry.dart';
 import 'chat_message_bubble.dart';
+import 'chat_system_message_bubble.dart';
 
 typedef ChatMessageAction = void Function();
 
@@ -53,7 +54,10 @@ class ChatMessageListTile extends StatelessWidget {
                 ),
               ),
             ),
-          ChatMessageBubble(
+          if (entry.isSystemMessage)
+            ChatSystemMessageBubble(message: entry.message)
+          else
+            ChatMessageBubble(
             conversationId: conversationId,
             messageKey: entry.stableKey,
             fallbackMessage: entry.message,
@@ -107,8 +111,7 @@ class ChatMessageList extends StatefulWidget {
   State<ChatMessageList> createState() => _ChatMessageListState();
 }
 
-class _ChatMessageListState extends State<ChatMessageList>
-    with AutomaticKeepAliveClientMixin {
+class _ChatMessageListState extends State<ChatMessageList> {
   final Set<String> _animatedKeys = <String>{};
   bool _allowEntranceAnimation = false;
   double? _maxBubbleWidth;
@@ -126,11 +129,7 @@ class _ChatMessageListState extends State<ChatMessageList>
   }
 
   @override
-  bool get wantKeepAlive => true;
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
     _maxBubbleWidth ??= MediaQuery.sizeOf(context).width * 0.78;
     final entries = widget.entries;
 
@@ -144,7 +143,7 @@ class _ChatMessageListState extends State<ChatMessageList>
       controller: widget.scrollController,
       reverse: true,
       cacheExtent: 720,
-      addAutomaticKeepAlives: true,
+      addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       findChildIndexCallback: (Key key) {
         if (key is! ValueKey<String>) return null;
@@ -194,26 +193,8 @@ class _ChatMessageListState extends State<ChatMessageList>
   }
 }
 
-/// Full-screen image preview with disk/memory cache.
+/// Legacy preview — delegates to [ChatMediaViewer].
+@Deprecated('Use openChatMediaViewer instead')
 void openChatImagePreview(BuildContext context, String url) {
-  showDialog<void>(
-    context: context,
-    builder: (_) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: Hero(
-        tag: 'chat-image-$url',
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: InteractiveViewer(
-            child: CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
+  ChatMediaViewer.open(context, remoteUrl: url, heroTag: 'chat-image-$url');
 }

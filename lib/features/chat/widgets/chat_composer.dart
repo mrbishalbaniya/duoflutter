@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/theme/duo_theme.dart';
 import '../chat_utils.dart';
+import '../services/chat_debug_log.dart';
+import 'chat_emoji_picker.dart';
 import 'voice_input_button.dart';
 import 'voice_recording_bar.dart';
 
@@ -17,14 +19,17 @@ class ChatComposer extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onSend,
-    required this.onTyping,
+    required     this.onTyping,
+    this.onTypingStop,
     this.replyingTo,
     this.onCancelReply,
     this.onPickImage,
     this.onPickCamera,
     this.showEmojiPicker = false,
-    this.onToggleEmojiPicker,
+    this.onOpenEmojiPicker,
+    this.onCloseEmojiPicker,
     this.onEmojiSelected,
+    this.recentEmojis = const [],
     this.sending = false,
     this.uploading = false,
     this.isVoiceComposeActive = false,
@@ -39,13 +44,16 @@ class ChatComposer extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback onTyping;
+  final VoidCallback? onTypingStop;
   final ChatMessage? replyingTo;
   final VoidCallback? onCancelReply;
   final VoidCallback? onPickImage;
   final VoidCallback? onPickCamera;
   final bool showEmojiPicker;
-  final VoidCallback? onToggleEmojiPicker;
+  final VoidCallback? onOpenEmojiPicker;
+  final VoidCallback? onCloseEmojiPicker;
   final ValueChanged<String>? onEmojiSelected;
+  final List<String> recentEmojis;
   final bool sending;
   final bool uploading;
   final bool isVoiceComposeActive;
@@ -69,7 +77,7 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   void initState() {
     super.initState();
-    _hasText = widget.controller.text.trim().isNotEmpty;
+    _hasText = widget.controller.text.isNotEmpty;
     widget.controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
   }
@@ -82,6 +90,7 @@ class _ChatComposerState extends State<ChatComposer> {
     }
     if (oldWidget.replyingTo == null && widget.replyingTo != null) {
       _collapseAttachments();
+      widget.onCloseEmojiPicker?.call();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _focusNode.requestFocus();
       });
@@ -99,18 +108,38 @@ class _ChatComposerState extends State<ChatComposer> {
   void _onFocusChanged() {
     final focused = _focusNode.hasFocus;
     if (focused == _isFocused) return;
+
+    if (focused) {
+      ChatDebugLog.keyboardOpened();
+      if (widget.showEmojiPicker) {
+        widget.onCloseEmojiPicker?.call();
+      }
+    } else {
+      ChatDebugLog.keyboardClosed();
+    }
+
     setState(() {
       _isFocused = focused;
       if (focused) {
         _attachmentsExpanded = false;
-      } else if (!widget.controller.text.trim().isNotEmpty) {
+      } else if (!widget.controller.text.isNotEmpty) {
         _attachmentsExpanded = false;
       }
     });
   }
 
   void _onTextChanged() {
-    final next = widget.controller.text.trim().isNotEmpty;
+    final hasContent = widget.controller.text.isNotEmpty;
+    if (hasContent) {
+      widget.onTyping();
+    } else {
+      widget.onTypingStop?.call();
+    }
+    ChatDebugLog.sendButtonState(
+      enabled: hasContent && !widget.uploading,
+      textLength: widget.controller.text.length,
+    );
+    final next = hasContent;
     if (next == _hasText) return;
     setState(() {
       _hasText = next;
@@ -129,7 +158,7 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   bool get _isTypingActive => _isFocused || _hasText;
-  bool get _busy => widget.sending || widget.uploading;
+  bool get _busy => widget.uploading;
 
   void _keepFocusAnd(VoidCallback? action) {
     if (action == null || _busy) return;
@@ -147,16 +176,45 @@ class _ChatComposerState extends State<ChatComposer> {
 
   void _handleSend() {
     if (_busy || !_hasText) return;
+    widget.onCloseEmojiPicker?.call();
+    widget.onTypingStop?.call();
     widget.onSend();
     _collapseAttachments();
+  }
+
+  void _hideSystemKeyboard() {
+    _focusNode.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  void _toggleEmojiPicker() {
+    if (_busy) return;
+    HapticFeedback.lightImpact();
+    _collapseAttachments();
+    if (widget.showEmojiPicker) {
+      widget.onCloseEmojiPicker?.call();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+      return;
+    }
+    _hideSystemKeyboard();
+    widget.onOpenEmojiPicker?.call();
   }
 
   void _handleEmoji(String emoji) {
     widget.onEmojiSelected?.call(emoji);
     _collapseAttachments();
+    widget.onCloseEmojiPicker?.call();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
+  }
+
+  void _handleInputTap() {
+    if (widget.showEmojiPicker) {
+      _toggleEmojiPicker();
+    }
   }
 
   @override
@@ -167,95 +225,93 @@ class _ChatComposerState extends State<ChatComposer> {
       color: scheme.surface,
       child: SafeArea(
         top: false,
-        child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Column(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: scheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (widget.replyingTo != null)
-                          _ReplyBanner(
-                            replyingTo: widget.replyingTo!,
-                            onCancelReply: widget.onCancelReply,
-                          ),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            _LeadingActions(
-                              isVoiceComposeActive: widget.isVoiceComposeActive,
-                              isTypingActive: _isTypingActive,
-                              attachmentsExpanded: _attachmentsExpanded,
-                              busy: _busy,
-                              uploading: widget.uploading,
-                              isRecording: widget.isRecording,
-                              voiceDraftReady: widget.voiceDraftReady,
-                              onToggleAttachments: _toggleAttachments,
-                              onPickCamera: () => _keepFocusAnd(widget.onPickCamera),
-                              onPickImage: () => _keepFocusAnd(widget.onPickImage),
-                              onVoiceListeningChange: widget.onVoiceListeningChange,
-                              onCancelVoiceRecording: widget.onCancelVoiceRecording,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _InputPill(
-                                focusNode: _focusNode,
-                                isVoiceComposeActive: widget.isVoiceComposeActive,
-                                isRecording: widget.isRecording,
-                                voiceRecordingSeconds: widget.voiceRecordingSeconds,
-                                controller: widget.controller,
-                                replyingTo: widget.replyingTo,
-                                busy: _busy,
-                                showEmojiPicker: widget.showEmojiPicker,
-                                onTyping: widget.onTyping,
-                                onSend: _handleSend,
-                                onToggleEmojiPicker: () {
-                                  _collapseAttachments();
-                                  widget.onToggleEmojiPicker?.call();
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _TrailingAction(
-                              isVoiceComposeActive: widget.isVoiceComposeActive,
-                              isTypingActive: _isTypingActive,
-                              hasText: _hasText,
-                              busy: _busy,
-                              uploading: widget.uploading,
-                              onSend: _handleSend,
-                              onSendVoiceMessage: widget.onSendVoiceMessage,
-                              onStartVoice: () {
-                                if (_busy) return;
-                                HapticFeedback.mediumImpact();
-                                widget.onVoiceListeningChange?.call(true);
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
+                  if (widget.replyingTo != null)
+                    _ReplyBanner(
+                      replyingTo: widget.replyingTo!,
+                      onCancelReply: widget.onCancelReply,
                     ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _LeadingActions(
+                        isVoiceComposeActive: widget.isVoiceComposeActive,
+                        isTypingActive: _isTypingActive,
+                        attachmentsExpanded: _attachmentsExpanded,
+                        busy: _busy,
+                        uploading: widget.uploading,
+                        isRecording: widget.isRecording,
+                        voiceDraftReady: widget.voiceDraftReady,
+                        onToggleAttachments: _toggleAttachments,
+                        onPickCamera: () => _keepFocusAnd(widget.onPickCamera),
+                        onPickImage: () => _keepFocusAnd(widget.onPickImage),
+                        onVoiceListeningChange: widget.onVoiceListeningChange,
+                        onCancelVoiceRecording: widget.onCancelVoiceRecording,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _InputPill(
+                          focusNode: _focusNode,
+                          isVoiceComposeActive: widget.isVoiceComposeActive,
+                          isRecording: widget.isRecording,
+                          voiceRecordingSeconds: widget.voiceRecordingSeconds,
+                          controller: widget.controller,
+                          replyingTo: widget.replyingTo,
+                          busy: _busy,
+                          showEmojiPicker: widget.showEmojiPicker,
+                          onTyping: widget.onTyping,
+                          onSend: _handleSend,
+                          onToggleEmojiPicker: _toggleEmojiPicker,
+                          onInputTap: _handleInputTap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _TrailingAction(
+                        isVoiceComposeActive: widget.isVoiceComposeActive,
+                        isTypingActive: _isTypingActive,
+                        hasText: _hasText,
+                        busy: _busy,
+                        uploading: widget.uploading,
+                        onSend: _handleSend,
+                        onSendVoiceMessage: widget.onSendVoiceMessage,
+                        onStartVoice: () {
+                          if (_busy) return;
+                          HapticFeedback.mediumImpact();
+                          widget.onVoiceListeningChange?.call(true);
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
-              if (widget.showEmojiPicker)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 72,
-                  child: _EmojiPickerPanel(onEmojiSelected: _handleEmoji),
-                ),
-            ],
-          ),
+            ),
+            AnimatedSize(
+              duration: _kComposerAnimDuration,
+              curve: _kComposerAnimCurve,
+              alignment: Alignment.topCenter,
+              clipBehavior: Clip.hardEdge,
+              child: widget.showEmojiPicker
+                  ? ChatEmojiPicker(
+                      recentEmojis: widget.recentEmojis,
+                      onEmojiSelected: _handleEmoji,
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
+      ),
     );
   }
 }
@@ -545,6 +601,7 @@ class _InputPill extends StatelessWidget {
     required this.onTyping,
     required this.onSend,
     required this.onToggleEmojiPicker,
+    this.onInputTap,
   });
 
   final FocusNode focusNode;
@@ -558,6 +615,7 @@ class _InputPill extends StatelessWidget {
   final VoidCallback onTyping;
   final VoidCallback onSend;
   final VoidCallback? onToggleEmojiPicker;
+  final VoidCallback? onInputTap;
 
   @override
   Widget build(BuildContext context) {
@@ -594,10 +652,12 @@ class _InputPill extends StatelessWidget {
                     minLines: 1,
                     maxLines: 5,
                     enabled: !busy,
+                    readOnly: showEmojiPicker,
                     keyboardType: TextInputType.multiline,
                     textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.send,
                     scrollPadding: const EdgeInsets.only(bottom: 96),
+                    onTap: onInputTap,
                     onChanged: (_) => onTyping(),
                     onSubmitted: (_) => onSend(),
                     style: Theme.of(context).textTheme.bodyMedium,
@@ -620,7 +680,7 @@ class _InputPill extends StatelessWidget {
                       ? Icons.keyboard_rounded
                       : Icons.sentiment_satisfied_alt_outlined,
                   onPressed: busy ? null : onToggleEmojiPicker,
-                  tooltip: showEmojiPicker ? 'Hide emoji picker' : 'Add emoji',
+                  tooltip: showEmojiPicker ? 'Show keyboard' : 'Add emoji',
                   iconColor: DuoColors.primary,
                 ),
               ],
@@ -787,60 +847,6 @@ class _SendCircleButton extends StatelessWidget {
                     size: 20,
                   ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmojiPickerPanel extends StatefulWidget {
-  const _EmojiPickerPanel({required this.onEmojiSelected});
-
-  final ValueChanged<String> onEmojiSelected;
-
-  @override
-  State<_EmojiPickerPanel> createState() => _EmojiPickerPanelState();
-}
-
-class _EmojiPickerPanelState extends State<_EmojiPickerPanel>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      elevation: 8,
-      shadowColor: scheme.shadow.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(16),
-      color: scheme.surface,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
-        ),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
-          ),
-          itemCount: composerEmojis.length,
-          itemBuilder: (_, i) {
-            final emoji = composerEmojis[i];
-            return InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => widget.onEmojiSelected(emoji),
-              child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 22)),
-              ),
-            );
-          },
         ),
       ),
     );

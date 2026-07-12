@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +45,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             muted: muted,
             archived: archived,
           );
-      ref.invalidate(conversationsProvider);
+      ref.read(conversationsListProvider(_filter).notifier).scheduleRefresh();
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
@@ -52,10 +53,25 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     }
   }
 
+  void _precacheAvatars(List<Conversation> conversations) {
+    if (!mounted) return;
+    for (final convo in conversations.take(12)) {
+      final photo = convo.otherUserProfile.displayPhoto;
+      if (photo.isEmpty) continue;
+      precacheImage(CachedNetworkImageProvider(photo), context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final conversations = ref.watch(conversationsProvider(_filter));
+    final listState = ref.watch(conversationsListProvider(_filter));
     final scheme = Theme.of(context).colorScheme;
+
+    if (listState.hasData) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _precacheAvatars(listState.conversations);
+      });
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -67,15 +83,20 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (listState.isRefreshing)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
                   IconButton(
-                    onPressed: () => ref.invalidate(conversationsProvider),
-                    icon: conversations.isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
+                    onPressed: () => ref
+                        .read(conversationsListProvider(_filter).notifier)
+                        .refresh(force: true),
+                    icon: const Icon(Icons.refresh),
                   ),
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
@@ -108,9 +129,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: conversations.maybeWhen(
-                data: (items) {
-                  final total = totalUnreadCount(items);
+              child: Builder(
+                builder: (context) {
+                  final total = totalUnreadCount(listState.conversations);
                   if (total == 0) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -134,7 +155,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     ),
                   );
                 },
-                orElse: () => const SizedBox.shrink(),
               ),
             ),
             Padding(
@@ -163,102 +183,114 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 88),
-                child: conversations.when(
-                  loading: () => const ChatListShimmer(),
-                  error: (e, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.cloud_off, size: 48, color: scheme.error),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Could not load messages',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$e',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: scheme.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: () => ref.invalidate(conversationsProvider),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Try again'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  data: (items) {
-                    final filtered = filterConversations(
-                      items: sortConversations(items),
-                      query: _search,
-                      unreadOnly: false,
-                    );
-                    if (filtered.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 56,
-                                color: DuoColors.primary.withValues(alpha: 0.5),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _filter.archived
-                                    ? 'No archived chats'
-                                    : _search.isNotEmpty
-                                        ? 'No results'
-                                        : 'No conversations yet',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              if (!_filter.archived && _search.isEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Match with someone to start chatting.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: scheme.onSurfaceVariant),
-                                ),
-                                const SizedBox(height: 16),
-                                FilledButton(
-                                  onPressed: () => context.go(AppRoutes.match),
-                                  child: const Text('Find matches'),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                    return RefreshIndicator(
-                      onRefresh: () async => ref.invalidate(conversationsProvider),
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (_, index) {
-                          final convo = filtered[index];
-                          return SwipeableConversationTile(
-                            conversation: convo,
-                            onTap: () => context.push('/chat/${convo.publicId}'),
-                            onPin: () => _updateSettings(convo, pinned: !convo.isPinned),
-                            onMute: () => _updateSettings(convo, muted: !convo.isMuted),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
+                child: _buildBody(listState, scheme),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBody(ConversationsListState listState, ColorScheme scheme) {
+    if (!listState.hasData && listState.isRefreshing) {
+      return const ChatListShimmer();
+    }
+
+    if (listState.error != null && !listState.hasData) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: scheme.error),
+              const SizedBox(height: 16),
+              Text(
+                'Could not load messages',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                listState.error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => ref
+                    .read(conversationsListProvider(_filter).notifier)
+                    .refresh(force: true),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try again'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final filtered = filterConversations(
+      items: sortConversations(listState.conversations),
+      query: _search,
+      unreadOnly: false,
+    );
+
+    if (filtered.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline,
+                size: 56,
+                color: DuoColors.primary.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _filter.archived
+                    ? 'No archived chats'
+                    : _search.isNotEmpty
+                        ? 'No results'
+                        : 'No conversations yet',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (!_filter.archived && _search.isEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Match with someone to start chatting.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => context.go(AppRoutes.match),
+                  child: const Text('Find matches'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => ref
+          .read(conversationsListProvider(_filter).notifier)
+          .refresh(force: true),
+      child: ListView.builder(
+        itemCount: filtered.length,
+        itemBuilder: (_, index) {
+          final convo = filtered[index];
+          return SwipeableConversationTile(
+            conversation: convo,
+            onTap: () => context.push('/chat/${convo.publicId}'),
+            onPin: () => _updateSettings(convo, pinned: !convo.isPinned),
+            onMute: () => _updateSettings(convo, muted: !convo.isMuted),
+          );
+        },
       ),
     );
   }

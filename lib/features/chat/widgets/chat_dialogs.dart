@@ -105,6 +105,71 @@ Future<String?> showNicknameDialog(
   );
 }
 
+class ChatPrivacySettings {
+  const ChatPrivacySettings({
+    required this.notifyScreenshots,
+    required this.secureChat,
+  });
+
+  final bool notifyScreenshots;
+  final bool secureChat;
+}
+
+Future<ChatPrivacySettings?> showPrivacySettingsDialog(
+  BuildContext context, {
+  required bool notifyScreenshots,
+  required bool secureChat,
+}) {
+  var notify = notifyScreenshots;
+  var secure = secureChat;
+
+  return showDialog<ChatPrivacySettings>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        title: const Text('Chat privacy'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CheckboxListTile(
+              value: notify,
+              onChanged: (value) => setState(() => notify = value ?? true),
+              title: const Text('Notify participants when screenshots are taken'),
+              subtitle: const Text(
+                'When enabled, others are alerted if you capture this chat.',
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            SwitchListTile(
+              value: secure,
+              onChanged: (value) => setState(() => secure = value),
+              title: const Text('Secure chat'),
+              subtitle: const Text(
+                'Blocks screenshots on Android while this chat is open.',
+              ),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              ChatPrivacySettings(
+                notifyScreenshots: notify,
+                secureChat: secure,
+              ),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Future<String?> showReportDialog(BuildContext context) {
   final reasons = [
     'Inappropriate messages',

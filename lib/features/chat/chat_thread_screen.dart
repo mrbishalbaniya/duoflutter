@@ -146,7 +146,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final convo = headerSlice.$1;
     final loading = headerSlice.$2;
 
-    return Scaffold(
+    final showEmojiPicker = ref.watch(
+      chatThreadControllerProvider(widget.conversationId)
+          .select((s) => s.showEmojiPicker),
+    );
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+
+    return PopScope(
+      canPop: !showEmojiPicker && !keyboardVisible,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (showEmojiPicker) {
+          notifier.closeEmojiPicker();
+          return;
+        }
+        if (keyboardVisible) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+      },
+      child: Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       appBar: convo == null
@@ -174,6 +192,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   initialNickname: convo.otherUserNickname,
                 );
                 if (nickname != null) await notifier.setNickname(nickname);
+              },
+              onPrivacy: () async {
+                final settings = await showPrivacySettingsDialog(
+                  context,
+                  notifyScreenshots: convo.notifyScreenshots,
+                  secureChat: convo.secureChat,
+                );
+                if (settings != null) {
+                  await notifier.updateSettings(
+                    notifyScreenshots: settings.notifyScreenshots,
+                    secureChat: settings.secureChat,
+                  );
+                }
               },
               onClearHistory: () async {
                 final ok = await showClearHistoryDialog(context);
@@ -228,6 +259,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

@@ -42,6 +42,10 @@ dependencies:
   just_audio: ^0.10.6
   path_provider: ^2.1.6
   flutter_local_notifications: ^22.0.1
+  screen_capture_event: ^1.2.0
+  gal: ^2.3.2
+  share_plus: ^10.1.4
+  flutter_cache_manager: ^3.4.1
   esewa_flutter_sdk:
     path: ./esewa_flutter_sdk
 
@@ -53,20 +57,21 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.3
 
 flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: assets/logo.png
+  # Android/iOS use pre-built assets from AppIcons/ (see AppIcons/README below).
+  android: false
+  ios: false
+  image_path: AppIcons/playstore.png
   web:
     generate: true
-    image_path: assets/logo.png
+    image_path: AppIcons/playstore.png
     background_color: "#B83280"
     theme_color: "#B83280"
   windows:
     generate: true
-    image_path: assets/logo.png
+    image_path: AppIcons/playstore.png
   macos:
     generate: true
-    image_path: assets/logo.png
+    image_path: AppIcons/playstore.png
 
 flutter:
   uses-material-design: true

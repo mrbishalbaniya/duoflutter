@@ -1,22 +1,47 @@
 import '../../../core/models/chat_models.dart';
 import '../chat_utils.dart';
+import 'chat_cache_serialization.dart';
 
-/// In-memory per-conversation message cache (mirrors Next.js `messagesCacheRef`).
+/// In-memory hot cache for active conversations and lists.
 class ChatMessageCache {
-  final Map<String, List<ChatMessage>> _store = {};
+  final Map<String, List<ChatMessage>> _messages = {};
+  final Map<String, bool> _hasMore = {};
+  final Map<String, int> _cachedAtMs = {};
+  final Map<String, CachedConversationList> _conversationLists = {};
 
   List<ChatMessage>? peek(String conversationKey) {
-    final cached = _store[conversationKey];
+    final cached = _messages[conversationKey];
     if (cached == null || cached.isEmpty) return null;
     return List<ChatMessage>.from(cached);
   }
 
-  void put(String conversationKey, List<ChatMessage> messages) {
+  bool? hasMore(String conversationKey) => _hasMore[conversationKey];
+
+  int? cachedAtMs(String conversationKey) => _cachedAtMs[conversationKey];
+
+  void put(
+    String conversationKey,
+    List<ChatMessage> messages, {
+    bool? hasMore,
+    int? cachedAtMs,
+  }) {
     if (messages.isEmpty) return;
-    _store[conversationKey] = sortMessages(messages);
+    _messages[conversationKey] = sortMessages(messages);
+    if (hasMore != null) _hasMore[conversationKey] = hasMore;
+    if (cachedAtMs != null) _cachedAtMs[conversationKey] = cachedAtMs;
   }
 
   void clear(String conversationKey) {
-    _store.remove(conversationKey);
+    _messages.remove(conversationKey);
+    _hasMore.remove(conversationKey);
+    _cachedAtMs.remove(conversationKey);
+  }
+
+  CachedConversationList? peekConversationList(String filterKey) {
+    return _conversationLists[filterKey];
+  }
+
+  void putConversationList(String filterKey, CachedConversationList list) {
+    _conversationLists[filterKey] = list;
   }
 }

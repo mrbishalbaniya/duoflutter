@@ -10,21 +10,29 @@ import '../../../core/models/chat_models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../repositories/chat_repository.dart';
+import '../../auth/auth_controller.dart';
 import '../chat_utils.dart';
-import '../domain/chat_message_cache.dart';
+import '../data/chat_cache_service.dart';
+import '../domain/chat_cache_serialization.dart';
 import '../domain/chat_message_selectors.dart';
 import '../domain/chat_thread_state.dart';
+import '../services/chat_debug_log.dart';
+import '../services/chat_screen_capture_service.dart';
 import '../services/chat_websocket_service.dart';
 import '../services/voice_recording_service.dart';
 import 'chat_providers.dart';
 
 final chatThreadControllerProvider = StateNotifierProvider.autoDispose
     .family<ChatThreadController, ChatThreadState, String>((ref, conversationId) {
+  final currentUserId = ref.watch(authControllerProvider.select((s) => s.user?.id));
   final controller = ChatThreadController(
     conversationId: conversationId,
+    currentUserId: currentUserId,
     repository: ref.read(chatRepositoryProvider),
-    messageCache: ref.read(chatMessageCacheProvider),
-    onConversationsChanged: () => ref.invalidate(conversationsProvider),
+    chatCache: ref.read(chatCacheServiceProvider),
+    onConversationsChanged: () => ref
+        .read(conversationsListProvider(const ConversationListFilter()).notifier)
+        .scheduleRefresh(),
   );
   ref.onDispose(controller.dispose);
   return controller;
@@ -45,8 +53,9 @@ class _PendingSend {
 class ChatThreadController extends StateNotifier<ChatThreadState> {
   ChatThreadController({
     required this.conversationId,
+    required this.currentUserId,
     required this.repository,
-    required this.messageCache,
+    required this.chatCache,
     required this.onConversationsChanged,
   }) : super(const ChatThreadState()) {
     _ws = ChatWebSocketService(repository);
@@ -56,8 +65,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   final String conversationId;
+  final int? currentUserId;
   final ChatRepository repository;
-  final ChatMessageCache messageCache;
+  final ChatCacheService chatCache;
   final VoidCallback onConversationsChanged;
 
   late final ChatWebSocketService _ws;
@@ -66,19 +76,28 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   final _pendingAckTimers = <String, Timer>{};
 
   Timer? _typingTimer;
+  Timer? _typingStopTimer;
   Timer? _typingClearTimer;
+  Timer? _conversationsInvalidateTimer;
   Timer? _voiceRecordingTimer;
   VoiceRecordingService? _voiceRecorder;
   StreamSubscription<ChatWsEvent>? _wsSub;
   StreamSubscription<WsConnectionState>? _connSub;
+  ChatScreenCaptureService? _screenCapture;
   bool _disposed = false;
+  bool _isTypingActive = false;
+  DateTime? _lastTypingSignalAt;
   int _pollCycle = 0;
+  static const _ackTimeout = Duration(seconds: 3);
 
   Future<void> _init() async {
-    unawaited(_connectWs());
+    final routeId = conversationId.trim();
+    if (routeId.length >= 10) {
+      unawaited(_connectWs(routeId));
+    }
     await load();
     if (!_ws.isConnected) {
-      await _connectWs();
+      unawaited(_connectWs());
     }
   }
 
@@ -122,10 +141,14 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _ws.send({'type': 'mark_read'});
   }
 
-  void _touchCache(List<ChatMessage> messages) {
+  void _touchCache(List<ChatMessage> messages, {bool? hasMore}) {
     final key = _activeConversationId;
     if (key.isEmpty) return;
-    messageCache.put(key, messages);
+    chatCache.writeMessages(
+      key,
+      messages,
+      hasMore: hasMore ?? state.hasMore,
+    );
   }
 
   List<ChatMessage> _sortedVisible(List<ChatMessage> messages) {
@@ -139,6 +162,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       messages: messages,
       visibleMessages: visible,
       listEntries: buildMessageListEntries(visible),
+      messagesByKey: buildMessagesByKey(visible),
     );
   }
 
@@ -162,8 +186,37 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   /// Updates message payloads without rebuilding list layout (read receipts, reactions).
   void _patchMessages(List<ChatMessage> messages, {bool cache = true}) {
     final visible = _sortedVisible(messages);
-    state = state.copyWith(messages: messages, visibleMessages: visible);
+    state = state.copyWith(
+      messages: messages,
+      visibleMessages: visible,
+      messagesByKey: buildMessagesByKey(visible),
+    );
     if (cache) _touchCache(messages);
+  }
+
+  void _scheduleConversationsChanged() {
+    _conversationsInvalidateTimer?.cancel();
+    _conversationsInvalidateTimer = Timer(const Duration(seconds: 2), () {
+      if (!_disposed) onConversationsChanged();
+    });
+  }
+
+  void _touchConversationPreview(ChatMessage msg, {required bool fromMe}) {
+    final convo = state.conversation;
+    if (convo == null) return;
+    final patched = convo.copyWith(
+      lastMessage: msg,
+      lastMessageAt: msg.timestamp,
+      unreadCount: 0,
+      isOtherUserTyping: false,
+    );
+    state = state.copyWith(conversation: patched);
+    chatCache.writeConversation(patched);
+    chatCache.patchConversationPreview(
+      conversationKey: convo.publicId,
+      lastMessage: msg,
+      lastMessageAt: msg.timestamp,
+    );
   }
 
   void _noteHttpSuccess() {
@@ -178,35 +231,154 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     state = state.copyWith(httpDeliveryOk: false);
   }
 
+  void _applyCachedSnapshot({
+    required List<ChatMessage> messages,
+    Conversation? conversation,
+    required bool hasMore,
+    bool initialScroll = true,
+  }) {
+    final visible = messages.where((m) => m.isVisible).toList(growable: false);
+    state = state.copyWith(
+      conversation: conversation ?? state.conversation,
+      messages: messages,
+      visibleMessages: visible,
+      listEntries: buildMessageListEntries(visible),
+      messagesByKey: buildMessagesByKey(visible),
+      isOtherUserTyping: conversation?.isOtherUserTyping ?? state.isOtherUserTyping,
+      hasMore: hasMore,
+      loading: false,
+      initialScrollPending: initialScroll && visible.isNotEmpty,
+      httpDeliveryOk: true,
+      clearError: true,
+    );
+    _syncScreenCapture();
+  }
+
+  void _syncScreenCapture() {
+    final convo = state.conversation;
+    if (convo == null) return;
+    _screenCapture ??= ChatScreenCaptureService(
+      onSecurityEvent: _onLocalSecurityEvent,
+    );
+    _screenCapture!.start(
+      notifyEnabled: convo.notifyScreenshots,
+      secureEnabled: convo.secureChat,
+    );
+  }
+
+  void _onLocalSecurityEvent(String eventCode) {
+    unawaited(reportSecurityEvent(eventCode));
+  }
+
+  Future<void> reportSecurityEvent(String eventCode) async {
+    final convo = state.conversation;
+    if (convo == null || !convo.notifyScreenshots) return;
+
+    ChatDebugLog.securityEventOut(
+      eventCode: eventCode,
+      conversationId: _activeConversationId,
+      channel: 'websocket',
+    );
+    ChatDebugLog.messageOut(
+      type: 'security_event',
+      conversationId: _activeConversationId,
+    );
+
+    final sent = _ws.send({
+      'type': 'security_event',
+      'event_code': eventCode,
+    });
+    if (sent) return;
+
+    try {
+      final msg = await repository.reportSecurityEvent(
+        _activeConversationId,
+        eventCode: eventCode,
+      );
+      ChatDebugLog.securityEventAck(
+        eventCode: eventCode,
+        conversationId: _activeConversationId,
+        messageId: msg.id,
+        channel: 'http',
+      );
+      ChatDebugLog.systemMessageCreated(
+        messageId: msg.id,
+        conversationId: _activeConversationId,
+        eventCode: eventCode,
+      );
+      _onIncomingMessage(msg.copyWith(isMine: true));
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+    }
+  }
+
   Future<void> load() async {
-    final cacheKey = conversationId.trim();
-    final cached = messageCache.peek(cacheKey) ??
-        messageCache.peek(_activeConversationId);
-    if (cached != null) {
-      final visible = cached.where((m) => m.isVisible).toList(growable: false);
+    final candidates = _conversationIdCandidates();
+    final cacheKeys = [
+      if (conversationId.trim().isNotEmpty) conversationId.trim(),
+      if (_activeConversationId.isNotEmpty) _activeConversationId,
+      ...candidates,
+    ];
+
+    CachedMessagePage? cachedPage;
+    Conversation? cachedConvo;
+    for (final key in cacheKeys) {
+      cachedPage ??= chatCache.readMessages(key);
+      cachedConvo ??= chatCache.readConversation(key);
+      if (cachedPage != null && cachedConvo != null) break;
+    }
+
+    final hadCache = cachedPage != null;
+    if (cachedPage != null) {
+      _applyCachedSnapshot(
+        messages: cachedPage.messages,
+        conversation: cachedConvo,
+        hasMore: cachedPage.hasMore,
+      );
+    } else if (cachedConvo != null) {
       state = state.copyWith(
-        messages: cached,
-        visibleMessages: visible,
-        listEntries: buildMessageListEntries(visible),
+        conversation: cachedConvo,
         loading: false,
-        initialScrollPending: true,
-        httpDeliveryOk: true,
+        clearError: true,
       );
     } else {
       state = state.copyWith(loading: true, clearError: true);
     }
 
-    final errors = <String>[];
+    if (hadCache) {
+      if (!chatCache.isMessagesStale(cachedPage)) {
+        unawaited(_refreshFromNetwork(silent: true));
+        return;
+      }
+    }
 
+    await _refreshFromNetwork(silent: hadCache);
+  }
+
+  Future<void> _refreshFromNetwork({required bool silent}) async {
+    final errors = <String>[];
     ChatMessagesPage? page;
     Conversation? convo;
-
     final candidates = _conversationIdCandidates();
+    final pageSize = ChatCacheService.messagePageSize;
+
     if (candidates.isNotEmpty) {
       final primary = candidates.first;
+
       Future<ChatMessagesPage?> fetchMessages() async {
+        final sw = Stopwatch()..start();
+        ChatDebugLog.apiRequest(
+          endpoint: 'messages',
+          conversationId: primary,
+        );
         try {
-          return await repository.getMessages(primary, limit: 50);
+          final result = await repository.getMessages(primary, limit: pageSize);
+          ChatDebugLog.apiResponse(
+            endpoint: 'messages',
+            latencyMs: sw.elapsedMilliseconds,
+            count: result.results.length,
+          );
+          return result;
         } on ApiException catch (e) {
           errors.add(e.message);
           _noteHttpFailure();
@@ -215,8 +387,18 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       }
 
       Future<Conversation?> fetchConversation() async {
+        final sw = Stopwatch()..start();
+        ChatDebugLog.apiRequest(
+          endpoint: 'conversation',
+          conversationId: primary,
+        );
         try {
-          return await repository.getConversation(primary);
+          final result = await repository.getConversation(primary);
+          ChatDebugLog.apiResponse(
+            endpoint: 'conversation',
+            latencyMs: sw.elapsedMilliseconds,
+          );
+          return result;
         } on ApiException catch (e) {
           if (!errors.contains(e.message)) errors.add(e.message);
           _noteHttpFailure();
@@ -235,7 +417,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     if (page == null) {
       for (final id in candidates.skip(1)) {
         try {
-          page = await repository.getMessages(id, limit: 50);
+          page = await repository.getMessages(id, limit: pageSize);
           errors.clear();
           break;
         } on ApiException catch (e) {
@@ -261,7 +443,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
     if (page == null && convo != null) {
       try {
-        page = await repository.getMessages(convo.publicId, limit: 50);
+        page = await repository.getMessages(convo.publicId, limit: pageSize);
         errors.clear();
       } on ApiException catch (e) {
         errors.add(e.message);
@@ -270,25 +452,49 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     }
 
     if (_disposed) return;
-    final sorted = page != null ? sortMessages(page.results) : state.messages;
-    final visible = sorted.where((m) => m.isVisible).toList(growable: false);
-    state = state.copyWith(
-      conversation: convo,
-      messages: sorted,
-      visibleMessages: visible,
-      listEntries: buildMessageListEntries(visible),
-      isOtherUserTyping: convo?.isOtherUserTyping ?? false,
-      hasMore: page?.hasMore ?? false,
-      loading: false,
-      initialScrollPending: sorted.isNotEmpty,
-      httpDeliveryOk: true,
-      error: errors.isEmpty ? null : errors.first,
-    );
-    if (sorted.isNotEmpty) {
-      _touchCache(sorted);
+
+    if (convo != null) {
+      chatCache.writeConversation(convo);
     }
+
+    if (page != null) {
+      final merged = _mergeMessages(state.messages, page.results);
+      final hadMessages = state.messages.isNotEmpty;
+      if (hadMessages) {
+        _applyMergedMessages(merged);
+        state = state.copyWith(
+          conversation: convo ?? state.conversation,
+          hasMore: page.hasMore,
+          loading: false,
+          error: errors.isEmpty ? null : errors.first,
+        );
+      } else {
+        _applyCachedSnapshot(
+          messages: sortMessages(page.results),
+          conversation: convo,
+          hasMore: page.hasMore,
+        );
+        state = state.copyWith(error: errors.isEmpty ? null : errors.first);
+      }
+      _touchCache(state.messages, hasMore: page.hasMore);
+    } else if (!silent || state.messages.isEmpty) {
+      state = state.copyWith(
+        conversation: convo ?? state.conversation,
+        loading: false,
+        error: errors.isEmpty ? null : errors.first,
+      );
+    }
+
+    ChatDebugLog.cacheStats(
+      memoryHits: chatCache.memoryHits,
+      diskHits: chatCache.diskHits,
+      misses: chatCache.misses,
+      hitRatio: chatCache.hitRatio,
+    );
+
     _noteHttpSuccess();
     if (_ws.isConnected) _markRead();
+    _syncScreenCapture();
   }
 
   List<String> _conversationIdCandidates() {
@@ -329,8 +535,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _syncWsState();
   }
 
-  Future<void> _connectWs() async {
-    final publicId = _wsPublicId;
+  Future<void> _connectWs([String? publicIdOverride]) async {
+    final publicId = publicIdOverride ?? _wsPublicId;
     if (publicId == null) {
       if (kDebugMode) {
         debugPrint('[ChatThread] ws deferred — waiting for public_id');
@@ -346,10 +552,18 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
     switch (event.type) {
       case 'chat_message':
-        _onIncomingMessage(ChatMessage.fromJson(event.data));
+        _onIncomingMessage(ChatMessage.fromWsJson(event.data, currentUserId: currentUserId));
       case 'typing_status':
+        final userId = event.data['user_id'] as int?;
+        if (userId != null && userId == currentUserId) return;
         final typing = event.data['is_typing'] as bool? ?? false;
+        ChatDebugLog.typing(
+          isTyping: typing,
+          conversationId: _activeConversationId,
+          incoming: true,
+        );
         state = state.copyWith(isOtherUserTyping: typing);
+        chatCache.setTyping(_activeConversationId, typing);
         _typingClearTimer?.cancel();
         if (typing) {
           _typingClearTimer = Timer(const Duration(seconds: 3), () {
@@ -368,22 +582,71 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   void _onIncomingMessage(ChatMessage msg) {
+    ChatDebugLog.messageIn(
+      type: 'chat_message',
+      conversationId: _activeConversationId,
+      tempId: msg.clientTempId,
+      messageId: msg.id > 0 ? msg.id : null,
+    );
+
     final messages = List<ChatMessage>.from(state.messages);
     if (msg.clientTempId != null) {
       _clearPendingAck(msg.clientTempId!);
       final idx = messages.indexWhere((m) => m.clientTempId == msg.clientTempId);
       if (idx >= 0) {
-        messages[idx] = msg.copyWith(sendStatus: MessageSendStatus.sent);
+        final optimistic = messages[idx];
+        messages[idx] = ChatMessage.fromWsJson(
+          {
+            'id': msg.id,
+            'content': msg.content,
+            'image_url': msg.imageUrl,
+            'message_type': msg.messageType,
+            'timestamp': msg.timestamp,
+            'sender_id': msg.senderId,
+            'sender_name': msg.senderName,
+            'reply_to': msg.replyTo,
+            'client_temp_id': msg.clientTempId,
+            'event_code': msg.eventCode,
+          },
+          currentUserId: currentUserId,
+          optimistic: optimistic,
+        );
+        _failedSends.remove(msg.clientTempId);
+        ChatDebugLog.sendSuccess(
+          tempId: msg.clientTempId!,
+          latencyMs: 0,
+          channel: 'websocket',
+        );
         _commitMessages(messages);
-        onConversationsChanged();
+        _touchConversationPreview(messages[idx], fromMe: messages[idx].isMine);
+        _scheduleConversationsChanged();
         _markRead();
         return;
       }
     }
-    if (messages.any((m) => m.id == msg.id && m.id > 0)) return;
+    if (messages.any((m) => m.id == msg.id && m.id > 0)) {
+      ChatDebugLog.duplicateEvent(
+        type: 'chat_message',
+        conversationId: _activeConversationId,
+        tempId: msg.clientTempId,
+      );
+      return;
+    }
     messages.add(msg);
     _commitMessages(messages);
-    onConversationsChanged();
+    _touchConversationPreview(msg, fromMe: msg.isMine);
+    if (msg.isSystemMessage && msg.id > 0) {
+      ChatDebugLog.systemMessageCreated(
+        messageId: msg.id,
+        conversationId: _activeConversationId,
+        eventCode: msg.eventCode ?? '',
+      );
+      ChatDebugLog.conversationUpdated(
+        conversationId: _activeConversationId,
+        reason: 'system_message',
+      );
+    }
+    _scheduleConversationsChanged();
     _markRead();
   }
 
@@ -445,7 +708,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     try {
       _pollCycle++;
       final sw = Stopwatch()..start();
-      final page = await repository.getMessages(_activeConversationId, limit: 50);
+      final page = await repository.getMessages(
+        _activeConversationId,
+        limit: ChatCacheService.messagePageSize,
+      );
       if (_disposed) return;
       _noteHttpSuccess();
       if (kDebugMode) {
@@ -462,7 +728,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         _patchMessages(merged);
       }
       if (_pollCycle % 3 == 0) {
-        onConversationsChanged();
+        _scheduleConversationsChanged();
       }
     } catch (e) {
       _noteHttpFailure();
@@ -514,7 +780,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       final page = await repository.getMessages(
         _activeConversationId,
         before: oldest.id.toString(),
-        limit: 50,
+        limit: ChatCacheService.messagePageSize,
       );
       if (_disposed) return;
       final merged = sortMessages([...page.results, ...state.messages]);
@@ -523,6 +789,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         hasMore: page.hasMore,
         loadingEarlier: false,
       );
+      _touchCache(merged, hasMore: page.hasMore);
       _noteHttpSuccess();
     } catch (_) {
       if (!_disposed) {
@@ -552,16 +819,46 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   void onTyping() {
+    _typingStopTimer?.cancel();
+    _typingStopTimer = Timer(const Duration(milliseconds: 2500), stopTyping);
+
+    final now = DateTime.now();
+    final shouldSignal = !_isTypingActive ||
+        _lastTypingSignalAt == null ||
+        now.difference(_lastTypingSignalAt!) >= const Duration(seconds: 2);
+
+    if (shouldSignal) {
+      _isTypingActive = true;
+      _lastTypingSignalAt = now;
+      _emitTyping(true);
+    }
+  }
+
+  void stopTyping() {
+    if (!_isTypingActive) return;
+    _isTypingActive = false;
+    _typingStopTimer?.cancel();
     _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(milliseconds: 2000), () {
-      if (_ws.send({'type': 'typing', 'is_typing': true})) return;
-      repository.sendTyping(_activeConversationId);
-    });
+    _emitTyping(false);
+  }
+
+  void _emitTyping(bool isTyping) {
+    ChatDebugLog.typing(isTyping: isTyping, conversationId: _activeConversationId);
+    final payload = <String, dynamic>{
+      'type': 'typing',
+      'is_typing': isTyping,
+      if (currentUserId != null) 'user_id': currentUserId,
+    };
+    if (_ws.send(payload)) return;
+    if (isTyping) {
+      unawaited(repository.sendTyping(_activeConversationId));
+    }
   }
 
   Future<void> send(String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || state.sending) return;
+    if (trimmed.isEmpty) return;
+    stopTyping();
     await _sendPayload(content: trimmed, replyToId: state.replyingTo?.id);
   }
 
@@ -569,6 +866,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     required String content,
     String imageUrl = '',
     int? replyToId,
+    String? existingTempId,
+    Stopwatch? started,
   }) async {
     final replyTarget = replyToId != null
         ? state.messages.cast<ChatMessage?>().firstWhere(
@@ -577,42 +876,59 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
             )
         : state.replyingTo;
 
-    final tempId = 'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
-    final optimistic = ChatMessage(
-      id: -DateTime.now().millisecondsSinceEpoch,
-      content: content,
-      imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      messageType: imageUrl.isNotEmpty
-          ? (content == voiceMessageLabel ? 'voice' : 'image')
-          : 'text',
-      timestamp: DateTime.now().toUtc().toIso8601String(),
-      isMine: true,
-      clientTempId: tempId,
-      sendStatus: MessageSendStatus.pending,
-      replyTo: replyTarget == null
-          ? null
-          : {
-              'id': replyTarget.id,
-              'content': replyTarget.content,
-              'sender_name': replyTarget.senderName ?? '',
-            },
-    );
+    final tempId = existingTempId ??
+        'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+    final sendStarted = started ?? (Stopwatch()..start());
 
-    _failedSends[tempId] = _PendingSend(
-      content: content,
-      imageUrl: imageUrl,
-      replyToId: replyToId ?? replyTarget?.id,
-    );
+    if (existingTempId == null) {
+      final optimistic = ChatMessage(
+        id: -DateTime.now().millisecondsSinceEpoch,
+        content: content,
+        imageUrl: imageUrl.isEmpty ? null : imageUrl,
+        messageType: imageUrl.isNotEmpty
+            ? (content == voiceMessageLabel ? 'voice' : 'image')
+            : 'text',
+        timestamp: DateTime.now().toUtc().toIso8601String(),
+        isMine: true,
+        clientTempId: tempId,
+        sendStatus: MessageSendStatus.pending,
+        replyTo: replyTarget == null
+            ? null
+            : {
+                'id': replyTarget.id,
+                'content': replyTarget.content,
+                'sender_name': replyTarget.senderName ?? '',
+              },
+      );
 
-    state = _withMessages(
-      state.copyWith(
-        sending: true,
-        clearReplyingTo: true,
-        showEmojiPicker: false,
-      ),
-      sortMessages([...state.messages, optimistic]),
-    );
-    _touchCache(state.messages);
+      _failedSends[tempId] = _PendingSend(
+        content: content,
+        imageUrl: imageUrl,
+        replyToId: replyToId ?? replyTarget?.id,
+      );
+
+      ChatDebugLog.sendStart(
+        conversationId: _activeConversationId,
+        tempId: tempId,
+        channel: _ws.isConnected ? 'websocket' : 'http',
+      );
+
+      state = _withMessages(
+        state.copyWith(
+          clearReplyingTo: true,
+          showEmojiPicker: false,
+        ),
+        sortMessages([...state.messages, optimistic]),
+      );
+      _touchCache(state.messages);
+      _touchConversationPreview(optimistic, fromMe: true);
+    } else {
+      _failedSends[tempId] = _PendingSend(
+        content: content,
+        imageUrl: imageUrl,
+        replyToId: replyToId ?? replyTarget?.id,
+      );
+    }
 
     try {
       final sentViaWs = _ws.send({
@@ -625,40 +941,38 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       });
 
       if (sentViaWs) {
-        _schedulePendingAck(tempId);
+        _schedulePendingAck(tempId, sendStarted);
       } else {
-        await _commitViaHttp(tempId);
+        await _commitViaHttp(tempId, sendStarted);
       }
       _noteHttpSuccess();
-      onConversationsChanged();
+      _scheduleConversationsChanged();
     } on ApiException catch (e) {
-      _markFailed(tempId, e.message);
+      _markFailed(tempId, e.message, sendStarted);
       _noteHttpFailure();
     } catch (e) {
-      _markFailed(tempId, e.toString());
-    } finally {
-      if (!_disposed) state = state.copyWith(sending: false);
+      _markFailed(tempId, e.toString(), sendStarted);
     }
   }
 
-  void _schedulePendingAck(String tempId) {
+  void _schedulePendingAck(String tempId, Stopwatch started) {
     _pendingAckTimers[tempId]?.cancel();
-    _pendingAckTimers[tempId] = Timer(const Duration(seconds: 8), () async {
+    _pendingAckTimers[tempId] = Timer(_ackTimeout, () async {
       if (_disposed) return;
       final stillPending = state.messages.any(
         (m) => m.clientTempId == tempId && m.sendStatus == MessageSendStatus.pending,
       );
       if (stillPending) {
         try {
-          await _commitViaHttp(tempId);
+          await _commitViaHttp(tempId, started);
         } catch (e) {
-          _markFailed(tempId, e.toString());
+          _markFailed(tempId, e.toString(), started);
         }
       }
     });
   }
 
-  Future<void> _commitViaHttp(String tempId) async {
+  Future<void> _commitViaHttp(String tempId, Stopwatch started) async {
     final payload = _failedSends[tempId];
     if (payload == null) return;
     final msg = await repository.sendMessage(
@@ -675,11 +989,21 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       messages[idx] = msg.copyWith(sendStatus: MessageSendStatus.sent);
       _commitMessages(messages);
     }
+    ChatDebugLog.sendSuccess(
+      tempId: tempId,
+      latencyMs: started.elapsedMilliseconds,
+      channel: 'http',
+    );
     _noteHttpSuccess();
   }
 
-  void _markFailed(String tempId, String error) {
+  void _markFailed(String tempId, String error, Stopwatch started) {
     _clearPendingAck(tempId);
+    ChatDebugLog.sendFailure(
+      tempId: tempId,
+      error: error,
+      latencyMs: started.elapsedMilliseconds,
+    );
     _patchMessages(
       state.messages.map((m) {
         if (m.clientTempId == tempId) {
@@ -699,11 +1023,42 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   Future<void> pickImage({ImageSource source = ImageSource.gallery}) async {
     final file = await _picker.pickImage(source: source, imageQuality: 85);
     if (file == null) return;
-    state = state.copyWith(uploading: true);
+
+    final tempId = 'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+    final optimistic = ChatMessage(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      content: '',
+      messageType: 'image',
+      timestamp: DateTime.now().toUtc().toIso8601String(),
+      isMine: true,
+      clientTempId: tempId,
+      sendStatus: MessageSendStatus.pending,
+      localMediaPath: file.path,
+    );
+    _failedSends[tempId] = const _PendingSend(content: '', imageUrl: '');
+
+    final sendStarted = Stopwatch()..start();
+    state = _withMessages(
+      state.copyWith(uploading: true),
+      sortMessages([...state.messages, optimistic]),
+    );
+    _touchConversationPreview(optimistic, fromMe: true);
+
     try {
       final imageUrl = await repository.uploadChatImage(file.path);
-      await _sendPayload(content: '', imageUrl: imageUrl);
+      _failedSends[tempId] = _PendingSend(content: '', imageUrl: imageUrl);
+      final messages = List<ChatMessage>.from(state.messages);
+      final idx = messages.indexWhere((m) => m.clientTempId == tempId);
+      if (idx >= 0) {
+        messages[idx] = messages[idx].copyWith(
+          imageUrl: imageUrl,
+          localMediaPath: file.path,
+        );
+        _patchMessages(messages);
+      }
+      await _sendPayload(content: '', imageUrl: imageUrl, existingTempId: tempId, started: sendStarted);
     } on ApiException catch (e) {
+      _markFailed(tempId, e.message, sendStarted);
       state = state.copyWith(error: e.message);
     } finally {
       if (!_disposed) state = state.copyWith(uploading: false);
@@ -723,7 +1078,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   Future<bool> _startVoiceRecording() async {
-    if (state.isRecording || state.uploading || state.sending) return false;
+    if (state.isRecording || state.uploading) return false;
 
     if (_voiceRecorder?.isPaused ?? false) {
       return _resumeVoiceRecording();
@@ -938,15 +1293,36 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   void setReplyingTo(ChatMessage? msg) {
     state = msg == null
-        ? state.copyWith(clearReplyingTo: true)
-        : state.copyWith(replyingTo: msg);
+        ? state.copyWith(clearReplyingTo: true, showEmojiPicker: false)
+        : state.copyWith(replyingTo: msg, showEmojiPicker: false);
+  }
+
+  void openEmojiPicker() {
+    if (state.showEmojiPicker) return;
+    ChatDebugLog.emojiPickerOpened();
+    state = state.copyWith(showEmojiPicker: true);
+  }
+
+  void closeEmojiPicker() {
+    if (!state.showEmojiPicker) return;
+    ChatDebugLog.emojiPickerClosed();
+    state = state.copyWith(showEmojiPicker: false);
   }
 
   void toggleEmojiPicker() {
-    state = state.copyWith(showEmojiPicker: !state.showEmojiPicker);
+    if (state.showEmojiPicker) {
+      closeEmojiPicker();
+    } else {
+      openEmojiPicker();
+    }
   }
 
-  Future<void> updateSettings({bool? muted, bool? pinned}) async {
+  Future<void> updateSettings({
+    bool? muted,
+    bool? pinned,
+    bool? notifyScreenshots,
+    bool? secureChat,
+  }) async {
     final convo = state.conversation;
     if (convo == null) return;
     try {
@@ -954,13 +1330,18 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         convo.publicId,
         muted: muted,
         pinned: pinned,
+        notifyScreenshots: notifyScreenshots,
+        secureChat: secureChat,
       );
       state = state.copyWith(
         conversation: convo.copyWith(
           isMuted: muted ?? convo.isMuted,
           isPinned: pinned ?? convo.isPinned,
+          notifyScreenshots: notifyScreenshots ?? convo.notifyScreenshots,
+          secureChat: secureChat ?? convo.secureChat,
         ),
       );
+      _syncScreenCapture();
       onConversationsChanged();
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
@@ -1016,7 +1397,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         visibleMessages: const [],
         listEntries: const [],
       );
-      messageCache.clear(_activeConversationId);
+      await chatCache.clearMessages(_activeConversationId);
       onConversationsChanged();
       return true;
     } on ApiException catch (e) {
@@ -1041,8 +1422,11 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   @override
   void dispose() {
     _disposed = true;
+    stopTyping();
     _typingTimer?.cancel();
+    _typingStopTimer?.cancel();
     _typingClearTimer?.cancel();
+    _conversationsInvalidateTimer?.cancel();
     _stopVoiceTimer();
     unawaited(_voiceRecorder?.dispose());
     for (final timer in _pendingAckTimers.values) {
@@ -1051,6 +1435,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _pendingAckTimers.clear();
     _wsSub?.cancel();
     _connSub?.cancel();
+    _screenCapture?.stop();
     _ws.dispose();
     super.dispose();
   }

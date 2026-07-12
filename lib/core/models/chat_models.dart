@@ -8,6 +8,7 @@ class ChatMessage extends Equatable {
     this.content = '',
     this.imageUrl,
     this.messageType = 'text',
+    this.eventCode,
     required this.timestamp,
     this.senderId,
     this.senderName,
@@ -21,6 +22,7 @@ class ChatMessage extends Equatable {
     this.replyTo,
     this.clientTempId,
     this.sendStatus = MessageSendStatus.sent,
+    this.localMediaPath,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class ChatMessage extends Equatable {
       content: json['content'] as String? ?? '',
       imageUrl: json['image_url'] as String?,
       messageType: json['message_type'] as String? ?? 'text',
+      eventCode: json['event_code'] as String?,
       timestamp: (json['timestamp'] ?? json['created_at'] ?? '').toString(),
       senderId: json['sender_id'] as int?,
       senderName: json['sender_name'] as String?,
@@ -44,10 +47,32 @@ class ChatMessage extends Equatable {
     );
   }
 
+  /// WebSocket payloads omit `is_mine` — derive from sender when needed.
+  factory ChatMessage.fromWsJson(
+    Map<String, dynamic> json, {
+    int? currentUserId,
+    ChatMessage? optimistic,
+  }) {
+    final parsed = ChatMessage.fromJson(json);
+    if (optimistic != null) {
+      return parsed.copyWith(
+        isMine: optimistic.isMine,
+        sendStatus: MessageSendStatus.sent,
+        localMediaPath: null,
+      );
+    }
+    if (parsed.isMine) return parsed;
+    if (currentUserId != null && parsed.senderId != null) {
+      return parsed.copyWith(isMine: parsed.senderId == currentUserId);
+    }
+    return parsed;
+  }
+
   final int id;
   final String content;
   final String? imageUrl;
   final String messageType;
+  final String? eventCode;
   final String timestamp;
   final int? senderId;
   final String? senderName;
@@ -61,14 +86,18 @@ class ChatMessage extends Equatable {
   final Map<String, dynamic>? replyTo;
   final String? clientTempId;
   final MessageSendStatus sendStatus;
+  final String? localMediaPath;
 
   bool get isVisible => !isDeletedForMe;
+
+  bool get isSystemMessage => messageType == 'system';
 
   ChatMessage copyWith({
     int? id,
     String? content,
     String? imageUrl,
     String? messageType,
+    String? eventCode,
     String? timestamp,
     bool? isMine,
     bool? isRead,
@@ -80,12 +109,15 @@ class ChatMessage extends Equatable {
     Map<String, dynamic>? replyTo,
     MessageSendStatus? sendStatus,
     String? clientTempId,
+    String? localMediaPath,
+    bool clearLocalMediaPath = false,
   }) =>
       ChatMessage(
         id: id ?? this.id,
         content: content ?? this.content,
         imageUrl: imageUrl ?? this.imageUrl,
         messageType: messageType ?? this.messageType,
+        eventCode: eventCode ?? this.eventCode,
         timestamp: timestamp ?? this.timestamp,
         senderId: senderId,
         senderName: senderName,
@@ -99,11 +131,12 @@ class ChatMessage extends Equatable {
         replyTo: replyTo ?? this.replyTo,
         clientTempId: clientTempId ?? this.clientTempId,
         sendStatus: sendStatus ?? this.sendStatus,
+        localMediaPath: clearLocalMediaPath ? null : (localMediaPath ?? this.localMediaPath),
       );
 
   @override
   List<Object?> get props =>
-      [id, content, timestamp, isRead, deliveredAt, readAt, reactions, sendStatus];
+      [id, content, timestamp, messageType, eventCode, isRead, deliveredAt, readAt, reactions, sendStatus];
 }
 
 Map<String, int> _parseReactions(dynamic raw) {
@@ -164,6 +197,8 @@ class Conversation extends Equatable {
     this.isArchived = false,
     this.isMuted = false,
     this.isPinned = false,
+    this.notifyScreenshots = true,
+    this.secureChat = false,
     this.matchCreatedAt,
   });
 
@@ -185,6 +220,8 @@ class Conversation extends Equatable {
       isArchived: json['is_archived'] as bool? ?? false,
       isMuted: json['is_muted'] as bool? ?? false,
       isPinned: json['is_pinned'] as bool? ?? false,
+      notifyScreenshots: json['notify_screenshots'] as bool? ?? true,
+      secureChat: json['secure_chat'] as bool? ?? false,
     );
   }
 
@@ -200,6 +237,8 @@ class Conversation extends Equatable {
   final bool isArchived;
   final bool isMuted;
   final bool isPinned;
+  final bool notifyScreenshots;
+  final bool secureChat;
   final String? matchCreatedAt;
 
   String get displayName =>
@@ -215,6 +254,8 @@ class Conversation extends Equatable {
     bool? isArchived,
     bool? isMuted,
     bool? isPinned,
+    bool? notifyScreenshots,
+    bool? secureChat,
     ChatMessage? lastMessage,
     String? lastMessageAt,
   }) =>
@@ -231,6 +272,8 @@ class Conversation extends Equatable {
         isArchived: isArchived ?? this.isArchived,
         isMuted: isMuted ?? this.isMuted,
         isPinned: isPinned ?? this.isPinned,
+        notifyScreenshots: notifyScreenshots ?? this.notifyScreenshots,
+        secureChat: secureChat ?? this.secureChat,
         matchCreatedAt: matchCreatedAt,
       );
 

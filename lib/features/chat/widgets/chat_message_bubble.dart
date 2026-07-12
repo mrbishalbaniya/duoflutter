@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,9 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/theme/duo_theme.dart';
 import '../chat_utils.dart';
-import '../domain/chat_message_selectors.dart';
 import '../domain/chat_message_status.dart';
 import '../providers/chat_thread_controller.dart';
+import '../domain/chat_media_utils.dart';
+import 'chat_media_actions_sheet.dart';
 import 'voice_message_bubble.dart';
 
 class ChatMessageBubble extends ConsumerWidget {
@@ -50,8 +53,7 @@ class ChatMessageBubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final message = ref.watch(
       chatThreadControllerProvider(conversationId).select(
-        (s) =>
-            chatMessageForKey(s.visibleMessages, messageKey) ?? fallbackMessage,
+        (s) => s.messagesByKey[messageKey] ?? fallbackMessage,
       ),
     );
 
@@ -98,6 +100,9 @@ class ChatMessageBubble extends ConsumerWidget {
                     message: message,
                     maxWidth: maxWidth,
                     onImageTap: onImageTap,
+                    onImageLongPress: hasSavableChatMedia(message)
+                        ? () => _showMediaActions(context, message)
+                        : null,
                   ),
                   if (message.reactions.isNotEmpty)
                     Padding(
@@ -161,6 +166,10 @@ class ChatMessageBubble extends ConsumerWidget {
   }
 
   void _showActions(BuildContext context, ChatMessage message) {
+    if (isImageDominantMessage(message)) {
+      _showMediaActions(context, message);
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -220,6 +229,26 @@ class ChatMessageBubble extends ConsumerWidget {
       ),
     );
   }
+
+  void _showMediaActions(BuildContext context, ChatMessage message) {
+    final url = message.imageUrl;
+    if (url == null || url.isEmpty) return;
+    showChatMediaActionsSheet(
+      context,
+      media: ChatMediaActionContext(
+        remoteUrl: url,
+        localPath: message.localMediaPath,
+        senderName: message.senderName,
+        timestamp: message.timestamp,
+        isMine: message.isMine,
+        canDeleteForEveryone: message.isMine && !message.isDeletedForEveryone,
+        message: message,
+        onReply: onReply,
+        onDeleteForMe: onDeleteForMe,
+        onDeleteForEveryone: onDeleteForEveryone,
+      ),
+    );
+  }
 }
 
 class _BubbleBody extends StatelessWidget {
@@ -227,11 +256,13 @@ class _BubbleBody extends StatelessWidget {
     required this.message,
     required this.maxWidth,
     this.onImageTap,
+    this.onImageLongPress,
   });
 
   final ChatMessage message;
   final double maxWidth;
   final VoidCallback? onImageTap;
+  final VoidCallback? onImageLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -295,29 +326,44 @@ class _BubbleBody extends StatelessWidget {
     }
 
     if (imageOnly && !deleted) {
+      final localPath = message.localMediaPath;
       return ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 280),
           child: GestureDetector(
             onTap: onImageTap,
-            child: CachedNetworkImage(
-              imageUrl: message.imageUrl!,
-              fit: BoxFit.cover,
-              memCacheWidth: isAnimatedImageUrl(message.imageUrl) ? 320 : 640,
-              filterQuality: FilterQuality.medium,
-              placeholder: (_, __) => Container(
-                height: 180,
-                width: maxWidth,
-                color: scheme.surfaceContainerHighest,
-              ),
-              errorWidget: (_, __, ___) => Container(
-                height: 180,
-                width: maxWidth,
-                color: scheme.surfaceContainerHighest,
-                child: const Icon(Icons.broken_image_outlined),
-              ),
-            ),
+            onLongPress: onImageLongPress,
+            child: localPath != null && File(localPath).existsSync()
+                ? Image.file(
+                    File(localPath),
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                  )
+                : CachedNetworkImage(
+                    imageUrl: message.imageUrl!,
+                    fit: BoxFit.cover,
+                    memCacheWidth: isAnimatedImageUrl(message.imageUrl) ? 320 : 640,
+                    filterQuality: FilterQuality.medium,
+                    placeholder: (_, __) => Container(
+                      height: 180,
+                      width: maxWidth,
+                      color: scheme.surfaceContainerHighest,
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      height: 180,
+                      width: maxWidth,
+                      color: scheme.surfaceContainerHighest,
+                      child: const Icon(Icons.broken_image_outlined),
+                    ),
+                  ),
           ),
         ),
       );
@@ -361,6 +407,7 @@ class _BubbleBody extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: GestureDetector(
                         onTap: onImageTap,
+                        onLongPress: onImageLongPress,
                         child: CachedNetworkImage(
                           imageUrl: message.imageUrl!,
                           width: maxWidth - 28,
