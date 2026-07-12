@@ -91,7 +91,7 @@ class PermissionCard extends StatelessWidget {
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: const Text('Continue'),
+                  child: const Text('Continue to Duo'),
                 ),
               if (status != null && !showSuccess) ...[
                 const SizedBox(height: 12),
@@ -215,7 +215,7 @@ class _SuccessState extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'You can change this anytime in Settings.',
+          'Permissions are configured. Continue to finish setup.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

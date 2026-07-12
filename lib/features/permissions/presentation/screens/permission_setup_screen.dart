@@ -34,8 +34,9 @@ class _PermissionSetupScreenState extends ConsumerState<PermissionSetupScreen> {
 
     final updated = ref.read(permissionSetupControllerProvider);
     if (status.isGranted || status == DuoPermissionStatus.limited) {
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (!mounted) return;
+      if (updated.showSuccess) {
+        return;
+      }
       _goNext(controller, updated);
       return;
     }

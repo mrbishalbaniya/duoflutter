@@ -91,7 +91,7 @@ class PermissionSetupController extends StateNotifier<PermissionSetupState> {
     state = state.copyWith(
       statuses: nextStatuses,
       isRequesting: false,
-      showSuccess: status.isGranted,
+      showSuccess: status.isGranted && state.isLastStep,
     );
     return status;
   }
