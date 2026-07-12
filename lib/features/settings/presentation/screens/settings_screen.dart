@@ -13,6 +13,7 @@ import '../../models/settings_search.dart';
 import '../../providers/settings_providers.dart';
 import '../../utils/settings_layout.dart';
 import '../dialogs/settings_dialogs.dart';
+import '../../../update/presentation/sections/settings_update_section.dart';
 import '../sections/settings_about_section.dart';
 import '../sections/settings_account_section.dart';
 import '../sections/settings_appearance_section.dart';
@@ -234,11 +235,13 @@ class _SettingsContent {
           if (shows(SettingsSectionId.language)) _gap(),
           SettingsHelpSection(animationIndex: 7, visible: shows(SettingsSectionId.help)),
           if (shows(SettingsSectionId.help)) _gap(),
-          SettingsAboutSection(animationIndex: 8, visible: shows(SettingsSectionId.about)),
+          const SettingsUpdateSection(animationIndex: 8),
+          _gap(),
+          SettingsAboutSection(animationIndex: 9, visible: shows(SettingsSectionId.about)),
           if (shows(SettingsSectionId.about)) _gap(),
           SettingsDangerZoneSection(
             onLogout: onLogout,
-            animationIndex: 9,
+            animationIndex: 10,
             visible: shows(SettingsSectionId.danger),
           ),
         ],

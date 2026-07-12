@@ -80,7 +80,7 @@ abstract final class SettingsSearchRegistry {
     ),
     SettingsSearchEntry(
       sectionId: SettingsSectionId.about,
-      keywords: ['about', 'version', 'privacy policy', 'terms', 'licenses'],
+      keywords: ['about', 'version', 'privacy policy', 'terms', 'licenses', 'update', 'ota'],
     ),
     SettingsSearchEntry(
       sectionId: SettingsSectionId.danger,

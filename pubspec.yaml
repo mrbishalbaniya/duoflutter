@@ -46,6 +46,8 @@ dependencies:
   gal: ^2.3.2
   share_plus: ^10.1.4
   flutter_cache_manager: ^3.4.1
+  crypto: ^3.0.6
+  open_filex: ^4.7.0
   esewa_flutter_sdk:
     path: ./esewa_flutter_sdk
 

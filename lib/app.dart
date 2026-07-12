@@ -6,6 +6,7 @@ import 'core/storage/local_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/notifications/presentation/widgets/push_notification_bridge.dart';
+import 'features/update/presentation/widgets/update_bridge.dart';
 
 class DuoApp extends ConsumerWidget {
   const DuoApp({super.key});
@@ -15,30 +16,32 @@ class DuoApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    return PushNotificationBridge(
-      child: Builder(
-        builder: (context) {
-          final brightness = switch (themeMode) {
-            ThemeMode.dark => Brightness.dark,
-            ThemeMode.light => Brightness.light,
-            ThemeMode.system => MediaQuery.platformBrightnessOf(context),
-          };
-          final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
+    return UpdateBridge(
+      child: PushNotificationBridge(
+        child: Builder(
+          builder: (context) {
+            final brightness = switch (themeMode) {
+              ThemeMode.dark => Brightness.dark,
+              ThemeMode.light => Brightness.light,
+              ThemeMode.system => MediaQuery.platformBrightnessOf(context),
+            };
+            final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
 
-          return AnimatedTheme(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-            data: theme,
-            child: MaterialApp.router(
-              title: 'Duo',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.light(),
-              darkTheme: AppTheme.dark(),
-              themeMode: themeMode,
-              routerConfig: router,
-            ),
-          );
-        },
+            return AnimatedTheme(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              data: theme,
+              child: MaterialApp.router(
+                title: 'Duo',
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.light(),
+                darkTheme: AppTheme.dark(),
+                themeMode: themeMode,
+                routerConfig: router,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

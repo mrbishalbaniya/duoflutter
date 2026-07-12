@@ -159,6 +159,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Publish OTA metadata to DuoBackend
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+          OTA_PUBLISH_TOKEN: ${{ secrets.OTA_PUBLISH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: bash .github/scripts/publish-ota-release.sh
+
+      - name: Upload version.json artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: duo-ota-version-json
+          path: version.json
+          retention-days: 90
+          if-no-files-found: ignore
+
       - name: Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
