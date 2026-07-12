@@ -59,7 +59,8 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Verification'),
+        title: const Text('Verify your profile'),
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => context.pop(),
@@ -68,7 +69,12 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
       body: DuoAmbientBackground(
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              state.step == VerificationFlowStep.liveness || state.step == VerificationFlowStep.selfie ? 12 : 16,
+            ),
             child: Column(
               children: [
                 VerificationProgressBar(progress: state.progressPercent),
@@ -158,7 +164,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
     }
 
     return KeyedSubtree(
-      key: ValueKey('${state.step}_${state.livenessIndex}'),
+      key: ValueKey(state.step),
       child: child,
     );
   }

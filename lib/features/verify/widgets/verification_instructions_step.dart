@@ -62,7 +62,7 @@ class VerificationInstructionsStep extends StatelessWidget {
               Text('Verify your profile', style: theme.textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                'Confirm you are the person in your profile photos. Complete a short liveness check and take a selfie.',
+                'Quick identity check with your front camera.',
                 style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
@@ -85,12 +85,13 @@ class VerificationInstructionsStep extends StatelessWidget {
         const SizedBox(height: 16),
         VerificationTimeline(
           currentStep: VerificationFlowStep.instructions,
-          livenessSteps: const [
-            LivenessStep.smile,
-            LivenessStep.blink,
-            LivenessStep.headLeft,
-            LivenessStep.headRight,
-          ],
+          livenessSteps: state.session?.livenessSteps ??
+              const [
+                LivenessStep.smile,
+                LivenessStep.blink,
+                LivenessStep.headLeft,
+                LivenessStep.headRight,
+              ],
           completedSteps: const [],
           resultStatus: dashboard?.status,
         ),
@@ -100,7 +101,7 @@ class VerificationInstructionsStep extends StatelessWidget {
         ],
         const SizedBox(height: 20),
         DuoGradientButton(
-          label: state.submitting ? 'Starting…' : 'Start on this device',
+          label: state.submitting ? 'Starting…' : 'Start verification',
           onPressed: state.submitting ? null : onStartDevice,
         ),
         const SizedBox(height: 20),

@@ -28,31 +28,31 @@ class LivenessStepInfo {
 const livenessStepCatalog = <LivenessStep, LivenessStepInfo>{
   LivenessStep.smile: LivenessStepInfo(
     title: 'Smile',
-    hint: 'Hold still with a neutral face, then smile clearly — tap Capture when ready.',
+    hint: 'Hold neutral, then smile.',
     icon: Icons.sentiment_satisfied_alt_outlined,
   ),
   LivenessStep.blink: LivenessStepInfo(
     title: 'Blink',
-    hint: 'Hold still with eyes open, then close your eyes briefly — tap Capture when ready.',
+    hint: 'Hold still, then blink.',
     icon: Icons.visibility_outlined,
   ),
   LivenessStep.headLeft: LivenessStepInfo(
     title: 'Turn Left',
-    hint: 'Hold still, then turn your head left — tap Capture when ready.',
+    hint: 'Hold still, then turn left.',
     icon: Icons.arrow_back_rounded,
   ),
   LivenessStep.headRight: LivenessStepInfo(
     title: 'Turn Right',
-    hint: 'Hold still, then turn your head right — tap Capture when ready.',
+    hint: 'Hold still, then turn right.',
     icon: Icons.arrow_forward_rounded,
   ),
 };
 
 const defaultInstructions = [
-  'Use good lighting and face the front camera',
-  'Complete smile, blink, and head-turn steps',
-  'Take a clear front-facing selfie at the end',
-  'Only one person should be visible',
+  'Center your face inside the frame',
+  'Remove hats and sunglasses',
+  'Ensure good lighting',
+  'Keep your head steady',
 ];
 
 const finalVerificationStatuses = {
