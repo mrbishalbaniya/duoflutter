@@ -50,9 +50,27 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/logo.png
+  web:
+    generate: true
+    image_path: assets/logo.png
+    background_color: "#B83280"
+    theme_color: "#B83280"
+  windows:
+    generate: true
+    image_path: assets/logo.png
+  macos:
+    generate: true
+    image_path: assets/logo.png
 
 flutter:
   uses-material-design: true
   assets:
+    - assets/logo.png
     - assets/lottie/duo_glow.json
     - assets/map/duo_globe.html

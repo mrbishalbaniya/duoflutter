@@ -10,18 +10,10 @@ class ConversationTile extends StatelessWidget {
     super.key,
     required this.conversation,
     required this.onTap,
-    this.onPin,
-    this.onMute,
-    this.onArchive,
-    this.onDelete,
   });
 
   final Conversation conversation;
   final VoidCallback onTap;
-  final VoidCallback? onPin;
-  final VoidCallback? onMute;
-  final VoidCallback? onArchive;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -39,16 +31,8 @@ class ConversationTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: Colors.transparent,
-                width: 4,
-              ),
-            ),
-          ),
           child: Row(
             children: [
               Stack(
@@ -161,37 +145,6 @@ class ConversationTile extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert,
-                    size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'pin':
-                      onPin?.call();
-                    case 'mute':
-                      onMute?.call();
-                    case 'archive':
-                      onArchive?.call();
-                    case 'delete':
-                      onDelete?.call();
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'pin',
-                    child: Text(conversation.isPinned ? 'Unpin' : 'Pin'),
-                  ),
-                  PopupMenuItem(
-                    value: 'mute',
-                    child: Text(conversation.isMuted ? 'Unmute' : 'Mute'),
-                  ),
-                  PopupMenuItem(
-                    value: 'archive',
-                    child: Text(conversation.isArchived ? 'Unarchive' : 'Archive'),
-                  ),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete chat')),
-                ],
               ),
             ],
           ),

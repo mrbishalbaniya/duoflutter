@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
-
-import '../../../core/theme/duo_gradients.dart';
 
 /// Brand block from DuoFrontend `/login` header.
 class LoginBrandHeader extends StatelessWidget {
@@ -14,19 +11,16 @@ class LoginBrandHeader extends StatelessWidget {
 
     return Column(
       children: [
-        ShaderMask(
-          shaderCallback: (bounds) => DuoGradients.brand.createShader(bounds),
-          child: Text(
-            'Duo',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: -0.5,
-            ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Image.asset(
+            'assets/logo.png',
+            width: 112,
+            height: 112,
+            fit: BoxFit.cover,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
           'Find your digital heirloom',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(

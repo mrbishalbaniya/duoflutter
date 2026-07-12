@@ -10,7 +10,6 @@ import '../../core/theme/duo_theme.dart';
 import '../../widgets/duo_ui.dart';
 import 'chat_utils.dart';
 import 'providers/chat_providers.dart';
-import 'widgets/chat_dialogs.dart';
 import 'widgets/chat_shimmer.dart';
 import 'widgets/swipeable_conversation_tile.dart';
 
@@ -53,12 +52,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     }
   }
 
-  Future<void> _deleteConversation(Conversation convo) async {
-    final confirmed = await showDeleteConversationDialog(context);
-    if (!confirmed) return;
-    await _updateSettings(convo, archived: true);
-  }
-
   @override
   Widget build(BuildContext context) {
     final conversations = ref.watch(conversationsProvider(_filter));
@@ -71,15 +64,46 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
           children: [
             DuoPageHeader(
               title: 'Messages',
-              trailing: IconButton(
-                onPressed: () => ref.invalidate(conversationsProvider),
-                icon: conversations.isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: () => ref.invalidate(conversationsProvider),
+                    icon: conversations.isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: 'Filter conversations',
+                    onSelected: (value) {
+                      setState(() {
+                        switch (value) {
+                          case 'unread':
+                            _filter = _filter.copyWith(unreadOnly: !_filter.unreadOnly);
+                          case 'archived':
+                            _filter = _filter.copyWith(archived: !_filter.archived);
+                        }
+                      });
+                    },
+                    itemBuilder: (_) => [
+                      CheckedPopupMenuItem<String>(
+                        value: 'unread',
+                        checked: _filter.unreadOnly,
+                        child: const Text('Unread'),
+                      ),
+                      CheckedPopupMenuItem<String>(
+                        value: 'archived',
+                        checked: _filter.archived,
+                        child: const Text('Archived'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             Padding(
@@ -136,42 +160,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: const Text('Unread'),
-                    selected: _filter.unreadOnly,
-                    onSelected: (v) => setState(
-                      () => _filter = _filter.copyWith(unreadOnly: v),
-                    ),
-                    selectedColor: DuoColors.primary,
-                    labelStyle: TextStyle(
-                      color: _filter.unreadOnly ? Colors.white : null,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('Archived'),
-                    selected: _filter.archived,
-                    onSelected: (v) => setState(
-                      () => _filter = _filter.copyWith(archived: v),
-                    ),
-                    selectedColor: DuoColors.primary,
-                    labelStyle: TextStyle(
-                      color: _filter.archived ? Colors.white : null,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Divider(height: 1),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 88),
@@ -252,12 +240,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     }
                     return RefreshIndicator(
                       onRefresh: () async => ref.invalidate(conversationsProvider),
-                      child: ListView.separated(
+                      child: ListView.builder(
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: scheme.outline.withValues(alpha: 0.4),
-                        ),
                         itemBuilder: (_, index) {
                           final convo = filtered[index];
                           return SwipeableConversationTile(
@@ -265,9 +249,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                             onTap: () => context.push('/chat/${convo.publicId}'),
                             onPin: () => _updateSettings(convo, pinned: !convo.isPinned),
                             onMute: () => _updateSettings(convo, muted: !convo.isMuted),
-                            onArchive: () =>
-                                _updateSettings(convo, archived: !convo.isArchived),
-                            onDelete: () => _deleteConversation(convo),
                           );
                         },
                       ),

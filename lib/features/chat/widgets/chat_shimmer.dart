@@ -12,13 +12,9 @@ class ChatListShimmer extends StatelessWidget {
     return Shimmer.fromColors(
       baseColor: scheme.surfaceContainerHighest,
       highlightColor: scheme.surface,
-      child: ListView.separated(
+      child: ListView.builder(
         physics: const NeverScrollableScrollPhysics(),
         itemCount: itemCount,
-        separatorBuilder: (_, __) => Divider(
-          height: 1,
-          color: scheme.outline.withValues(alpha: 0.3),
-        ),
         itemBuilder: (_, __) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(

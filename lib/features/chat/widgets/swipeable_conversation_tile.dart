@@ -12,16 +12,12 @@ class SwipeableConversationTile extends StatelessWidget {
     required this.onTap,
     this.onPin,
     this.onMute,
-    this.onArchive,
-    this.onDelete,
   });
 
   final Conversation conversation;
   final VoidCallback onTap;
   final VoidCallback? onPin;
   final VoidCallback? onMute;
-  final VoidCallback? onArchive;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -42,31 +38,22 @@ class SwipeableConversationTile extends StatelessWidget {
       ),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
-        extentRatio: 0.44,
+        extentRatio: 0.22,
         children: [
           SlidableAction(
-            onPressed: (_) => onArchive?.call(),
-            backgroundColor: Colors.blueGrey,
+            onPressed: (_) => onMute?.call(),
+            backgroundColor: Colors.blueGrey.shade700,
             foregroundColor: Colors.white,
-            icon: conversation.isArchived ? Icons.unarchive : Icons.archive_outlined,
-            label: conversation.isArchived ? 'Restore' : 'Archive',
-          ),
-          SlidableAction(
-            onPressed: (_) => onDelete?.call(),
-            backgroundColor: Colors.redAccent,
-            foregroundColor: Colors.white,
-            icon: Icons.delete_outline,
-            label: 'Delete',
+            icon: conversation.isMuted
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_off_outlined,
+            label: conversation.isMuted ? 'Unmute' : 'Mute',
           ),
         ],
       ),
       child: ConversationTile(
         conversation: conversation,
         onTap: onTap,
-        onPin: onPin,
-        onMute: onMute,
-        onArchive: onArchive,
-        onDelete: onDelete,
       ),
     );
   }
