@@ -7,7 +7,8 @@ Pod::Spec.new do |s|
   s.version          = '0.0.1'
   s.summary          = 'eSewa Flutter SDK'
   s.description      = <<-DESC
-eSewa Flutter SDK
+eSewa Flutter SDK. Android uses the native eSewa SDK; iOS uses a compile-safe stub
+because the vendored EsewaSDK.framework is incompatible with Xcode 16+.
                        DESC
   s.homepage         = 'http://example.com'
   s.license          = { :file => '../LICENSE' }
@@ -15,12 +16,11 @@ eSewa Flutter SDK
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '9.0'
-  s.preserve_paths = 'EsewaSDK.framework'
-  s.xcconfig = { 'OTHER_LDFLAGS' => '-framework EsewaSDK' }
-  s.vendored_frameworks = 'EsewaSDK.framework'
+  s.platform = :ios, '12.0'
 
-  # Flutter.framework does not contain a i386 slice.
+  # Do not vendor EsewaSDK.framework on iOS — Swift 5.10 binary module breaks under Swift 6.
+  # The framework remains in ios/EsewaSDK.framework for reference / future SDK updates.
+
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
   s.swift_version = '5.0'
 end

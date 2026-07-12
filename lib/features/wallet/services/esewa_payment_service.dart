@@ -22,8 +22,8 @@ class EsewaNativePaymentResult {
 }
 
 class EsewaPaymentService {
-  bool get supportsNativeSdk =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  /// Native SDK is Android-only; iOS uses WebView checkout (vendored iOS SDK incompatible with Xcode 16+).
+  bool get supportsNativeSdk => !kIsWeb && Platform.isAndroid;
 
   Environment _environmentFor(String? value) {
     return value == 'live' ? Environment.live : Environment.test;
@@ -32,7 +32,7 @@ class EsewaPaymentService {
   Future<EsewaNativePaymentResult> startNativePayment(EsewaPaymentForm form) async {
     final sdk = form.mobileSdk;
     if (!supportsNativeSdk || sdk == null) {
-      throw UnsupportedError('Native eSewa SDK is only available on Android/iOS.');
+      throw UnsupportedError('Native eSewa SDK is only available on Android.');
     }
 
     final completer = Completer<EsewaNativePaymentResult>();
