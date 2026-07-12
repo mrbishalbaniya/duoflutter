@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="notification_color">#B83280</color>
+
+    <!-- Duo splash — matches Flutter SplashBackground light theme -->
+    <color name="splash_background">#FFF8FB</color>
+    <color name="splash_gradient_mid">#F7F2FF</color>
+    <color name="splash_gradient_end">#F7F7F8</color>
+    <color name="splash_icon_background">#E84A7A</color>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Duo splash — matches Flutter SplashBackground dark theme -->
+    <color name="splash_background">#0F0F10</color>
+    <color name="splash_gradient_mid">#151218</color>
+    <color name="splash_gradient_end">#17181A</color>
+    <color name="splash_icon_background">#E84A7A</color>
+</resources>
