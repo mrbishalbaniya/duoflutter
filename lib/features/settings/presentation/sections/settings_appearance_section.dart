@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/theme_controller.dart';
-import '../../../widgets/theme_option.dart';
-import 'settings_section.dart';
+import '../../../../core/theme/theme_controller.dart';
+import '../widgets/settings_section.dart';
+import '../widgets/settings_theme_option.dart';
 
 class SettingsAppearanceSection extends ConsumerWidget {
-  const SettingsAppearanceSection({super.key});
+  const SettingsAppearanceSection({
+    super.key,
+    required this.animationIndex,
+    this.visible = true,
+  });
+
+  final int animationIndex;
+  final bool visible;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,16 +23,21 @@ class SettingsAppearanceSection extends ConsumerWidget {
 
     return SettingsSection(
       title: 'Appearance',
+      animationIndex: animationIndex,
+      visible: visible,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Theme', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+            Text(
+              'Theme',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
-                ThemeOption(
+                SettingsThemeOption(
                   label: 'Dark',
                   icon: Icons.dark_mode_outlined,
                   active: themeMode == ThemeMode.dark,
@@ -35,7 +47,7 @@ class SettingsAppearanceSection extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(width: 8),
-                ThemeOption(
+                SettingsThemeOption(
                   label: 'Light',
                   icon: Icons.light_mode_outlined,
                   active: themeMode == ThemeMode.light,
@@ -45,7 +57,7 @@ class SettingsAppearanceSection extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(width: 8),
-                ThemeOption(
+                SettingsThemeOption(
                   label: 'System',
                   icon: Icons.brightness_auto_outlined,
                   active: themeMode == ThemeMode.system,
@@ -55,6 +67,14 @@ class SettingsAppearanceSection extends ConsumerWidget {
                   },
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Display preferences follow your device accessibility settings, including text scaling.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
             ),
           ],
         ),

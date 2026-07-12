@@ -190,4 +190,11 @@ class ChatCacheService {
   bool? typingStatus(String conversationKey) {
     return _typingByConversation[conversationKey.trim()];
   }
+
+  Future<void> clearAll() async {
+    _memory.clearAll();
+    _typingByConversation.clear();
+    _conversationMeta.clear();
+    await _disk.clearAll();
+  }
 }

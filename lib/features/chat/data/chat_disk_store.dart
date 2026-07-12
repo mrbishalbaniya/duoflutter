@@ -97,4 +97,16 @@ class ChatDiskStore {
       },
     );
   }
+
+  Future<void> clearAll() async {
+    final keys = _box.keys.toList(growable: false);
+    for (final key in keys) {
+      if (key is! String) continue;
+      if (key.startsWith(_messagesPrefix) ||
+          key.startsWith(_conversationPrefix) ||
+          key.startsWith(_listPrefix)) {
+        await _box.delete(key);
+      }
+    }
+  }
 }

@@ -19,3 +19,10 @@ String formatWalletBalance(int? balance) {
         (match) => '${match[1]},',
       )}';
 }
+
+String formatPhoneLabel(String? countryCode, String? number) {
+  if (number == null || number.trim().isEmpty) return 'Not set';
+  final code = countryCode?.trim();
+  if (code == null || code.isEmpty) return number;
+  return '$code $number';
+}

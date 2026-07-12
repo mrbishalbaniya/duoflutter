@@ -37,6 +37,13 @@ class ChatMessageCache {
     _cachedAtMs.remove(conversationKey);
   }
 
+  void clearAll() {
+    _messages.clear();
+    _hasMore.clear();
+    _cachedAtMs.clear();
+    _conversationLists.clear();
+  }
+
   CachedConversationList? peekConversationList(String filterKey) {
     return _conversationLists[filterKey];
   }

@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../core/models/notification_models.dart';
-import '../../../core/theme/duo_theme.dart';
-import '../../../widgets/duo_ui.dart';
-import '../providers/settings_providers.dart';
-import 'settings_section.dart';
+import '../../../../core/models/notification_models.dart';
+import '../../../../core/router/app_router.dart';
+import '../../../../widgets/duo_ui.dart';
+import '../../providers/settings_providers.dart';
+import '../widgets/settings_section.dart';
 
 class SettingsNotificationsSection extends ConsumerWidget {
-  const SettingsNotificationsSection({super.key});
+  const SettingsNotificationsSection({
+    super.key,
+    required this.animationIndex,
+    this.visible = true,
+  });
+
+  final int animationIndex;
+  final bool visible;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,6 +27,8 @@ class SettingsNotificationsSection extends ConsumerWidget {
 
     return SettingsSection(
       title: 'Notifications',
+      animationIndex: animationIndex,
+      visible: visible,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -29,24 +38,27 @@ class SettingsNotificationsSection extends ConsumerWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: DuoColors.primary.withValues(alpha: 0.1),
+                color: scheme.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.notifications_outlined, color: DuoColors.primary, size: 22),
+              child: Icon(Icons.notifications_outlined, color: scheme.primary, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Push notifications',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Get beautiful alerts for likes, new matches, and messages on this device.',
-                    style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.35),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
                   ),
                   const SizedBox(height: 12),
                   AnimatedSwitcher(
@@ -55,19 +67,28 @@ class SettingsNotificationsSection extends ConsumerWidget {
                   ),
                   if (ui.pushError != null) ...[
                     const SizedBox(height: 10),
-                    Text(ui.pushError!, style: const TextStyle(color: DuoColors.error, fontSize: 13)),
+                    Text(
+                      ui.pushError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.error),
+                    ),
                   ],
                   if (ui.pushMessage != null) ...[
                     const SizedBox(height: 10),
                     Text(
                       ui.pushMessage!,
-                      style: TextStyle(color: scheme.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ],
                   const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => context.push('/notifications'),
-                    child: const Text('View notification history'),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => context.push(AppRoutes.notifications),
+                      child: const Text('View notification history'),
+                    ),
                   ),
                 ],
               ),
@@ -101,7 +122,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
       return Text(
         'This device does not support push notifications.',
         key: const ValueKey('push-unsupported'),
-        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
 
@@ -109,7 +130,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
       return Text(
         'Push is not configured yet. Ask an admin to enable Firebase in integration settings.',
         key: const ValueKey('push-unconfigured'),
-        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
 
@@ -142,7 +163,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
           ),
         Text(
           status.enabled ? 'Enabled' : 'Disabled',
-          style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
