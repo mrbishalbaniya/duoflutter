@@ -26,16 +26,24 @@ class WalletRepository {
     return EsewaPaymentForm.fromJson(response.data!);
   }
 
-  Future<Map<String, dynamic>> purchasePlan(String planId) async {
+  Future<WalletPurchaseResult> purchasePlan(String planId) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/wallet/purchase/',
       data: {'plan_id': planId},
     );
-    return response.data ?? {};
+    return WalletPurchaseResult.fromJson(response.data!);
   }
 
   Future<Map<String, dynamic>> getSubscriptionStatus() async {
     final response = await _client.get<Map<String, dynamic>>('/subscriptions/status/');
+    return response.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> verifyPayment(String transactionUuid) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/subscriptions/verify/',
+      data: {'transaction_uuid': transactionUuid},
+    );
     return response.data ?? {};
   }
 }

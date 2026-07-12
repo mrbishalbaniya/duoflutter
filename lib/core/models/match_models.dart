@@ -21,11 +21,12 @@ class MatchSession extends Equatable {
   });
 
   factory MatchSession.fromJson(Map<String, dynamic> json) {
+    final other = json['other_user_profile'] as Map<String, dynamic>?;
     return MatchSession(
-      id: json['id'] as int,
-      otherUserProfile: DuoProfile.fromJson(
-        json['other_user_profile'] as Map<String, dynamic>,
-      ),
+      id: (json['id'] ?? json['match_id'] ?? 0) as int,
+      otherUserProfile: other != null
+          ? DuoProfile.fromJson(other)
+          : const DuoProfile(),
       matchedAt: json['matched_at'] as String?,
       compatibilityScore: (json['compatibility_score'] as num?)?.toDouble(),
     );
@@ -65,24 +66,65 @@ class SwipeResult extends Equatable {
 class LikedProfileEntry extends Equatable {
   const LikedProfileEntry({
     required this.profile,
+    this.swipeId,
     this.likedAt,
+    this.action,
     this.locked = false,
   });
 
   factory LikedProfileEntry.fromJson(Map<String, dynamic> json) {
     return LikedProfileEntry(
       profile: DuoProfile.fromJson(json['profile'] as Map<String, dynamic>),
+      swipeId: json['swipe_id'] as int?,
       likedAt: json['liked_at'] as String?,
+      action: _parseSwipeAction(json['action'] as String?),
       locked: json['locked'] as bool? ?? false,
     );
   }
 
   final DuoProfile profile;
+  final int? swipeId;
   final String? likedAt;
+  final SwipeAction? action;
   final bool locked;
 
   @override
-  List<Object?> get props => [profile.userId, locked];
+  List<Object?> get props => [profile.userId, swipeId, locked];
+}
+
+class VisitedProfileEntry extends Equatable {
+  const VisitedProfileEntry({
+    required this.profile,
+    this.visitId,
+    this.visitedAt,
+    this.locked = false,
+  });
+
+  factory VisitedProfileEntry.fromJson(Map<String, dynamic> json) {
+    return VisitedProfileEntry(
+      profile: DuoProfile.fromJson(json['profile'] as Map<String, dynamic>),
+      visitId: json['visit_id'] as int?,
+      visitedAt: json['visited_at'] as String?,
+      locked: json['locked'] as bool? ?? false,
+    );
+  }
+
+  final DuoProfile profile;
+  final int? visitId;
+  final String? visitedAt;
+  final bool locked;
+
+  @override
+  List<Object?> get props => [profile.userId, visitId, locked];
+}
+
+SwipeAction? _parseSwipeAction(String? value) {
+  if (value == null) return null;
+  return switch (value.toUpperCase()) {
+    'SKIP' => SwipeAction.skip,
+    'SUPERLIKE' => SwipeAction.superlike,
+    _ => SwipeAction.like,
+  };
 }
 
 class PaywalledList<T> extends Equatable {

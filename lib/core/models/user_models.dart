@@ -21,6 +21,28 @@ class DuoProfile extends Equatable {
     this.profileCompleteness = 0,
     this.previewDistanceKm,
     this.locked = false,
+    this.locationShared = true,
+    this.locationGhostMode = false,
+    this.locationVisibility = 'friends',
+    this.locationVisibilityFriends = const [],
+    this.education,
+    this.occupation,
+    this.religion,
+    this.workPreference,
+    this.lifestyleTags = const [],
+    this.relationshipGoal,
+    this.prefAgeMin,
+    this.prefAgeMax,
+    this.prefLocation,
+    this.prefMaxDistanceKm,
+    this.prefGender,
+    this.prefRelationshipGoal,
+    this.prefVerifiedOnly = false,
+    this.phoneCountryCode,
+    this.phoneNumber,
+    this.prefMinHeight,
+    this.prefOccupation,
+    this.prefValues,
   });
 
   factory DuoProfile.fromJson(Map<String, dynamic> json) {
@@ -47,6 +69,34 @@ class DuoProfile extends Equatable {
       profileCompleteness: json['profile_completeness'] as int? ?? 0,
       previewDistanceKm: (json['preview_distance_km'] as num?)?.toDouble(),
       locked: json['locked'] as bool? ?? false,
+      locationShared: json['location_shared'] as bool? ?? true,
+      locationGhostMode: json['location_ghost_mode'] as bool? ?? false,
+      locationVisibility: json['location_visibility'] as String? ?? 'friends',
+      locationVisibilityFriends: (json['location_visibility_friends'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const [],
+      education: json['education'] as String?,
+      occupation: json['occupation'] as String?,
+      religion: json['religion'] as String?,
+      workPreference: json['work_preference'] as String?,
+      lifestyleTags: (json['lifestyle_tags'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      relationshipGoal: json['relationship_goal'] as String?,
+      prefAgeMin: json['pref_age_min'] as int?,
+      prefAgeMax: json['pref_age_max'] as int?,
+      prefLocation: json['pref_location'] as String?,
+      prefMaxDistanceKm: json['pref_max_distance_km'] as int?,
+      prefGender: json['pref_gender'] as String?,
+      prefRelationshipGoal: json['pref_relationship_goal'] as String?,
+      prefVerifiedOnly: json['pref_verified_only'] as bool? ?? false,
+      phoneCountryCode: json['phone_country_code'] as String?,
+      phoneNumber: json['phone_number'] as String?,
+      prefMinHeight: json['pref_min_height'] as String?,
+      prefOccupation: json['pref_occupation'] as String?,
+      prefValues: json['pref_values'] as String?,
     );
   }
 
@@ -77,6 +127,28 @@ class DuoProfile extends Equatable {
   final int profileCompleteness;
   final double? previewDistanceKm;
   final bool locked;
+  final bool locationShared;
+  final bool locationGhostMode;
+  final String locationVisibility;
+  final List<int> locationVisibilityFriends;
+  final String? education;
+  final String? occupation;
+  final String? religion;
+  final String? workPreference;
+  final List<String> lifestyleTags;
+  final String? relationshipGoal;
+  final int? prefAgeMin;
+  final int? prefAgeMax;
+  final String? prefLocation;
+  final int? prefMaxDistanceKm;
+  final String? prefGender;
+  final String? prefRelationshipGoal;
+  final bool prefVerifiedOnly;
+  final String? phoneCountryCode;
+  final String? phoneNumber;
+  final String? prefMinHeight;
+  final String? prefOccupation;
+  final String? prefValues;
 
   String get displayPhoto {
     if (photoUrl != null && photoUrl!.isNotEmpty) return photoUrl!;
@@ -85,6 +157,19 @@ class DuoProfile extends Equatable {
   }
 
   String get displayName => fullName.isNotEmpty ? fullName : (username ?? 'User');
+
+  List<String> get profilePhotos => allPhotos.take(3).toList();
+
+  List<String> get allPhotos {
+    final photos = <String>[];
+    if (photoUrl != null && photoUrl!.isNotEmpty) photos.add(photoUrl!);
+    for (final url in photoUrls) {
+      if (url.isNotEmpty && !photos.contains(url)) photos.add(url);
+    }
+    return photos;
+  }
+
+  int? get resolvedUserId => userId ?? id;
 
   @override
   List<Object?> get props => [userId, fullName, photoUrl, isPremium];

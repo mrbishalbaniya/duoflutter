@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/local_storage.dart';
 import 'core/theme/duo_theme.dart';
-
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+import 'core/theme/theme_controller.dart';
 
 class DuoApp extends ConsumerWidget {
   const DuoApp({super.key});

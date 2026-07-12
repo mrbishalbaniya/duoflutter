@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/splash/splash_controller.dart';
 import '../../features/auth/auth_controller.dart';
+import '../../features/onboarding/onboarding_controller.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
@@ -15,10 +18,14 @@ import '../../features/profile/profile_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/shell/main_shell.dart';
 import '../../features/splash/splash_screen.dart';
+import '../../features/map/map_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
+import '../../features/verify/verification_screen.dart';
+import '../../features/verify/verify_device_screen.dart';
 
 abstract final class AppRoutes {
   static const splash = '/';
+  static const onboarding = '/onboarding';
   static const login = '/login';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
@@ -32,31 +39,52 @@ abstract final class AppRoutes {
   static const wallet = '/wallet';
   static const settings = '/settings';
   static const verify = '/verify';
+  static const verifyDevice = '/verify/device';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
+  final splash = ref.watch(splashControllerProvider);
+  final intro = ref.watch(onboardingControllerProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: _AuthRefreshListenable(ref),
     redirect: (context, state) {
       final path = state.matchedLocation;
+      final isOnboarding = path == AppRoutes.onboarding;
       final isAuthRoute = path == AppRoutes.login ||
           path == AppRoutes.register ||
-          path == AppRoutes.forgotPassword;
+          path == AppRoutes.forgotPassword ||
+          isOnboarding;
       final isSplash = path == AppRoutes.splash;
+      final isVerifyDevice = path == AppRoutes.verifyDevice;
 
       if (auth.status == AuthStatus.unknown) {
-        return isSplash ? null : AppRoutes.splash;
+        return isSplash || isVerifyDevice ? null : AppRoutes.splash;
+      }
+
+      if (isSplash && !splash.canExit) {
+        return null;
       }
 
       if (auth.status == AuthStatus.unauthenticated) {
+        if (isVerifyDevice) return null;
+        if (!intro.isComplete) {
+          if (!isOnboarding) return AppRoutes.onboarding;
+          return null;
+        }
+        if (isOnboarding) return AppRoutes.login;
         if (isAuthRoute) return null;
         return AppRoutes.login;
       }
 
       if (auth.status == AuthStatus.authenticated) {
+        final needsOnboarding = !(auth.user?.profile.isOnboarded ?? false);
+        if (needsOnboarding) {
+          if (path != AppRoutes.register) return AppRoutes.register;
+          return null;
+        }
         if (isAuthRoute || isSplash) return AppRoutes.match;
       }
 
@@ -68,8 +96,35 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const SplashScreen(),
       ),
       GoRoute(
+        path: AppRoutes.onboarding,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const OnboardingScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.login,
-        builder: (_, __) => const LoginScreen(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.98, end: 1).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+                ),
+                child: child,
+              ),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.register,
@@ -97,7 +152,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.verify,
-        builder: (_, __) => const VerifyPlaceholderScreen(),
+        builder: (_, __) => const VerificationScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyDevice,
+        builder: (_, state) => VerifyDeviceScreen(
+          sessionToken: state.uri.queryParameters['session'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.settings,
@@ -134,7 +195,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.map,
-                builder: (_, __) => const _MapPlaceholderScreen(),
+                builder: (_, __) => const MapScreen(),
               ),
             ],
           ),
@@ -155,43 +216,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 class _AuthRefreshListenable extends ChangeNotifier {
   _AuthRefreshListenable(this._ref) {
     _ref.listen(authControllerProvider, (_, __) => notifyListeners());
+    _ref.listen(splashControllerProvider, (_, __) => notifyListeners());
+    _ref.listen(onboardingControllerProvider, (_, __) => notifyListeners());
   }
 
   final Ref _ref;
-}
-
-class _MapPlaceholderScreen extends StatelessWidget {
-  const _MapPlaceholderScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Map')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.map_outlined, size: 64, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 16),
-              Text(
-                'Globe map coming in Phase 2',
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Match locations, layers, and activity heatmap will mirror the web map.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -9,6 +9,16 @@ import '../../repositories/chat_repository.dart';
 import '../../repositories/matching_repository.dart';
 import '../../repositories/profile_repository.dart';
 import '../../repositories/wallet_repository.dart';
+import '../../repositories/photo_repository.dart';
+import '../../repositories/verification_repository.dart';
+
+final photoRepositoryProvider = Provider<PhotoRepository>((ref) {
+  return PhotoRepository(ref.watch(dioClientProvider));
+});
+
+final verificationRepositoryProvider = Provider<VerificationRepository>((ref) {
+  return VerificationRepository(ref.watch(dioClientProvider));
+});
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 

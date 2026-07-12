@@ -27,11 +27,13 @@ class ProfileSwipeCard extends StatelessWidget {
             CachedNetworkImage(
               imageUrl: photo,
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(color: DuoColors.surfaceVariantDark),
-              errorWidget: (_, __, ___) => _placeholder(),
+              placeholder: (_, __) => Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
+              errorWidget: (_, __, ___) => _placeholder(context),
             )
           else
-            _placeholder(),
+            _placeholder(context),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -110,9 +112,9 @@ class ProfileSwipeCard extends StatelessWidget {
     );
   }
 
-  Widget _placeholder() {
+  Widget _placeholder(BuildContext context) {
     return Container(
-      color: DuoColors.surfaceVariantDark,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: const Center(
         child: Icon(Icons.person, size: 80, color: Colors.white24),
       ),

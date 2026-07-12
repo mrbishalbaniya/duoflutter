@@ -4,6 +4,7 @@ import '../../core/models/user_models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/core_providers.dart';
 import '../../repositories/auth_repository.dart';
+import '../settings/providers/settings_providers.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -47,6 +48,7 @@ class AuthController extends StateNotifier<AuthState> {
       }
       final user = await _auth.getMe();
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } catch (_) {
       await _auth.logout();
       state = const AuthState(status: AuthStatus.unauthenticated);
@@ -58,6 +60,7 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await _auth.login(email: email, password: password);
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
       rethrow;
@@ -73,6 +76,7 @@ class AuthController extends StateNotifier<AuthState> {
 
       final user = await _auth.loginWithGoogle(idToken);
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
       rethrow;
@@ -95,6 +99,7 @@ class AuthController extends StateNotifier<AuthState> {
         fullName: fullName,
       );
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
       rethrow;
@@ -105,6 +110,7 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await _auth.getMe();
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } catch (_) {}
   }
 

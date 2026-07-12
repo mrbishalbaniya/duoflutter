@@ -28,21 +28,27 @@ class ChatRepository {
     return Conversation.fromJson(response.data!);
   }
 
-  Future<List<ChatMessage>> getMessages(
+  Future<ChatMessagesPage> getMessages(
     String conversationId, {
     int limit = 50,
     String? before,
   }) async {
-    final response = await _client.get<List<dynamic>>(
+    final response = await _client.get<Map<String, dynamic>>(
       '/chat/conversations/$conversationId/messages/',
       queryParameters: {
         'limit': limit,
         if (before != null) 'before': before,
       },
     );
-    return (response.data ?? [])
+    final data = response.data ?? {};
+    final results = (data['results'] as List<dynamic>? ?? [])
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
+    return ChatMessagesPage(
+      results: results,
+      hasMore: data['has_more'] as bool? ?? false,
+      nextBefore: data['next_before'] as int?,
+    );
   }
 
   Future<ChatMessage> sendMessage(
@@ -54,8 +60,8 @@ class ChatRepository {
     final response = await _client.post<Map<String, dynamic>>(
       '/chat/conversations/$conversationId/messages/',
       data: {
-        if (content != null) 'content': content,
-        if (imageUrl != null) 'image_url': imageUrl,
+        'content': content ?? '',
+        'image_url': imageUrl ?? '',
         if (replyToId != null) 'reply_to_id': replyToId,
       },
     );
@@ -81,8 +87,12 @@ class ChatRepository {
     return response.data!['image_url'] as String;
   }
 
-  Future<void> reactToMessage(int messageId, String emoji) async {
-    await _client.post('/chat/messages/$messageId/react/', data: {'emoji': emoji});
+  Future<ChatMessage> reactToMessage(int messageId, String emoji) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/chat/messages/$messageId/react/',
+      data: {'emoji': emoji},
+    );
+    return ChatMessage.fromJson(response.data!);
   }
 
   Future<void> deleteMessage(int messageId, {required String deleteType}) async {
@@ -114,5 +124,9 @@ class ChatRepository {
     await _client.post('/chat/conversations/$conversationId/report/', data: {
       'reason': reason,
     });
+  }
+
+  Future<void> clearConversationHistory(String conversationId) async {
+    await _client.post('/chat/conversations/$conversationId/clear/');
   }
 }

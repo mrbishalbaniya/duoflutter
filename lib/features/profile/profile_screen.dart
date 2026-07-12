@@ -1,244 +1,335 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/user_models.dart';
 import '../../core/network/api_exception.dart';
-import '../../core/providers/core_providers.dart';
 import '../../core/router/app_router.dart';
-import '../auth/auth_controller.dart';
+import '../../core/theme/duo_gradients.dart';
+import '../../core/theme/duo_theme.dart';
+import '../../widgets/duo_ui.dart';
+import 'domain/profile_domain.dart';
+import 'profile_edit_screen.dart';
+import 'providers/profile_providers.dart';
+import 'widgets/profile_completeness_card.dart';
+import 'widgets/profile_header.dart';
+import 'widgets/profile_lifestyle_card.dart';
+import 'widgets/profile_photo_gallery.dart';
+import 'widgets/profile_section_card.dart';
+import 'widgets/profile_skeleton.dart';
 
-final myProfileProvider = FutureProvider.autoDispose<DuoProfile>((ref) async {
-  return ref.read(profileRepositoryProvider).getMyProfile();
-});
-
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(myProfileProvider);
-    final user = ref.watch(authControllerProvider).user;
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
 
-    return Scaffold(
-      body: profile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
-        data: (p) => CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 120,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0x66E84A7A), Color(0x668B5CF6)],
-                    ),
-                  ),
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: () => context.push(AppRoutes.settings),
-                ),
-              ],
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        CircleAvatar(
-                          radius: 48,
-                          backgroundImage: p.displayPhoto.isNotEmpty
-                              ? CachedNetworkImageProvider(p.displayPhoto)
-                              : null,
-                          child: p.displayPhoto.isEmpty ? const Icon(Icons.person, size: 48) : null,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                p.displayName,
-                                style: Theme.of(context).textTheme.headlineSmall,
-                              ),
-                              if (p.location != null)
-                                Text(
-                                  p.location!,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _InfoCard(
-                      title: 'Profile completeness',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          LinearProgressIndicator(value: p.profileCompleteness / 100),
-                          const SizedBox(height: 8),
-                          Text('${p.profileCompleteness}% complete'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (p.isPremium)
-                      _InfoCard(
-                        title: 'Premium',
-                        child: const Text('Duo Premium is active'),
-                      ),
-                    if (!p.isVerified)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.verified_user_outlined),
-                        title: const Text('Verify your profile'),
-                        subtitle: const Text('Earn a verified badge'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push(AppRoutes.verify),
-                      ),
-                    if (p.bio != null && p.bio!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _InfoCard(title: 'About', child: Text(p.bio!)),
-                    ],
-                    const SizedBox(height: 12),
-                    _InfoCard(
-                      title: 'Account',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Email: ${user?.email ?? p.email ?? '—'}'),
-                          Text('Username: ${user?.username ?? p.username ?? '—'}'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  Future<void> _refresh() async {
+    ref.invalidate(profileScreenProvider);
+    await ref.read(profileScreenProvider.future);
+  }
+
+  Future<void> _openEdit(DuoProfile profile) async {
+    HapticFeedback.lightImpact();
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ProfileEditScreen(initialProfile: profile),
       ),
     );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ProfileEditScreen extends ConsumerStatefulWidget {
-  const ProfileEditScreen({super.key});
-
-  @override
-  ConsumerState<ProfileEditScreen> createState() => _ProfileEditScreenState();
-}
-
-class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
-  final _bioController = TextEditingController();
-  final _locationController = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _bioController.dispose();
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    try {
-      await ref.read(profileRepositoryProvider).updateProfile({
-        'bio': _bioController.text.trim(),
-        'location': _locationController.text.trim(),
-      });
-      ref.invalidate(myProfileProvider);
-      await ref.read(authControllerProvider.notifier).refreshUser();
-      if (mounted) Navigator.pop(context);
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    if (saved == true && mounted) {
+      await _refresh();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(myProfileProvider);
+    final screen = ref.watch(profileScreenProvider);
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit profile'),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving ? const Text('Saving…') : const Text('Save'),
-          ),
-        ],
-      ),
-      body: profile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
-        data: (p) {
-          if (_bioController.text.isEmpty && (p.bio?.isNotEmpty ?? false)) {
-            _bioController.text = p.bio!;
-          }
-          if (_locationController.text.isEmpty && (p.location?.isNotEmpty ?? false)) {
-            _locationController.text = p.location!;
-          }
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+      body: screen.when(
+        loading: () => const ProfileSkeleton(),
+        error: (error, _) => _ProfileErrorState(
+          message: error is ApiException ? error.message : '$error',
+          onRetry: _refresh,
+        ),
+        data: (data) {
+          final profile = data.profile;
+          final user = data.user;
+          final sections = buildProfileSections(user, profile);
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            edgeOffset: MediaQuery.paddingOf(context).top,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ProfileHeader(
+                    profile: profile,
+                    onSettings: () {
+                      HapticFeedback.selectionClick();
+                      context.push(AppRoutes.settings);
+                    },
+                  ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _bioController,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Bio'),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 72, 20, 120),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      ProfileCompletenessCard(profile: profile),
+                      const SizedBox(height: 12),
+                      _ProfileVerifyCard(
+                        isVerified: profile.isVerified,
+                        onVerify: () => context.push(AppRoutes.verify),
+                      ),
+                      if (profile.isPremium) ...[
+                        const SizedBox(height: 12),
+                        _PremiumCard(),
+                      ],
+                      const SizedBox(height: 16),
+                      DuoGradientButton(
+                        label: 'Edit profile',
+                        icon: Icons.edit_outlined,
+                        onPressed: () => _openEdit(profile),
+                      ),
+                      if (sections.photos.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        ProfilePhotoGallery(
+                          photos: sections.photos,
+                          heroTagBuilder: (url, index) =>
+                              '${profileHeroTag(profile)}-photo-$index',
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      ProfileSectionCard(
+                        title: 'Account',
+                        icon: Icons.account_circle_outlined,
+                        fields: sections.account,
+                      ),
+                      ProfileSectionCard(
+                        title: 'Personal',
+                        icon: Icons.person_outline,
+                        fields: sections.personal,
+                      ),
+                      ProfileSectionCard(
+                        title: 'About me',
+                        icon: Icons.format_quote_outlined,
+                        fields: sections.about,
+                      ),
+                      ProfileSectionCard(
+                        title: 'Education & career',
+                        icon: Icons.school_outlined,
+                        fields: sections.education,
+                      ),
+                      ProfileSectionCard(
+                        title: 'Religion & background',
+                        icon: Icons.temple_hindu_outlined,
+                        fields: sections.background,
+                      ),
+                      ProfileLifestyleCard(tags: sections.lifestyleTags),
+                      ProfileSectionCard(
+                        title: 'Partner preferences',
+                        icon: Icons.favorite_outline,
+                        fields: sections.preferences,
+                      ),
+                      ProfileSectionCard(
+                        title: 'Profile status',
+                        icon: Icons.verified_outlined,
+                        fields: sections.status,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pull down to refresh your profile.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ]),
+                  ),
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ProfileErrorState extends StatelessWidget {
+  const _ProfileErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: DuoColors.error),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileVerifyCard extends StatelessWidget {
+  const _ProfileVerifyCard({required this.isVerified, required this.onVerify});
+
+  final bool isVerified;
+  final VoidCallback onVerify;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    if (isVerified) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: DuoColors.primary.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: DuoGradients.brandBr,
+              ),
+              child: const Icon(Icons.verified_user, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Verified profile',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  Text(
+                    'Selfie verification completed',
+                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Material(
+      color: DuoColors.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onVerify,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: DuoColors.primary.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: DuoColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.photo_camera_front_outlined, color: DuoColors.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Verify your profile',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    Text(
+                      'Take a selfie to earn a verified badge',
+                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: DuoGradients.brandBr,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.workspace_premium_rounded, color: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Duo Premium',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'Premium is active on your account',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.check_circle_rounded, color: scheme.surface),
+        ],
       ),
     );
   }

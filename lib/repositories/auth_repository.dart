@@ -91,14 +91,15 @@ class AuthRepository {
     });
   }
 
-  Future<void> changePassword({
+  Future<String> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _client.post('/auth/password/change/', data: {
+    final response = await _client.post<Map<String, dynamic>>('/auth/password/change/', data: {
       'current_password': currentPassword,
       'new_password': newPassword,
     });
+    return response.data?['message'] as String? ?? 'Password updated successfully.';
   }
 
   Future<DuoUser> getMe() async {

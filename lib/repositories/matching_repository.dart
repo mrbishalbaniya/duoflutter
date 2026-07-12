@@ -39,11 +39,11 @@ class MatchingRepository {
     );
   }
 
-  Future<PaywalledList<LikedProfileEntry>> getProfileVisitors() async {
+  Future<PaywalledList<VisitedProfileEntry>> getProfileVisitors() async {
     final response = await _client.get<Map<String, dynamic>>('/matching/profile-visitors/');
     return PaywalledList.fromJson(
       response.data!,
-      LikedProfileEntry.fromJson,
+      VisitedProfileEntry.fromJson,
     );
   }
 

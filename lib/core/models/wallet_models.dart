@@ -13,12 +13,12 @@ class SubscriptionPlan extends Equatable {
 
   factory SubscriptionPlan.fromJson(Map<String, dynamic> json) {
     return SubscriptionPlan(
-      planId: json['plan_id'] as String,
-      name: json['name'] as String,
+      planId: json['plan_id'] as String? ?? '',
+      name: json['name'] as String? ?? 'Premium',
       description: json['description'] as String? ?? '',
       currency: json['currency'] as String? ?? 'NPR',
-      amount: (json['amount'] as num).toInt(),
-      durationDays: json['duration_days'] as int,
+      amount: (json['amount'] as num?)?.toInt() ?? 0,
+      durationDays: json['duration_days'] as int? ?? 0,
       badge: json['badge'] as String?,
     );
   }
@@ -42,15 +42,17 @@ class WalletTransaction extends Equatable {
     required this.balanceAfter,
     required this.description,
     required this.createdAt,
+    this.referenceId = '',
   });
 
   factory WalletTransaction.fromJson(Map<String, dynamic> json) {
     return WalletTransaction(
-      type: json['type'] as String,
-      amount: json['amount'].toString(),
-      balanceAfter: json['balance_after'].toString(),
+      type: json['type'] as String? ?? 'adjustment',
+      amount: '${json['amount'] ?? 0}',
+      balanceAfter: '${json['balance_after'] ?? 0}',
       description: json['description'] as String? ?? '',
-      createdAt: json['created_at'] as String,
+      createdAt: '${json['created_at'] ?? ''}',
+      referenceId: json['reference_id'] as String? ?? '',
     );
   }
 
@@ -59,9 +61,25 @@ class WalletTransaction extends Equatable {
   final String balanceAfter;
   final String description;
   final String createdAt;
+  final String referenceId;
+
+  bool get isCredit {
+    final value = double.tryParse(amount);
+    return value != null && value >= 0;
+  }
+
+  String get displayTitle {
+    if (description.isNotEmpty) return description;
+    return switch (type) {
+      'top_up' => 'Wallet top-up',
+      'purchase' => 'Premium purchase',
+      'adjustment' => 'Balance adjustment',
+      _ => 'Transaction',
+    };
+  }
 
   @override
-  List<Object?> get props => [type, amount, createdAt];
+  List<Object?> get props => [type, amount, createdAt, referenceId];
 }
 
 class WalletSummary extends Equatable {
@@ -74,7 +92,7 @@ class WalletSummary extends Equatable {
 
   factory WalletSummary.fromJson(Map<String, dynamic> json) {
     return WalletSummary(
-      balance: (json['balance'] as num).toInt(),
+      balance: (json['balance'] as num?)?.toInt() ?? 0,
       currency: json['currency'] as String? ?? 'NPR',
       topUpPresets: (json['top_up_presets'] as List<dynamic>? ?? [])
           .map((e) => (e as num).toInt())
@@ -102,10 +120,17 @@ class EsewaPaymentForm extends Equatable {
   });
 
   factory EsewaPaymentForm.fromJson(Map<String, dynamic> json) {
+    final rawForm = json['form'];
+    final fields = <String, String>{};
+    if (rawForm is Map) {
+      for (final entry in rawForm.entries) {
+        fields['${entry.key}'] = '${entry.value}';
+      }
+    }
     return EsewaPaymentForm(
-      paymentUrl: json['payment_url'] as String,
-      transactionUuid: json['transaction_uuid'] as String,
-      fields: Map<String, String>.from(json['form'] as Map<String, dynamic>),
+      paymentUrl: json['payment_url'] as String? ?? '',
+      transactionUuid: json['transaction_uuid'] as String? ?? '',
+      fields: fields,
     );
   }
 
@@ -115,4 +140,40 @@ class EsewaPaymentForm extends Equatable {
 
   @override
   List<Object?> get props => [transactionUuid];
+}
+
+class WalletPurchaseResult extends Equatable {
+  const WalletPurchaseResult({
+    required this.isPremium,
+    required this.balance,
+    required this.plan,
+    this.expiresAt,
+  });
+
+  factory WalletPurchaseResult.fromJson(Map<String, dynamic> json) {
+    final planJson = json['plan'];
+    return WalletPurchaseResult(
+      isPremium: json['is_premium'] as bool? ?? false,
+      balance: (json['balance'] as num?)?.toInt() ?? 0,
+      expiresAt: json['expires_at'] as String?,
+      plan: planJson is Map<String, dynamic>
+          ? SubscriptionPlan.fromJson(planJson)
+          : const SubscriptionPlan(
+              planId: '',
+              name: 'Premium',
+              description: '',
+              currency: 'NPR',
+              amount: 0,
+              durationDays: 0,
+            ),
+    );
+  }
+
+  final bool isPremium;
+  final int balance;
+  final String? expiresAt;
+  final SubscriptionPlan plan;
+
+  @override
+  List<Object?> get props => [balance, plan.planId];
 }
