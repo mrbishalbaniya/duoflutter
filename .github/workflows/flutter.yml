@@ -1,0 +1,185 @@
+name: Flutter
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: flutter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  API_BASE_URL: https://duobackend.onrender.com/api
+  WS_BASE_URL: wss://duobackend.onrender.com
+
+jobs:
+  analyze-test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Verify Flutter
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Dependency validation
+        run: dart pub deps --style=compact
+
+      - name: Flutter analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Dart format check
+        run: dart format --output=none --set-exit-if-changed lib test
+        continue-on-error: true
+
+      - name: Flutter test
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: coverage/lcov.info
+          retention-days: 14
+          if-no-files-found: ignore
+
+  build-android:
+    name: Build Android
+    needs: analyze-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: bash .github/scripts/setup-android-signing.sh
+
+      - name: Build release APK
+        env:
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          GOOGLE_ID="${GOOGLE_WEB_CLIENT_ID:-599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com}"
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=${{ env.API_BASE_URL }} \
+            --dart-define=WS_BASE_URL=${{ env.WS_BASE_URL }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${GOOGLE_ID}
+
+      - name: Build release App Bundle
+        env:
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          GOOGLE_ID="${GOOGLE_WEB_CLIENT_ID:-599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com}"
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL=${{ env.API_BASE_URL }} \
+            --dart-define=WS_BASE_URL=${{ env.WS_BASE_URL }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${GOOGLE_ID}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: duo-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: duo-android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Firebase App Distribution
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_DISTRIBUTION_GROUPS: ${{ vars.FIREBASE_DISTRIBUTION_GROUPS }}
+        run: bash .github/scripts/firebase-distribute.sh
+
+      - name: Notify success
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: bash .github/scripts/notify.sh success "Flutter Android Build" "APK and AAB artifacts uploaded."
+
+      - name: Notify failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: bash .github/scripts/notify.sh failure "Flutter Android Build Failed" "Android build pipeline failed."
+
+  build-ios:
+    name: Build iOS
+    needs: analyze-test
+    runs-on: macos-latest
+    timeout-minutes: 45
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        env:
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          GOOGLE_ID="${GOOGLE_WEB_CLIENT_ID:-599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com}"
+          flutter build ios --release --no-codesign \
+            --dart-define=API_BASE_URL=${{ env.API_BASE_URL }} \
+            --dart-define=WS_BASE_URL=${{ env.WS_BASE_URL }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${GOOGLE_ID}
+
+      - name: Upload iOS build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-output
+          path: build/ios
+          retention-days: 7
+          if-no-files-found: ignore
