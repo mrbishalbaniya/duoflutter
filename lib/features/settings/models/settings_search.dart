@@ -4,6 +4,7 @@ enum SettingsSectionId {
   appearance,
   notifications,
   privacy,
+  permissions,
   security,
   storage,
   language,
@@ -60,6 +61,20 @@ abstract final class SettingsSearchRegistry {
         'discovery',
         'blocked',
         'screenshot',
+      ],
+    ),
+    SettingsSearchEntry(
+      sectionId: SettingsSectionId.permissions,
+      keywords: [
+        'permissions',
+        'camera',
+        'microphone',
+        'notifications',
+        'photos',
+        'media',
+        'contacts',
+        'location',
+        'access',
       ],
     ),
     SettingsSearchEntry(

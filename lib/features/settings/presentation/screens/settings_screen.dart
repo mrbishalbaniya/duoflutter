@@ -22,6 +22,7 @@ import '../sections/settings_help_section.dart';
 import '../sections/settings_language_section.dart';
 import '../sections/settings_notifications_section.dart';
 import '../sections/settings_privacy_section.dart';
+import '../../../permissions/presentation/sections/settings_permissions_section.dart';
 import '../sections/settings_security_section.dart';
 import '../sections/settings_storage_section.dart';
 import '../widgets/settings_app_bar.dart';
@@ -221,27 +222,29 @@ class _SettingsContent {
             animationIndex: 3,
             visible: shows(SettingsSectionId.privacy),
           ),
+          if (shows(SettingsSectionId.privacy)) _gap(),
+          SettingsPermissionsSection(animationIndex: 4, visible: shows(SettingsSectionId.permissions)),
         ],
       );
 
   Widget get rightColumn => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SettingsSecuritySection(animationIndex: 4, visible: shows(SettingsSectionId.security)),
+          SettingsSecuritySection(animationIndex: 5, visible: shows(SettingsSectionId.security)),
           if (shows(SettingsSectionId.security)) _gap(),
-          SettingsStorageSection(animationIndex: 5, visible: shows(SettingsSectionId.storage)),
+          SettingsStorageSection(animationIndex: 6, visible: shows(SettingsSectionId.storage)),
           if (shows(SettingsSectionId.storage)) _gap(),
-          SettingsLanguageSection(animationIndex: 6, visible: shows(SettingsSectionId.language)),
+          SettingsLanguageSection(animationIndex: 7, visible: shows(SettingsSectionId.language)),
           if (shows(SettingsSectionId.language)) _gap(),
-          SettingsHelpSection(animationIndex: 7, visible: shows(SettingsSectionId.help)),
+          SettingsHelpSection(animationIndex: 8, visible: shows(SettingsSectionId.help)),
           if (shows(SettingsSectionId.help)) _gap(),
-          const SettingsUpdateSection(animationIndex: 8),
+          const SettingsUpdateSection(animationIndex: 9),
           _gap(),
-          SettingsAboutSection(animationIndex: 9, visible: shows(SettingsSectionId.about)),
+          SettingsAboutSection(animationIndex: 10, visible: shows(SettingsSectionId.about)),
           if (shows(SettingsSectionId.about)) _gap(),
           SettingsDangerZoneSection(
             onLogout: onLogout,
-            animationIndex: 10,
+            animationIndex: 11,
             visible: shows(SettingsSectionId.danger),
           ),
         ],

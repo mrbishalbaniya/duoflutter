@@ -23,6 +23,10 @@ import '../../features/map/map_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/verify/verification_screen.dart';
 import '../../features/verify/verify_device_screen.dart';
+import '../../features/permissions/providers/permission_providers.dart';
+import '../../features/permissions/presentation/screens/permission_welcome_screen.dart';
+import '../../features/permissions/presentation/screens/permission_setup_screen.dart';
+import '../../features/permissions/presentation/screens/permission_personalization_screen.dart';
 
 abstract final class AppRoutes {
   static const splash = '/';
@@ -42,12 +46,16 @@ abstract final class AppRoutes {
   static const notifications = '/notifications';
   static const verify = '/verify';
   static const verifyDevice = '/verify/device';
+  static const permissionWelcome = '/setup/welcome';
+  static const permissionSetup = '/setup/permissions';
+  static const permissionPersonalize = '/setup/personalize';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
   final splash = ref.watch(splashControllerProvider);
   final intro = ref.watch(onboardingControllerProvider);
+  final permissionSetupComplete = ref.watch(permissionSetupCompleteProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
@@ -61,6 +69,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           isOnboarding;
       final isSplash = path == AppRoutes.splash;
       final isVerifyDevice = path == AppRoutes.verifyDevice;
+      final isPermissionRoute = path == AppRoutes.permissionWelcome ||
+          path == AppRoutes.permissionSetup ||
+          path == AppRoutes.permissionPersonalize;
 
       if (auth.status == AuthStatus.unknown) {
         return isSplash || isVerifyDevice ? null : AppRoutes.splash;
@@ -87,6 +98,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (path != AppRoutes.register) return AppRoutes.register;
           return null;
         }
+        if (!permissionSetupComplete) {
+          if (!isPermissionRoute) return AppRoutes.permissionWelcome;
+          return null;
+        }
+        if (isPermissionRoute) return AppRoutes.match;
         if (isAuthRoute || isSplash) return AppRoutes.match;
       }
 
@@ -163,6 +179,45 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.permissionWelcome,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const PermissionWelcomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.permissionSetup,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const PermissionSetupScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.permissionPersonalize,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const PermissionPersonalizationScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.settings,
         builder: (_, __) => const SettingsScreen(),
       ),
@@ -224,6 +279,7 @@ class _AuthRefreshListenable extends ChangeNotifier {
     _ref.listen(authControllerProvider, (_, __) => notifyListeners());
     _ref.listen(splashControllerProvider, (_, __) => notifyListeners());
     _ref.listen(onboardingControllerProvider, (_, __) => notifyListeners());
+    _ref.listen(permissionSetupCompleteProvider, (_, __) => notifyListeners());
   }
 
   final Ref _ref;

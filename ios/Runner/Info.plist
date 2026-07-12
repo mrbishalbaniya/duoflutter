@@ -72,6 +72,14 @@
 	<string>Duo uses your location to show matches and activity on the Friends Map.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Duo needs microphone access so you can send voice messages in chat.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Duo uses your camera for profile verification, photo uploads, and video calls.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Duo needs photo library access so you can upload profile photos and save images from chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Duo saves images and videos you download from chat to your photo library.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Duo can optionally access contacts to help you find friends and invite people you know.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
