@@ -108,8 +108,8 @@ ThemeData buildDuoTheme(ColorScheme scheme, DuoThemeTokens tokens, Color scaffol
     textTheme: textTheme,
     primaryTextTheme: textTheme,
     extensions: [tokens],
-    pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: const {
         TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
         TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
       },
