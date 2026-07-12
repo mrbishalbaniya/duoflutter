@@ -270,26 +270,6 @@ class _MapStatusBanner extends StatelessWidget {
   }
 }
 
-class _MapLoadingState extends StatelessWidget {
-  const _MapLoadingState({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(message),
-        ],
-      ),
-    );
-  }
-}
-
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
 
@@ -345,42 +325,6 @@ class _LocationBanner extends ConsumerWidget {
           child: const Text('Retry'),
         ),
       ],
-    );
-  }
-}
-
-class _LocationPermissionCard extends ConsumerWidget {
-  const _LocationPermissionCard({
-    required this.status,
-    required this.onRetry,
-  });
-
-  final LocationPermissionStatus status;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.location_disabled, size: 48),
-            const SizedBox(height: 12),
-            const Text('Could not determine your location.'),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Try again')),
-            if (status == LocationPermissionStatus.deniedForever) ...[
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.read(locationServiceProvider).openAppSettings(),
-                child: const Text('Open settings'),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

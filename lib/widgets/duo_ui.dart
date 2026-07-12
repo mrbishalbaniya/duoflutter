@@ -211,7 +211,6 @@ class DuoSettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final duo = context.duo;
     return Material(
       color: Colors.transparent,
       child: InkWell(

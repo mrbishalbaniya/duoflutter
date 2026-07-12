@@ -1,7 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
-import 'package:hive_flutter/hive_flutter.dart';
-
 import '../../features/notifications/data/notification_local_store.dart';
 
 class LocalStorage {

@@ -125,13 +125,20 @@ Future<String?> showReportDialog(BuildContext context) {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ...reasons.map(
-                (r) => RadioListTile<String>(
-                  title: Text(r, style: const TextStyle(fontSize: 14)),
-                  value: r,
-                  groupValue: selected,
-                  onChanged: (v) => setState(() => selected = v!),
-                  contentPadding: EdgeInsets.zero,
+              RadioGroup<String>(
+                groupValue: selected,
+                onChanged: (v) => setState(() => selected = v!),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: reasons
+                      .map(
+                        (r) => RadioListTile<String>(
+                          title: Text(r, style: const TextStyle(fontSize: 14)),
+                          value: r,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
               if (selected == 'Other')

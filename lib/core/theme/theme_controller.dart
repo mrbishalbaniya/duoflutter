@@ -24,9 +24,7 @@ class ThemeController extends StateNotifier<ThemeMode> {
   ThemeController(this._storage, {ThemeMode? initial})
       : super(initial ?? themeModeFromStorage(_storage!.themeMode));
 
-  ThemeController.testing([ThemeMode mode = ThemeMode.dark])
-      : _storage = null,
-        super(mode);
+  ThemeController.testing([super.mode = ThemeMode.dark]) : _storage = null;
 
   final LocalStorage? _storage;
 

@@ -93,21 +93,25 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
           onChanged: (v) => setState(() => _settings = _settings.copyWith(ghostMode: v)),
         ),
         const SizedBox(height: 4),
-        ...LocationVisibilityMode.values.map((mode) {
-          final meta = _visibilityMeta(mode);
-          return RadioListTile<LocationVisibilityMode>(
-            contentPadding: EdgeInsets.zero,
-            title: Text(meta.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(meta.$2),
-            value: mode,
-            groupValue: _settings.visibility,
-            activeColor: DuoColors.primary,
-            onChanged: (v) {
-              if (v == null) return;
-              setState(() => _settings = _settings.copyWith(visibility: v));
-            },
-          );
-        }),
+        RadioGroup<LocationVisibilityMode>(
+          groupValue: _settings.visibility,
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() => _settings = _settings.copyWith(visibility: v));
+          },
+          child: Column(
+            children: LocationVisibilityMode.values.map((mode) {
+              final meta = _visibilityMeta(mode);
+              return RadioListTile<LocationVisibilityMode>(
+                contentPadding: EdgeInsets.zero,
+                title: Text(meta.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(meta.$2),
+                value: mode,
+                activeColor: DuoColors.primary,
+              );
+            }).toList(),
+          ),
+        ),
         if (_settings.visibility != LocationVisibilityMode.friends) ...[
           const SizedBox(height: 4),
           Text(

@@ -39,7 +39,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     _bootstrapOnce();
 
     final splash = ref.watch(splashControllerProvider);
-    final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     ref.listen<SplashState>(splashControllerProvider, (previous, next) {

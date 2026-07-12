@@ -497,7 +497,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
-        value: resolved,
+        initialValue: resolved,
         decoration: InputDecoration(labelText: label),
         items: options
             .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))

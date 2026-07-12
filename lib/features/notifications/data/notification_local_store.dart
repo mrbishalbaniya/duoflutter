@@ -25,7 +25,8 @@ class NotificationLocalStore {
   }
 
   List<Map<String, dynamic>> _readRawList() {
-    if (_ephemeral != null) return List<Map<String, dynamic>>.from(_ephemeral!);
+    final ephemeral = _ephemeral;
+    if (ephemeral != null) return List<Map<String, dynamic>>.from(ephemeral);
     final raw = _box?.get(_listKey);
     if (raw is! List) return const [];
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
@@ -34,8 +35,9 @@ class NotificationLocalStore {
   Future<void> saveAll(List<NotificationItem> items) async {
     final trimmed = items.take(maxItems).toList();
     final encoded = trimmed.map((e) => e.toJson()).toList();
-    if (_ephemeral != null) {
-      _ephemeral!
+    final ephemeral = _ephemeral;
+    if (ephemeral != null) {
+      ephemeral
         ..clear()
         ..addAll(encoded);
       return;
@@ -92,8 +94,9 @@ class NotificationLocalStore {
   }
 
   Future<void> clear() async {
-    if (_ephemeral != null) {
-      _ephemeral!.clear();
+    final ephemeral = _ephemeral;
+    if (ephemeral != null) {
+      ephemeral.clear();
       return;
     }
     await _box?.delete(_listKey);
