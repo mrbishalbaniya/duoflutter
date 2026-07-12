@@ -1,0 +1,9 @@
+title = "Duo Mobile gitleaks"
+
+[allowlist]
+description = "Template and example config files"
+paths = [
+  '''(?:^|/)\.env\.example$''',
+  '''(?:^|/)\.env\.sample$''',
+  '''(?:^|/)android/key\.properties\.example$''',
+]
