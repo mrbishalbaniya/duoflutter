@@ -112,11 +112,49 @@ class WalletSummary extends Equatable {
   List<Object?> get props => [balance, transactions.length];
 }
 
+class EsewaMobileSdkConfig extends Equatable {
+  const EsewaMobileSdkConfig({
+    required this.environment,
+    required this.clientId,
+    required this.secretId,
+    required this.productId,
+    required this.productName,
+    required this.productPrice,
+    this.callbackUrl = '',
+  });
+
+  factory EsewaMobileSdkConfig.fromJson(Map<String, dynamic> json) {
+    return EsewaMobileSdkConfig(
+      environment: json['environment'] as String? ?? 'test',
+      clientId: json['client_id'] as String? ?? '',
+      secretId: json['secret_id'] as String? ?? '',
+      productId: json['product_id'] as String? ?? '',
+      productName: json['product_name'] as String? ?? 'Duo Wallet Top-up',
+      productPrice: json['product_price'] as String? ?? '0',
+      callbackUrl: json['callback_url'] as String? ?? '',
+    );
+  }
+
+  final String environment;
+  final String clientId;
+  final String secretId;
+  final String productId;
+  final String productName;
+  final String productPrice;
+  final String callbackUrl;
+
+  bool get isConfigured => clientId.isNotEmpty && secretId.isNotEmpty;
+
+  @override
+  List<Object?> get props => [productId, productPrice];
+}
+
 class EsewaPaymentForm extends Equatable {
   const EsewaPaymentForm({
     required this.paymentUrl,
     required this.transactionUuid,
     required this.fields,
+    this.mobileSdk,
   });
 
   factory EsewaPaymentForm.fromJson(Map<String, dynamic> json) {
@@ -127,16 +165,21 @@ class EsewaPaymentForm extends Equatable {
         fields['${entry.key}'] = '${entry.value}';
       }
     }
+    final rawMobile = json['mobile_sdk'];
     return EsewaPaymentForm(
       paymentUrl: json['payment_url'] as String? ?? '',
       transactionUuid: json['transaction_uuid'] as String? ?? '',
       fields: fields,
+      mobileSdk: rawMobile is Map<String, dynamic>
+          ? EsewaMobileSdkConfig.fromJson(rawMobile)
+          : null,
     );
   }
 
   final String paymentUrl;
   final String transactionUuid;
   final Map<String, String> fields;
+  final EsewaMobileSdkConfig? mobileSdk;
 
   @override
   List<Object?> get props => [transactionUuid];

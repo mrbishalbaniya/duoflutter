@@ -38,9 +38,20 @@ class ApiException implements Exception {
     if (error.type == DioExceptionType.connectionError) {
       return ApiException('Cannot reach the server. Check your connection.');
     }
+    final status = response?.statusCode;
+    if (status == 404) {
+      final path = error.requestOptions.path;
+      if (path.contains('wallet')) {
+        return ApiException(
+          'Wallet service not found on the server (404). The backend may need to be redeployed.',
+          statusCode: 404,
+        );
+      }
+      return ApiException('Not found (404)', statusCode: 404);
+    }
     return ApiException(
-      'Network error (${response?.statusCode ?? error.type.name})',
-      statusCode: response?.statusCode,
+      'Network error (${status ?? error.type.name})',
+      statusCode: status,
     );
   }
 }

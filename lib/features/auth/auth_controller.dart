@@ -115,6 +115,9 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    try {
+      await _ref.read(pushNotificationServiceProvider).unregister();
+    } catch (_) {}
     await _auth.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }

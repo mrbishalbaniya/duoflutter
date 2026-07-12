@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/storage/local_storage.dart';
-import 'core/theme/duo_theme.dart';
+import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
+import 'features/notifications/presentation/widgets/push_notification_bridge.dart';
 
 class DuoApp extends ConsumerWidget {
   const DuoApp({super.key});
@@ -14,13 +15,31 @@ class DuoApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    return MaterialApp.router(
-      title: 'Duo',
-      debugShowCheckedModeBanner: false,
-      theme: DuoTheme.light(),
-      darkTheme: DuoTheme.dark(),
-      themeMode: themeMode,
-      routerConfig: router,
+    return PushNotificationBridge(
+      child: Builder(
+        builder: (context) {
+          final brightness = switch (themeMode) {
+            ThemeMode.dark => Brightness.dark,
+            ThemeMode.light => Brightness.light,
+            ThemeMode.system => MediaQuery.platformBrightnessOf(context),
+          };
+          final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
+
+          return AnimatedTheme(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            data: theme,
+            child: MaterialApp.router(
+              title: 'Duo',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light(),
+              darkTheme: AppTheme.dark(),
+              themeMode: themeMode,
+              routerConfig: router,
+            ),
+          );
+        },
+      ),
     );
   }
 }

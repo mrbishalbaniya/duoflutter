@@ -168,14 +168,15 @@ class Conversation extends Equatable {
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
+    final profileRaw = json['other_user_profile'];
     return Conversation(
-      id: json['id'] as int,
+      id: json['id'] as int? ?? 0,
       publicId: json['public_id']?.toString() ?? json['id'].toString(),
       matchId: json['match_id'] as int?,
       matchCreatedAt: json['match_created_at'] as String?,
-      otherUserProfile: DuoProfile.fromJson(
-        json['other_user_profile'] as Map<String, dynamic>,
-      ),
+      otherUserProfile: profileRaw is Map<String, dynamic>
+          ? DuoProfile.fromJson(profileRaw)
+          : const DuoProfile(fullName: 'Chat'),
       otherUserNickname: json['other_user_nickname'] as String?,
       lastMessage: _parseLastMessage(json['last_message']),
       lastMessageAt: json['last_message_at'] as String?,

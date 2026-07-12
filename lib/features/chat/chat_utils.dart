@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import '../../core/models/chat_models.dart';
+import 'domain/chat_message_list_entry.dart';
 
 const voiceMessageLabel = '🎤 Voice message';
 
@@ -33,6 +34,13 @@ bool isImageOnlyMessage(ChatMessage msg) {
   if (!msg.isMine || msg.isDeletedForEveryone) return false;
   if (isVoiceMessage(msg)) return false;
   return (msg.imageUrl?.isNotEmpty ?? false) && msg.content.trim().isEmpty;
+}
+
+bool isVoiceOnlyMessage(ChatMessage msg) {
+  if (!isVoiceMessage(msg) || msg.isDeletedForEveryone) return false;
+  if (msg.imageUrl?.isEmpty ?? true) return false;
+  final text = msg.content.trim();
+  return text.isEmpty || text == voiceMessageLabel;
 }
 
 String lastMessagePreview(Conversation convo) {
@@ -129,6 +137,38 @@ bool isGroupedWithPrevious(ChatMessage current, ChatMessage? previous) {
   final a = _parseDate(current.timestamp);
   final b = _parseDate(previous.timestamp);
   return a.difference(b).inMinutes.abs() < 5;
+}
+
+List<ChatMessageListEntry> buildMessageListEntries(List<ChatMessage> messages) {
+  if (messages.isEmpty) return const [];
+
+  final entries = <ChatMessageListEntry>[];
+  ChatMessage? previous;
+
+  for (final message in messages) {
+    if (!message.isVisible) continue;
+
+    final grouped = isGroupedWithPrevious(message, previous);
+    final showDate = shouldShowDateSeparator(message, previous);
+
+    entries.add(
+      ChatMessageListEntry(
+        message: message,
+        showDateSeparator: showDate,
+        dateLabel: showDate ? dateSeparatorLabel(message.timestamp) : '',
+        showAvatar: !grouped,
+        isGrouped: grouped,
+      ),
+    );
+    previous = message;
+  }
+
+  return entries;
+}
+
+bool isAnimatedImageUrl(String? url) {
+  if (url == null || url.isEmpty) return false;
+  return RegExp(r'\.gif(\?|$)', caseSensitive: false).hasMatch(url);
 }
 
 String replyPreview(ChatMessage msg, {String? fallbackName}) {

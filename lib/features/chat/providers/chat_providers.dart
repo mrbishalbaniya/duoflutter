@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/providers/core_providers.dart';
 import '../chat_utils.dart';
+import '../domain/chat_message_cache.dart';
+
+final chatMessageCacheProvider = Provider<ChatMessageCache>((ref) {
+  return ChatMessageCache();
+});
 
 class ConversationListFilter {
   const ConversationListFilter({this.archived = false, this.unreadOnly = false});

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/theme/duo_gradients.dart';
 import '../core/theme/duo_theme.dart';
+import '../core/theme/theme_extensions.dart';
 
 class DuoBrandLogo extends StatelessWidget {
   const DuoBrandLogo({super.key, this.size = 32, this.showTagline = false});
@@ -50,7 +51,8 @@ class DuoAmbientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final duo = context.duo;
+    final isDark = context.isDarkTheme;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -59,17 +61,23 @@ class DuoAmbientBackground extends StatelessWidget {
           Positioned(
             top: -80,
             left: -40,
-            child: _GlowOrb(color: DuoColors.primary.withValues(alpha: 0.18), size: 220),
+            child: _GlowOrb(color: duo.ambientGlowPrimary, size: 220),
           ),
           Positioned(
             top: 120,
             right: -60,
-            child: _GlowOrb(color: DuoColors.tertiary.withValues(alpha: 0.14), size: 180),
+            child: _GlowOrb(color: duo.ambientGlowTertiary, size: 180),
           ),
           Positioned(
             bottom: 80,
             left: 40,
-            child: _GlowOrb(color: DuoColors.accent.withValues(alpha: 0.1), size: 160),
+            child: _GlowOrb(color: duo.ambientGlowAccent, size: 160),
+          ),
+        ] else ...[
+          Positioned(
+            top: -100,
+            left: -20,
+            child: _GlowOrb(color: duo.ambientGlowPrimary, size: 200),
           ),
         ],
         child,
@@ -108,8 +116,7 @@ class DuoGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final duo = context.duo;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -117,18 +124,12 @@ class DuoGlassCard extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: isDark
-                ? DuoColors.surfaceDark.withValues(alpha: 0.72)
-                : scheme.surface.withValues(alpha: 0.88),
+            color: duo.glassSurface,
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : scheme.outline.withValues(alpha: 0.35),
-            ),
+            border: Border.all(color: duo.glassBorder),
             boxShadow: [
               BoxShadow(
-                color: DuoColors.primary.withValues(alpha: 0.12),
+                color: duo.cardShadow,
                 blurRadius: 40,
                 offset: const Offset(0, 20),
               ),
@@ -170,6 +171,7 @@ class DuoSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -178,9 +180,9 @@ class DuoSettingsSection extends StatelessWidget {
           DuoSectionHeader(title),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.35),
+              color: scheme.secondary.withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: DuoColors.primary.withValues(alpha: 0.1)),
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.12)),
             ),
             child: child,
           ),
@@ -208,6 +210,8 @@ class DuoSettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final duo = context.duo;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -220,10 +224,10 @@ class DuoSettingsRow extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: DuoColors.primary.withValues(alpha: 0.1),
+                  color: scheme.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: DuoColors.primary, size: 22),
+                child: Icon(icon, color: scheme.primary, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -232,7 +236,7 @@ class DuoSettingsRow extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
                     if (subtitle != null)
                       Text(
@@ -318,22 +322,24 @@ class DuoGradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final duo = context.duo;
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: onPressed == null ? null : DuoGradients.brand,
+        gradient: onPressed == null ? null : duo.brandGradient,
         borderRadius: BorderRadius.circular(999),
         boxShadow: onPressed == null
             ? null
             : [
                 BoxShadow(
-                  color: DuoColors.primary.withValues(alpha: 0.25),
+                  color: scheme.primary.withValues(alpha: 0.25),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 ),
               ],
       ),
       child: Material(
-        color: onPressed == null ? Theme.of(context).colorScheme.surfaceContainerHigh : Colors.transparent,
+        color: onPressed == null ? scheme.surfaceContainerHigh : Colors.transparent,
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           onTap: loading ? null : onPressed,
@@ -342,22 +348,27 @@ class DuoGradientButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
             child: Center(
               child: loading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onPrimary,
+                      ),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (icon != null) ...[
-                          Icon(icon, color: Colors.white, size: 20),
+                          Icon(icon, color: scheme.onPrimary, size: 20),
                           const SizedBox(width: 8),
                         ],
                         Text(
                           label,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: onPressed == null
+                                ? scheme.onSurfaceVariant
+                                : scheme.onPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
@@ -386,18 +397,19 @@ class DuoIconCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+      color: scheme.surface.withValues(alpha: 0.95),
       shape: const CircleBorder(),
       elevation: 2,
-      shadowColor: DuoColors.primary.withValues(alpha: 0.15),
+      shadowColor: scheme.primary.withValues(alpha: 0.15),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
           width: size,
           height: size,
-          child: Icon(icon, color: DuoColors.primary, size: size * 0.45),
+          child: Icon(icon, color: scheme.primary, size: size * 0.45),
         ),
       ),
     );
@@ -418,6 +430,8 @@ class DuoPremiumBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final duo = context.duo;
+    final scheme = Theme.of(context).colorScheme;
     return DuoGlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 20,
@@ -427,10 +441,10 @@ class DuoPremiumBanner extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              gradient: DuoGradients.brand,
+              gradient: duo.brandGradient,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.workspace_premium, color: Colors.white),
+            child: Icon(Icons.workspace_premium, color: scheme.onPrimary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -474,16 +488,17 @@ class DuoInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: DuoColors.primary.withValues(alpha: 0.1)),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: DuoColors.primary.withValues(alpha: 0.06),
+            color: context.duo.cardShadow,
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -498,10 +513,10 @@ class DuoInfoCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: DuoColors.primary.withValues(alpha: 0.1),
+                    color: scheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: DuoColors.primary, size: 20),
+                  child: Icon(icon, color: scheme.primary, size: 20),
                 ),
                 const SizedBox(width: 10),
               ],

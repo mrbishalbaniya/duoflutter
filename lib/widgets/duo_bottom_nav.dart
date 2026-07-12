@@ -2,8 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../core/theme/duo_gradients.dart';
-import '../core/theme/duo_theme.dart';
+import '../core/theme/theme_extensions.dart';
 
 class DuoBottomNav extends StatelessWidget {
   const DuoBottomNav({
@@ -28,6 +27,7 @@ class DuoBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final duo = context.duo;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(12, 0, 12, MediaQuery.paddingOf(context).bottom + 8),
@@ -37,12 +37,12 @@ class DuoBottomNav extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.92),
+              color: duo.navBarSurface,
               borderRadius: BorderRadius.circular(35),
-              border: Border.all(color: scheme.outline.withValues(alpha: 0.35)),
+              border: Border.all(color: duo.navBarBorder),
               boxShadow: [
                 BoxShadow(
-                  color: DuoColors.primary.withValues(alpha: 0.12),
+                  color: duo.cardShadow,
                   blurRadius: 24,
                   offset: const Offset(0, 8),
                 ),
@@ -70,17 +70,17 @@ class DuoBottomNav extends StatelessWidget {
                                 height: 56,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: selected ? DuoGradients.brandBr : null,
+                                  gradient: selected ? duo.brandBrGradient : null,
                                   color: selected ? null : scheme.surfaceContainerHighest,
                                   border: Border.all(
                                     color: selected
-                                        ? Colors.white.withValues(alpha: 0.9)
-                                        : scheme.outline.withValues(alpha: 0.4),
+                                        ? scheme.onPrimary.withValues(alpha: 0.9)
+                                        : scheme.outline.withValues(alpha: 0.45),
                                     width: 2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: DuoColors.primary.withValues(
+                                      color: scheme.primary.withValues(
                                         alpha: selected ? 0.35 : 0.12,
                                       ),
                                       blurRadius: 16,
@@ -91,7 +91,7 @@ class DuoBottomNav extends StatelessWidget {
                                 child: Icon(
                                   selected ? item.active : item.icon,
                                   size: 28,
-                                  color: selected ? Colors.white : DuoColors.primary,
+                                  color: selected ? scheme.onPrimary : scheme.primary,
                                 ),
                               ),
                             ),
@@ -114,7 +114,7 @@ class DuoBottomNav extends StatelessWidget {
                               Icon(
                                 selected ? item.active : item.icon,
                                 size: 22,
-                                color: selected ? DuoColors.primary : scheme.onSurfaceVariant,
+                                color: selected ? scheme.primary : scheme.onSurfaceVariant,
                               ),
                               if (index == 1 && unreadCount > 0)
                                 Positioned(
@@ -123,13 +123,13 @@ class DuoBottomNav extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: DuoColors.primary,
+                                      color: duo.badgeBackground,
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
                                       unreadCount > 99 ? '99+' : '$unreadCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: duo.badgeForeground,
                                         fontSize: 9,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -144,7 +144,7 @@ class DuoBottomNav extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                              color: selected ? DuoColors.primary : scheme.onSurfaceVariant,
+                              color: selected ? scheme.primary : scheme.onSurfaceVariant,
                             ),
                           ),
                           if (selected)
@@ -152,8 +152,8 @@ class DuoBottomNav extends StatelessWidget {
                               margin: const EdgeInsets.only(top: 4),
                               width: 4,
                               height: 4,
-                              decoration: const BoxDecoration(
-                                color: DuoColors.primary,
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
                                 shape: BoxShape.circle,
                               ),
                             ),

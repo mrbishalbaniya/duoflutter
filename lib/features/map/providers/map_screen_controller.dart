@@ -48,4 +48,11 @@ class MapScreenController extends StateNotifier<MapScreenState> {
   void clearFlyTo() {
     state = state.copyWith(clearFlyTo: true);
   }
+
+  void locateMe() {
+    state = state.copyWith(
+      locateNonce: state.locateNonce + 1,
+      clearFocus: true,
+    );
+  }
 }

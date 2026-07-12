@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -63,6 +64,11 @@ class SettingsNotificationsSection extends ConsumerWidget {
                       style: TextStyle(color: scheme.primary, fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ],
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => context.push('/notifications'),
+                    child: const Text('View notification history'),
+                  ),
                 ],
               ),
             ),

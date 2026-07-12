@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_controller.dart';
 import '../../features/auth/auth_controller.dart';
 import '../../features/onboarding/onboarding_controller.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/login_screen.dart';
@@ -38,6 +39,7 @@ abstract final class AppRoutes {
   static const profile = '/profile';
   static const wallet = '/wallet';
   static const settings = '/settings';
+  static const notifications = '/notifications';
   static const verify = '/verify';
   static const verifyDevice = '/verify/device';
 }
@@ -163,6 +165,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (_, __) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (_, __) => const NotificationsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (_, __, navigationShell) => MainShell(navigationShell: navigationShell),

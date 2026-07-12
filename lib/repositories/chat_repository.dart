@@ -33,21 +33,35 @@ class ChatRepository {
     int limit = 50,
     String? before,
   }) async {
-    final response = await _client.get<Map<String, dynamic>>(
+    final response = await _client.get<dynamic>(
       '/chat/conversations/$conversationId/messages/',
       queryParameters: {
         'limit': limit,
         if (before != null) 'before': before,
       },
     );
-    final data = response.data ?? {};
-    final results = (data['results'] as List<dynamic>? ?? [])
+    return _parseMessagesPage(response.data);
+  }
+
+  ChatMessagesPage _parseMessagesPage(dynamic data) {
+    if (data is List) {
+      final results = data
+          .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return ChatMessagesPage(
+        results: results,
+        hasMore: results.length >= 50,
+      );
+    }
+
+    final map = data is Map<String, dynamic> ? data : <String, dynamic>{};
+    final results = (map['results'] as List<dynamic>? ?? [])
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
     return ChatMessagesPage(
       results: results,
-      hasMore: data['has_more'] as bool? ?? false,
-      nextBefore: data['next_before'] as int?,
+      hasMore: map['has_more'] as bool? ?? false,
+      nextBefore: map['next_before'] as int?,
     );
   }
 

@@ -16,6 +16,7 @@ class ActivityWsEvent {
 class ActivityWebSocketService {
   static const _reconnectBaseMs = 1500;
   static const _reconnectMaxMs = 20000;
+  static const _connectTimeout = Duration(seconds: 15);
 
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
@@ -43,8 +44,15 @@ class ActivityWebSocketService {
       await _subscription?.cancel();
       await _channel?.sink.close();
 
-      final uri = Uri.parse('${AppConfig.wsBaseUrl}/ws/activity/');
-      _channel = WebSocketChannel.connect(uri);
+      final uri = AppConfig.webSocketUri('/ws/activity/');
+      final channel = WebSocketChannel.connect(uri);
+      await channel.ready.timeout(_connectTimeout);
+      if (_disposed) {
+        await channel.sink.close();
+        return;
+      }
+
+      _channel = channel;
       _connectionController.add(true);
       _reconnectAttempt = 0;
 
@@ -58,6 +66,7 @@ class ActivityWebSocketService {
         },
         onError: (_) => _handleDisconnect(),
         onDone: _handleDisconnect,
+        cancelOnError: false,
       );
     } catch (_) {
       _connectionController.add(false);

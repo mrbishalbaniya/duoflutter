@@ -1,5 +1,9 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:hive_flutter/hive_flutter.dart';
+
+import '../../features/notifications/data/notification_local_store.dart';
+
 class LocalStorage {
   static const _settingsBox = 'settings';
   static const _cacheBox = 'cache';
@@ -8,10 +12,12 @@ class LocalStorage {
     await Hive.initFlutter();
     await Hive.openBox<dynamic>(_settingsBox);
     await Hive.openBox<dynamic>(_cacheBox);
+    await Hive.openBox<dynamic>(NotificationLocalStore.boxName);
   }
 
   Box<dynamic> get settings => Hive.box<dynamic>(_settingsBox);
   Box<dynamic> get cache => Hive.box<dynamic>(_cacheBox);
+  Box<dynamic> get notificationInbox => Hive.box<dynamic>(NotificationLocalStore.boxName);
 
   static const _themeKey = 'duo_theme';
   static const _pushEnabledKey = 'duo_push_enabled';

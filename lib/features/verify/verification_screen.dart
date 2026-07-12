@@ -57,10 +57,6 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
       }
     });
 
-    final scrollable = state.step == VerificationFlowStep.instructions ||
-        state.step == VerificationFlowStep.crossDevice ||
-        state.step == VerificationFlowStep.result;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Verification'),
@@ -87,7 +83,6 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                       state: state,
                       notifier: notifier,
                       userEmail: userEmail,
-                      scrollable: scrollable,
                     ),
                   ),
                 ),
@@ -104,7 +99,6 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
     required VerificationState state,
     required VerificationController notifier,
     required String? userEmail,
-    required bool scrollable,
   }) {
     if (state.deviceLoading) {
       return const Center(
@@ -130,7 +124,16 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
         );
       case VerificationFlowStep.crossDevice:
         child = state.session == null
-            ? const SizedBox.shrink()
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Preparing cross-device session…'),
+                  ],
+                ),
+              )
             : VerificationCrossDeviceStep(
                 session: state.session!,
                 userEmail: userEmail,
@@ -145,7 +148,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
         child = const VerificationProcessingStep();
       case VerificationFlowStep.result:
         child = state.result == null
-            ? const SizedBox.shrink()
+            ? const VerificationProcessingStep()
             : VerificationResultStep(
                 result: state.result!,
                 mode: state.mode,
@@ -154,13 +157,9 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
               );
     }
 
-    if (!scrollable) {
-      return KeyedSubtree(key: ValueKey(state.step), child: child);
-    }
-
     return KeyedSubtree(
-      key: ValueKey(state.step),
-      child: SingleChildScrollView(child: child),
+      key: ValueKey('${state.step}_${state.livenessIndex}'),
+      child: child,
     );
   }
 }

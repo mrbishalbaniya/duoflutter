@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -10,8 +11,11 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../repositories/chat_repository.dart';
 import '../chat_utils.dart';
+import '../domain/chat_message_cache.dart';
+import '../domain/chat_message_selectors.dart';
 import '../domain/chat_thread_state.dart';
 import '../services/chat_websocket_service.dart';
+import '../services/voice_recording_service.dart';
 import 'chat_providers.dart';
 
 final chatThreadControllerProvider = StateNotifierProvider.autoDispose
@@ -19,6 +23,7 @@ final chatThreadControllerProvider = StateNotifierProvider.autoDispose
   final controller = ChatThreadController(
     conversationId: conversationId,
     repository: ref.read(chatRepositoryProvider),
+    messageCache: ref.read(chatMessageCacheProvider),
     onConversationsChanged: () => ref.invalidate(conversationsProvider),
   );
   ref.onDispose(controller.dispose);
@@ -41,14 +46,18 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   ChatThreadController({
     required this.conversationId,
     required this.repository,
+    required this.messageCache,
     required this.onConversationsChanged,
   }) : super(const ChatThreadState()) {
     _ws = ChatWebSocketService(repository);
+    _connSub = _ws.connectionStream.listen(_onConnectionState);
+    _wsSub = _ws.events.listen(_handleWsEvent);
     unawaited(_init());
   }
 
   final String conversationId;
   final ChatRepository repository;
+  final ChatMessageCache messageCache;
   final VoidCallback onConversationsChanged;
 
   late final ChatWebSocketService _ws;
@@ -58,58 +67,278 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   Timer? _typingTimer;
   Timer? _typingClearTimer;
+  Timer? _voiceRecordingTimer;
+  VoiceRecordingService? _voiceRecorder;
   StreamSubscription<ChatWsEvent>? _wsSub;
-  StreamSubscription<bool>? _connSub;
+  StreamSubscription<WsConnectionState>? _connSub;
   bool _disposed = false;
   int _pollCycle = 0;
 
   Future<void> _init() async {
+    unawaited(_connectWs());
     await load();
-    await _connectWs();
+    if (!_ws.isConnected) {
+      await _connectWs();
+    }
+  }
+
+  String get _activeConversationId => state.conversation?.publicId ?? conversationId;
+
+  String? get _wsPublicId {
+    final id = state.conversation?.publicId.trim();
+    if (id != null && id.isNotEmpty) return id;
+    final route = conversationId.trim();
+    if (route.length >= 10) return route;
+    return null;
+  }
+
+  void _onConnectionState(WsConnectionState connection) {
+    if (_disposed) return;
+    state = state.copyWith(
+      wsConnected: connection.connected,
+      wsReconnecting: connection.reconnecting,
+    );
+    if (connection.connected) {
+      _markRead();
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '[ChatThread] connection connected=${connection.connected} '
+        'reconnecting=${connection.reconnecting}',
+      );
+    }
+  }
+
+  void _syncWsState() {
+    if (_disposed) return;
+    state = state.copyWith(
+      wsConnected: _ws.isConnected,
+      wsReconnecting: _ws.isReconnecting && !_ws.isConnected,
+    );
+  }
+
+  void _markRead() {
+    if (state.messages.isEmpty) return;
+    _ws.send({'type': 'mark_read'});
+  }
+
+  void _touchCache(List<ChatMessage> messages) {
+    final key = _activeConversationId;
+    if (key.isEmpty) return;
+    messageCache.put(key, messages);
+  }
+
+  List<ChatMessage> _sortedVisible(List<ChatMessage> messages) {
+    final sorted = sortMessages(messages);
+    return sorted.where((m) => m.isVisible).toList(growable: false);
+  }
+
+  ChatThreadState _withMessages(ChatThreadState base, List<ChatMessage> messages) {
+    final visible = _sortedVisible(messages);
+    return base.copyWith(
+      messages: messages,
+      visibleMessages: visible,
+      listEntries: buildMessageListEntries(visible),
+    );
+  }
+
+  void _commitMessages(List<ChatMessage> messages, {bool cache = true}) {
+    state = _withMessages(state, messages);
+    if (cache) _touchCache(state.messages);
+  }
+
+  /// Applies merged messages using a structural patch when list layout is unchanged.
+  void _applyMergedMessages(List<ChatMessage> merged, {bool cache = true}) {
+    final newVisible = _sortedVisible(merged);
+    final newEntries = buildMessageListEntries(newVisible);
+    if (chatListStructureRevision(state.listEntries) ==
+        chatListStructureRevision(newEntries)) {
+      _patchMessages(merged, cache: cache);
+      return;
+    }
+    _commitMessages(merged, cache: cache);
+  }
+
+  /// Updates message payloads without rebuilding list layout (read receipts, reactions).
+  void _patchMessages(List<ChatMessage> messages, {bool cache = true}) {
+    final visible = _sortedVisible(messages);
+    state = state.copyWith(messages: messages, visibleMessages: visible);
+    if (cache) _touchCache(messages);
+  }
+
+  void _noteHttpSuccess() {
+    if (_disposed) return;
+    if (!state.httpDeliveryOk) {
+      state = state.copyWith(httpDeliveryOk: true);
+    }
+  }
+
+  void _noteHttpFailure() {
+    if (_disposed) return;
+    state = state.copyWith(httpDeliveryOk: false);
   }
 
   Future<void> load() async {
-    state = state.copyWith(loading: true, clearError: true);
-    try {
-      final results = await Future.wait([
-        repository.getConversation(conversationId),
-        repository.getMessages(conversationId, limit: 50),
-      ]);
-      final convo = results[0] as Conversation;
-      final page = results[1] as ChatMessagesPage;
-      if (_disposed) return;
+    final cacheKey = conversationId.trim();
+    final cached = messageCache.peek(cacheKey) ??
+        messageCache.peek(_activeConversationId);
+    if (cached != null) {
+      final visible = cached.where((m) => m.isVisible).toList(growable: false);
       state = state.copyWith(
-        conversation: convo,
-        messages: sortMessages(page.results),
-        isOtherUserTyping: convo.isOtherUserTyping,
-        hasMore: page.hasMore,
+        messages: cached,
+        visibleMessages: visible,
+        listEntries: buildMessageListEntries(visible),
         loading: false,
         initialScrollPending: true,
+        httpDeliveryOk: true,
       );
-    } on ApiException catch (e) {
-      if (_disposed) return;
-      state = state.copyWith(loading: false, error: e.message);
+    } else {
+      state = state.copyWith(loading: true, clearError: true);
     }
+
+    final errors = <String>[];
+
+    ChatMessagesPage? page;
+    Conversation? convo;
+
+    final candidates = _conversationIdCandidates();
+    if (candidates.isNotEmpty) {
+      final primary = candidates.first;
+      Future<ChatMessagesPage?> fetchMessages() async {
+        try {
+          return await repository.getMessages(primary, limit: 50);
+        } on ApiException catch (e) {
+          errors.add(e.message);
+          _noteHttpFailure();
+          return null;
+        }
+      }
+
+      Future<Conversation?> fetchConversation() async {
+        try {
+          return await repository.getConversation(primary);
+        } on ApiException catch (e) {
+          if (!errors.contains(e.message)) errors.add(e.message);
+          _noteHttpFailure();
+          return null;
+        }
+      }
+
+      final results = await Future.wait<Object?>([
+        fetchMessages(),
+        fetchConversation(),
+      ]);
+      page = results[0] as ChatMessagesPage?;
+      convo = results[1] as Conversation?;
+    }
+
+    if (page == null) {
+      for (final id in candidates.skip(1)) {
+        try {
+          page = await repository.getMessages(id, limit: 50);
+          errors.clear();
+          break;
+        } on ApiException catch (e) {
+          if (!errors.contains(e.message)) errors.add(e.message);
+          _noteHttpFailure();
+        }
+      }
+    }
+
+    if (convo == null) {
+      for (final id in candidates.skip(1)) {
+        try {
+          convo = await repository.getConversation(id);
+          break;
+        } on ApiException catch (e) {
+          if (!errors.contains(e.message)) errors.add(e.message);
+          _noteHttpFailure();
+        }
+      }
+    }
+
+    convo ??= await _findConversationInList();
+
+    if (page == null && convo != null) {
+      try {
+        page = await repository.getMessages(convo.publicId, limit: 50);
+        errors.clear();
+      } on ApiException catch (e) {
+        errors.add(e.message);
+        _noteHttpFailure();
+      }
+    }
+
+    if (_disposed) return;
+    final sorted = page != null ? sortMessages(page.results) : state.messages;
+    final visible = sorted.where((m) => m.isVisible).toList(growable: false);
+    state = state.copyWith(
+      conversation: convo,
+      messages: sorted,
+      visibleMessages: visible,
+      listEntries: buildMessageListEntries(visible),
+      isOtherUserTyping: convo?.isOtherUserTyping ?? false,
+      hasMore: page?.hasMore ?? false,
+      loading: false,
+      initialScrollPending: sorted.isNotEmpty,
+      httpDeliveryOk: true,
+      error: errors.isEmpty ? null : errors.first,
+    );
+    if (sorted.isNotEmpty) {
+      _touchCache(sorted);
+    }
+    _noteHttpSuccess();
+    if (_ws.isConnected) _markRead();
+  }
+
+  List<String> _conversationIdCandidates() {
+    final id = conversationId.trim();
+    if (id.isEmpty) return const [];
+    final seen = <String>{};
+    final candidates = <String>[];
+    void add(String value) {
+      final normalized = value.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) return;
+      candidates.add(normalized);
+    }
+
+    add(id);
+    final convo = state.conversation;
+    if (convo != null) {
+      add(convo.publicId);
+      add(convo.id.toString());
+    }
+    return candidates;
+  }
+
+  Future<Conversation?> _findConversationInList() async {
+    try {
+      final conversations = await repository.getConversations();
+      for (final convo in conversations) {
+        if (convo.publicId == conversationId ||
+            convo.id.toString() == conversationId) {
+          return convo;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> reconnect() async {
     await _ws.reconnect();
+    _syncWsState();
   }
 
   Future<void> _connectWs() async {
-    _wsSub?.cancel();
-    _connSub?.cancel();
-
-    _connSub = _ws.connectionStream.listen((connected) {
-      if (_disposed) return;
-      state = state.copyWith(wsConnected: connected);
-      if (connected) {
-        _ws.send({'type': 'mark_read'});
+    final publicId = _wsPublicId;
+    if (publicId == null) {
+      if (kDebugMode) {
+        debugPrint('[ChatThread] ws deferred — waiting for public_id');
       }
-    });
-
-    _wsSub = _ws.events.listen(_handleWsEvent);
-    await _ws.connect(conversationId);
+      return;
+    }
+    await _ws.connect(publicId);
+    _syncWsState();
   }
 
   void _handleWsEvent(ChatWsEvent event) {
@@ -145,26 +374,29 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       final idx = messages.indexWhere((m) => m.clientTempId == msg.clientTempId);
       if (idx >= 0) {
         messages[idx] = msg.copyWith(sendStatus: MessageSendStatus.sent);
-        state = state.copyWith(messages: sortMessages(messages));
+        _commitMessages(messages);
         onConversationsChanged();
+        _markRead();
         return;
       }
     }
     if (messages.any((m) => m.id == msg.id && m.id > 0)) return;
     messages.add(msg);
-    state = state.copyWith(messages: sortMessages(messages));
+    _commitMessages(messages);
     onConversationsChanged();
+    _markRead();
   }
 
   void _onMessageReacted(Map<String, dynamic> data) {
     final messageId = data['id'] as int?;
     if (messageId == null) return;
     final reactions = _parseReactionsMap(data['reactions']);
-    state = state.copyWith(
-      messages: state.messages.map((m) {
+    _patchMessages(
+      state.messages.map((m) {
         if (m.id != messageId) return m;
         return m.copyWith(reactions: reactions);
       }).toList(),
+      cache: false,
     );
   }
 
@@ -172,8 +404,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final messageId = data['id'] as int?;
     final deleteType = data['delete_type'] as String? ?? 'for_me';
     if (messageId == null) return;
-    state = state.copyWith(
-      messages: state.messages
+    _commitMessages(
+      state.messages
           .map((m) {
             if (m.id != messageId) return m;
             if (deleteType == 'for_everyone') {
@@ -186,6 +418,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
           })
           .where((m) => m.isVisible)
           .toList(),
+      cache: false,
     );
   }
 
@@ -194,8 +427,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         .map((e) => (e as num).toInt())
         .toList();
     final now = DateTime.now().toUtc().toIso8601String();
-    state = state.copyWith(
-      messages: state.messages.map((m) {
+    _patchMessages(
+      state.messages.map((m) {
         if (!m.isMine) return m;
         if (ids.isNotEmpty && !ids.contains(m.id)) return m;
         return m.copyWith(
@@ -204,20 +437,37 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
           deliveredAt: m.deliveredAt ?? now,
         );
       }).toList(),
+      cache: false,
     );
   }
 
   Future<void> _pollLatestMessages() async {
     try {
       _pollCycle++;
-      final page = await repository.getMessages(conversationId, limit: 50);
-      if (_disposed || page.results.isEmpty) return;
+      final sw = Stopwatch()..start();
+      final page = await repository.getMessages(_activeConversationId, limit: 50);
+      if (_disposed) return;
+      _noteHttpSuccess();
+      if (kDebugMode) {
+        debugPrint('[ChatThread] poll ok ${sw.elapsedMilliseconds}ms '
+            'count=${page.results.length}');
+      }
       final merged = _mergeMessages(state.messages, page.results);
-      state = state.copyWith(messages: merged);
+      if (merged.length != state.messages.length ||
+          (merged.isNotEmpty &&
+              state.messages.isNotEmpty &&
+              merged.last.id != state.messages.last.id)) {
+        _applyMergedMessages(merged);
+      } else if (!_messagesEqual(merged, state.messages)) {
+        _patchMessages(merged);
+      }
       if (_pollCycle % 3 == 0) {
         onConversationsChanged();
       }
-    } catch (_) {}
+    } catch (e) {
+      _noteHttpFailure();
+      if (kDebugMode) debugPrint('[ChatThread] poll failed: $e');
+    }
   }
 
   List<ChatMessage> _mergeMessages(
@@ -240,31 +490,59 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     return sortMessages(merged);
   }
 
+  bool _messagesEqual(List<ChatMessage> a, List<ChatMessage> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+      if (a[i].isRead != b[i].isRead) return false;
+      if (a[i].readAt != b[i].readAt) return false;
+      if (a[i].deliveredAt != b[i].deliveredAt) return false;
+      if (a[i].sendStatus != b[i].sendStatus) return false;
+      if (a[i].reactions != b[i].reactions) return false;
+      if (a[i].content != b[i].content) return false;
+      if (a[i].isDeletedForMe != b[i].isDeletedForMe) return false;
+      if (a[i].isDeletedForEveryone != b[i].isDeletedForEveryone) return false;
+    }
+    return true;
+  }
+
   Future<void> loadEarlier() async {
     if (state.loadingEarlier || !state.hasMore || state.messages.isEmpty) return;
     state = state.copyWith(loadingEarlier: true);
     try {
       final oldest = state.messages.firstWhere((m) => m.id > 0, orElse: () => state.messages.first);
       final page = await repository.getMessages(
-        conversationId,
+        _activeConversationId,
         before: oldest.id.toString(),
         limit: 50,
       );
       if (_disposed) return;
+      final merged = sortMessages([...page.results, ...state.messages]);
+      _commitMessages(merged);
       state = state.copyWith(
-        messages: sortMessages([...page.results, ...state.messages]),
         hasMore: page.hasMore,
         loadingEarlier: false,
       );
+      _noteHttpSuccess();
     } catch (_) {
-      if (!_disposed) state = state.copyWith(loadingEarlier: false);
+      if (!_disposed) {
+        state = state.copyWith(loadingEarlier: false);
+        _noteHttpFailure();
+      }
     }
   }
 
+  DateTime? _lastPaginationAt;
+
   void onScrollNearTop() {
-    if (!state.loadingEarlier && state.hasMore) {
-      loadEarlier();
+    if (state.loadingEarlier || !state.hasMore) return;
+    final now = DateTime.now();
+    if (_lastPaginationAt != null &&
+        now.difference(_lastPaginationAt!) < const Duration(milliseconds: 500)) {
+      return;
     }
+    _lastPaginationAt = now;
+    loadEarlier();
   }
 
   void markInitialScrollDone() {
@@ -277,7 +555,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(milliseconds: 2000), () {
       if (_ws.send({'type': 'typing', 'is_typing': true})) return;
-      repository.sendTyping(conversationId);
+      repository.sendTyping(_activeConversationId);
     });
   }
 
@@ -304,7 +582,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       id: -DateTime.now().millisecondsSinceEpoch,
       content: content,
       imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      messageType: imageUrl.isNotEmpty ? 'image' : 'text',
+      messageType: imageUrl.isNotEmpty
+          ? (content == voiceMessageLabel ? 'voice' : 'image')
+          : 'text',
       timestamp: DateTime.now().toUtc().toIso8601String(),
       isMine: true,
       clientTempId: tempId,
@@ -324,12 +604,15 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       replyToId: replyToId ?? replyTarget?.id,
     );
 
-    state = state.copyWith(
-      sending: true,
-      messages: sortMessages([...state.messages, optimistic]),
-      clearReplyingTo: true,
-      showEmojiPicker: false,
+    state = _withMessages(
+      state.copyWith(
+        sending: true,
+        clearReplyingTo: true,
+        showEmojiPicker: false,
+      ),
+      sortMessages([...state.messages, optimistic]),
     );
+    _touchCache(state.messages);
 
     try {
       final sentViaWs = _ws.send({
@@ -346,9 +629,11 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       } else {
         await _commitViaHttp(tempId);
       }
+      _noteHttpSuccess();
       onConversationsChanged();
     } on ApiException catch (e) {
       _markFailed(tempId, e.message);
+      _noteHttpFailure();
     } catch (e) {
       _markFailed(tempId, e.toString());
     } finally {
@@ -358,7 +643,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   void _schedulePendingAck(String tempId) {
     _pendingAckTimers[tempId]?.cancel();
-    _pendingAckTimers[tempId] = Timer(const Duration(seconds: 10), () async {
+    _pendingAckTimers[tempId] = Timer(const Duration(seconds: 8), () async {
       if (_disposed) return;
       final stillPending = state.messages.any(
         (m) => m.clientTempId == tempId && m.sendStatus == MessageSendStatus.pending,
@@ -377,7 +662,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final payload = _failedSends[tempId];
     if (payload == null) return;
     final msg = await repository.sendMessage(
-      conversationId,
+      _activeConversationId,
       content: payload.content,
       imageUrl: payload.imageUrl.isEmpty ? null : payload.imageUrl,
       replyToId: payload.replyToId,
@@ -388,19 +673,23 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final idx = messages.indexWhere((m) => m.clientTempId == tempId);
     if (idx >= 0) {
       messages[idx] = msg.copyWith(sendStatus: MessageSendStatus.sent);
-      state = state.copyWith(messages: sortMessages(messages));
+      _commitMessages(messages);
     }
+    _noteHttpSuccess();
   }
 
   void _markFailed(String tempId, String error) {
     _clearPendingAck(tempId);
-    final messages = state.messages.map((m) {
-      if (m.clientTempId == tempId) {
-        return m.copyWith(sendStatus: MessageSendStatus.failed);
-      }
-      return m;
-    }).toList();
-    state = state.copyWith(messages: messages, error: error);
+    _patchMessages(
+      state.messages.map((m) {
+        if (m.clientTempId == tempId) {
+          return m.copyWith(sendStatus: MessageSendStatus.failed);
+        }
+        return m;
+      }).toList(),
+      cache: false,
+    );
+    state = state.copyWith(error: error);
   }
 
   void _clearPendingAck(String tempId) {
@@ -421,14 +710,166 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     }
   }
 
+  Future<void> onVoiceListeningChange(bool next) async {
+    if (next) {
+      if (state.voiceDraftReady && (_voiceRecorder?.isPaused ?? false)) {
+        await _resumeVoiceRecording();
+      } else {
+        await _startVoiceRecording();
+      }
+    } else if (state.isRecording) {
+      await _pauseVoiceRecording();
+    }
+  }
+
+  Future<bool> _startVoiceRecording() async {
+    if (state.isRecording || state.uploading || state.sending) return false;
+
+    if (_voiceRecorder?.isPaused ?? false) {
+      return _resumeVoiceRecording();
+    }
+
+    final permission = await VoiceRecordingService.ensureMicrophonePermission();
+    if (permission == MicrophonePermissionResult.permanentlyDenied) {
+      state = state.copyWith(
+        micPermissionDenied: true,
+        error: 'Microphone permission is required to send voice messages.',
+      );
+      return false;
+    }
+    if (permission != MicrophonePermissionResult.granted) {
+      state = state.copyWith(
+        error: 'Microphone permission is required to send voice messages.',
+      );
+      return false;
+    }
+
+    _voiceRecorder ??= VoiceRecordingService();
+    try {
+      final path = await _voiceRecorder!.start();
+      if (path == null) return false;
+      state = state.copyWith(
+        isRecording: true,
+        voiceDraftReady: true,
+        micPermissionDenied: false,
+        clearError: true,
+      );
+      _startVoiceTimer();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: 'Unable to start voice recording.');
+      return false;
+    }
+  }
+
+  Future<bool> _resumeVoiceRecording() async {
+    final recorder = _voiceRecorder;
+    if (recorder == null || !recorder.isPaused) return false;
+    try {
+      await recorder.resume();
+      state = state.copyWith(isRecording: true, voiceDraftReady: true);
+      _startVoiceTimer();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _pauseVoiceRecording() async {
+    final recorder = _voiceRecorder;
+    if (recorder == null) {
+      state = state.copyWith(isRecording: false);
+      return;
+    }
+
+    try {
+      if (await recorder.isRecording) {
+        await recorder.pause();
+      }
+    } catch (_) {}
+
+    _stopVoiceTimer();
+    state = state.copyWith(isRecording: false, voiceDraftReady: true);
+  }
+
+  Future<void> cancelVoiceRecording() async {
+    await _voiceRecorder?.cancel();
+    _stopVoiceTimer();
+    state = state.copyWith(
+      isRecording: false,
+      voiceDraftReady: false,
+      voiceRecordingSeconds: 0,
+    );
+  }
+
+  Future<void> sendVoiceMessage() async {
+    final recorder = _voiceRecorder;
+    if (recorder != null && (state.isRecording || recorder.isPaused)) {
+      final path = await recorder.stop();
+      _stopVoiceTimer();
+      state = state.copyWith(isRecording: false);
+      if (path == null || !File(path).existsSync()) {
+        await cancelVoiceRecording();
+        return;
+      }
+    }
+
+    final path = recorder?.recordingPath;
+    if (path == null || !File(path).existsSync()) {
+      await cancelVoiceRecording();
+      return;
+    }
+
+    final file = File(path);
+    if (await file.length() == 0) {
+      await cancelVoiceRecording();
+      return;
+    }
+
+    state = state.copyWith(uploading: true);
+    try {
+      final audioUrl = await repository.uploadChatImage(path);
+      await _sendPayload(content: voiceMessageLabel, imageUrl: audioUrl);
+      await recorder?.cancel();
+      state = state.copyWith(
+        voiceDraftReady: false,
+        voiceRecordingSeconds: 0,
+      );
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message, voiceDraftReady: true);
+    } catch (e) {
+      state = state.copyWith(error: e.toString(), voiceDraftReady: true);
+    } finally {
+      if (!_disposed) state = state.copyWith(uploading: false);
+    }
+  }
+
+  Future<void> openMicrophoneSettings() {
+    return VoiceRecordingService.openSettings();
+  }
+
+  void _startVoiceTimer() {
+    _voiceRecordingTimer?.cancel();
+    _voiceRecordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_disposed || !state.isRecording) return;
+      state = state.copyWith(voiceRecordingSeconds: state.voiceRecordingSeconds + 1);
+    });
+  }
+
+  void _stopVoiceTimer() {
+    _voiceRecordingTimer?.cancel();
+    _voiceRecordingTimer = null;
+  }
+
   Future<void> react(ChatMessage msg, String emoji) async {
     try {
       final updated = await repository.reactToMessage(msg.id, emoji);
       _ws.send({'type': 'message_reaction', 'id': msg.id, 'emoji': emoji});
-      state = state.copyWith(
-        messages: state.messages
+      _patchMessages(
+        state.messages
             .map((m) => m.id == msg.id ? updated : m)
             .toList(),
+        cache: false,
       );
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
@@ -446,8 +887,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         await repository.deleteMessage(msg.id, deleteType: deleteType);
       }
       if (deleteType == 'for_everyone') {
-        state = state.copyWith(
-          messages: state.messages
+        _commitMessages(
+          state.messages
               .map(
                 (m) => m.id == msg.id
                     ? m.copyWith(
@@ -457,10 +898,12 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
                     : m,
               )
               .toList(),
+          cache: false,
         );
       } else {
-        state = state.copyWith(
-          messages: state.messages.where((m) => m.id != msg.id).toList(),
+        _commitMessages(
+          state.messages.where((m) => m.id != msg.id).toList(),
+          cache: false,
         );
       }
     } on ApiException catch (e) {
@@ -470,10 +913,11 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   void retryFailed(ChatMessage msg, void Function(String) setText) {
     final payload = msg.clientTempId != null ? _failedSends[msg.clientTempId!] : null;
-    state = state.copyWith(
-      messages: state.messages
+    _commitMessages(
+      state.messages
           .where((m) => m.clientTempId != msg.clientTempId)
           .toList(),
+      cache: false,
     );
     if (payload != null) {
       if (payload.imageUrl.isNotEmpty) {
@@ -545,7 +989,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   Future<bool> unmatch() async {
     try {
-      await repository.unmatch(conversationId);
+      await repository.unmatch(_activeConversationId);
       onConversationsChanged();
       return true;
     } on ApiException catch (e) {
@@ -556,7 +1000,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   Future<bool> report(String reason) async {
     try {
-      await repository.report(conversationId, reason: reason);
+      await repository.report(_activeConversationId, reason: reason);
       return true;
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
@@ -566,8 +1010,13 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   Future<bool> clearHistory() async {
     try {
-      await repository.clearConversationHistory(conversationId);
-      state = state.copyWith(messages: []);
+      await repository.clearConversationHistory(_activeConversationId);
+      state = state.copyWith(
+        messages: const [],
+        visibleMessages: const [],
+        listEntries: const [],
+      );
+      messageCache.clear(_activeConversationId);
       onConversationsChanged();
       return true;
     } on ApiException catch (e) {
@@ -594,6 +1043,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _disposed = true;
     _typingTimer?.cancel();
     _typingClearTimer?.cancel();
+    _stopVoiceTimer();
+    unawaited(_voiceRecorder?.dispose());
     for (final timer in _pendingAckTimers.values) {
       timer.cancel();
     }

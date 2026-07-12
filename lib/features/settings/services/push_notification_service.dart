@@ -115,6 +115,17 @@ class PushNotificationService {
     }
   }
 
+  Future<void> ensureMessagingReady() async {
+    if (Firebase.apps.isNotEmpty) return;
+    if (!_storage.pushEnabled) return;
+    try {
+      final config = await _repository.getConfig();
+      if (config.firebase != null) {
+        await _ensureFirebase(config.firebase!);
+      }
+    } catch (_) {}
+  }
+
   Future<PushPermissionState> _resolvePermission() async {
     if (!Platform.isAndroid && !Platform.isIOS) {
       return PushPermissionState.unsupported;

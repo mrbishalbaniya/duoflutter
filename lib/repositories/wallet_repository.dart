@@ -1,4 +1,5 @@
 import '../core/models/wallet_models.dart';
+import '../core/network/api_exception.dart';
 import '../core/network/dio_client.dart';
 
 class WalletRepository {
@@ -6,9 +7,27 @@ class WalletRepository {
 
   final DioClient _client;
 
+  static const _primaryPrefix = '/wallet';
+  static const _fallbackPrefix = '/subscriptions/wallet';
+
+  Future<T> _withWalletFallback<T>(
+    Future<T> Function(String prefix) action,
+  ) async {
+    try {
+      return await action(_primaryPrefix);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        return await action(_fallbackPrefix);
+      }
+      rethrow;
+    }
+  }
+
   Future<WalletSummary> getWallet() async {
-    final response = await _client.get<Map<String, dynamic>>('/wallet/');
-    return WalletSummary.fromJson(response.data!);
+    return _withWalletFallback((prefix) async {
+      final response = await _client.get<Map<String, dynamic>>('$prefix/');
+      return WalletSummary.fromJson(response.data!);
+    });
   }
 
   Future<List<SubscriptionPlan>> getPlans() async {
@@ -19,19 +38,23 @@ class WalletRepository {
   }
 
   Future<EsewaPaymentForm> initiateTopUp(int amount) async {
-    final response = await _client.post<Map<String, dynamic>>(
-      '/wallet/topup/initiate/',
-      data: {'amount': amount},
-    );
-    return EsewaPaymentForm.fromJson(response.data!);
+    return _withWalletFallback((prefix) async {
+      final response = await _client.post<Map<String, dynamic>>(
+        '$prefix/topup/initiate/',
+        data: {'amount': amount},
+      );
+      return EsewaPaymentForm.fromJson(response.data!);
+    });
   }
 
   Future<WalletPurchaseResult> purchasePlan(String planId) async {
-    final response = await _client.post<Map<String, dynamic>>(
-      '/wallet/purchase/',
-      data: {'plan_id': planId},
-    );
-    return WalletPurchaseResult.fromJson(response.data!);
+    return _withWalletFallback((prefix) async {
+      final response = await _client.post<Map<String, dynamic>>(
+        '$prefix/purchase/',
+        data: {'plan_id': planId},
+      );
+      return WalletPurchaseResult.fromJson(response.data!);
+    });
   }
 
   Future<Map<String, dynamic>> getSubscriptionStatus() async {
@@ -39,10 +62,16 @@ class WalletRepository {
     return response.data ?? {};
   }
 
-  Future<Map<String, dynamic>> verifyPayment(String transactionUuid) async {
+  Future<Map<String, dynamic>> verifyPayment(
+    String transactionUuid, {
+    String? refId,
+  }) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/subscriptions/verify/',
-      data: {'transaction_uuid': transactionUuid},
+      data: {
+        'transaction_uuid': transactionUuid,
+        if (refId != null && refId.isNotEmpty) 'ref_id': refId,
+      },
     );
     return response.data ?? {};
   }

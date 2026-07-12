@@ -10,6 +10,7 @@ import '../../widgets/duo_ui.dart';
 import '../auth/auth_controller.dart';
 import 'domain/wallet_domain.dart';
 import 'providers/wallet_providers.dart';
+import 'services/esewa_payment_service.dart';
 import 'widgets/esewa_payment_webview.dart';
 import 'widgets/wallet_balance_card.dart';
 import 'widgets/wallet_premium_plans_section.dart';
@@ -25,6 +26,8 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
+  final _esewaService = EsewaPaymentService();
+
   @override
   void initState() {
     super.initState();
@@ -45,27 +48,55 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     try {
       form = await ui.initiateTopUp(amount);
       if (!mounted) return;
-      final success = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => EsewaPaymentScreen(form: form!)),
-      );
-      ui.clearToppingUp();
-      if (!mounted) return;
 
-      var toppedUp = success == true;
-      if (success == null && form.transactionUuid.isNotEmpty) {
-        try {
-          final verified = await ref
-              .read(walletRepositoryProvider)
-              .verifyPayment(form.transactionUuid);
-          toppedUp = verified['status'] == 'COMPLETE';
-        } catch (_) {}
+      var toppedUp = false;
+      String? refId;
+
+      if (_esewaService.supportsNativeSdk && form.mobileSdk?.isConfigured == true) {
+        final nativeResult = await _esewaService.startNativePayment(form);
+        ui.clearToppingUp();
+        if (!mounted) return;
+
+        if (nativeResult.outcome == EsewaPaymentOutcome.success) {
+          refId = nativeResult.refId;
+          try {
+            final verified = await ref.read(walletRepositoryProvider).verifyPayment(
+                  form.transactionUuid,
+                  refId: refId,
+                );
+            toppedUp = verified['status'] == 'COMPLETE';
+          } catch (_) {}
+        } else if (nativeResult.outcome == EsewaPaymentOutcome.failure) {
+          ref.read(walletUiProvider.notifier).setNotice('Top-up was not completed.');
+          return;
+        } else {
+          ref.read(walletUiProvider.notifier).setNotice('Top-up was cancelled.');
+          return;
+        }
+      } else {
+        final success = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => EsewaPaymentScreen(form: form!)),
+        );
+        ui.clearToppingUp();
+        if (!mounted) return;
+
+        toppedUp = success == true;
+        if (success == null && form.transactionUuid.isNotEmpty) {
+          try {
+            final verified = await ref
+                .read(walletRepositoryProvider)
+                .verifyPayment(form.transactionUuid);
+            toppedUp = verified['status'] == 'COMPLETE';
+          } catch (_) {}
+        } else if (success == false) {
+          ref.read(walletUiProvider.notifier).setNotice('Top-up was not completed.');
+          return;
+        }
       }
 
       if (toppedUp) {
         ref.read(walletUiProvider.notifier).setNotice('Wallet topped up successfully.');
         await ref.read(walletUiProvider.notifier).refreshAll();
-      } else if (success == false) {
-        ref.read(walletUiProvider.notifier).setNotice('Top-up was not completed.');
       } else {
         ref.read(walletUiProvider.notifier).setNotice(
               'Payment submitted. Pull to refresh if your balance has not updated yet.',
@@ -77,10 +108,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       if (mounted) {
         ref.read(walletUiProvider.notifier).setNotice(e.message);
       }
-    } catch (_) {
+    } catch (e) {
       ui.clearToppingUp();
       if (mounted) {
-        ref.read(walletUiProvider.notifier).setNotice('Could not start eSewa top-up.');
+        ref.read(walletUiProvider.notifier).setNotice(
+              e is UnsupportedError
+                  ? 'Native eSewa is not available on this device.'
+                  : 'Could not start eSewa top-up.',
+            );
       }
     }
   }
@@ -184,6 +219,38 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                         children: [
+                          if (walletData.degraded)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Material(
+                                color: scheme.errorContainer.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(14),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.cloud_sync_rounded,
+                                        size: 20,
+                                        color: scheme.onErrorContainer,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          walletData.degradedMessage ??
+                                              'Wallet API unavailable. Backend redeploy in progress.',
+                                          style: TextStyle(
+                                            color: scheme.onErrorContainer,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           WalletBalanceCard(
                             balance: balance,
                             hidden: ui.balanceHidden,

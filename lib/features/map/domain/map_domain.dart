@@ -24,6 +24,7 @@ class MapScreenState extends Equatable {
     this.followMe = false,
     this.isFullscreen = false,
     this.flyToTarget,
+    this.locateNonce = 0,
   });
 
   final String? focusProfileId;
@@ -34,6 +35,7 @@ class MapScreenState extends Equatable {
   final bool followMe;
   final bool isFullscreen;
   final LatLng? flyToTarget;
+  final int locateNonce;
 
   MapScreenState copyWith({
     String? focusProfileId,
@@ -47,6 +49,7 @@ class MapScreenState extends Equatable {
     bool? isFullscreen,
     LatLng? flyToTarget,
     bool clearFlyTo = false,
+    int? locateNonce,
   }) {
     return MapScreenState(
       focusProfileId: clearFocus ? null : (focusProfileId ?? this.focusProfileId),
@@ -57,6 +60,7 @@ class MapScreenState extends Equatable {
       followMe: followMe ?? this.followMe,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       flyToTarget: clearFlyTo ? null : (flyToTarget ?? this.flyToTarget),
+      locateNonce: locateNonce ?? this.locateNonce,
     );
   }
 
@@ -70,6 +74,7 @@ class MapScreenState extends Equatable {
         followMe,
         isFullscreen,
         flyToTarget,
+        locateNonce,
       ];
 }
 

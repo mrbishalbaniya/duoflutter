@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+
+import 'app_colors.dart';
+import 'dark_theme.dart' show buildDuoTheme;
+import 'theme_extensions.dart';
+
+ThemeData buildLightTheme() {
+  const tokens = DuoThemeTokens(
+    accent: AppColors.accent,
+    love: AppColors.love,
+    premium: AppColors.premium,
+    mutedForeground: AppColors.mutedForegroundLight,
+    glassSurface: Color(0xD1FFFFFF),
+    glassBorder: Color(0x14000000),
+    navBarSurface: Color(0xDBFFFFFF),
+    navBarBorder: Color(0x1FE84A7A),
+    cardGradientTop: Color(0xFAFFFFFF),
+    cardGradientBottom: Color(0xF2F9FAFB),
+    cardBorder: Color(0x0F000000),
+    cardShadow: Color(0x140F172A),
+    brandGradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [AppColors.primary, AppColors.love, AppColors.accent],
+    ),
+    brandBrGradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [AppColors.primary, AppColors.accent],
+    ),
+    chatIncomingBackground: AppColors.surfaceContainerHighLight,
+    chatIncomingBorder: AppColors.borderLight,
+    chatOutgoingGradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [AppColors.primary, AppColors.primaryContainer],
+    ),
+    chatOnOutgoing: AppColors.onPrimary,
+    chatVoiceWaveIncoming: AppColors.chatVoiceWaveIncoming,
+    chatVoiceWaveOutgoing: AppColors.chatVoiceWaveOutgoing,
+    chatReplyScrim: Color(0x12000000),
+    mapControlBackground: Color(0xE6111827),
+    mapControlForeground: AppColors.onPrimary,
+    mapControlBorder: Color(0x33FFFFFF),
+    badgeBackground: AppColors.primary,
+    badgeForeground: AppColors.onPrimary,
+    success: AppColors.success,
+    warning: AppColors.warning,
+    disabledForeground: Color(0xFF9CA3AF),
+    link: AppColors.primary,
+    ambientGlowPrimary: Color(0x1AE84A7A),
+    ambientGlowAccent: Color(0x14D4A574),
+    ambientGlowTertiary: Color(0x148B5CF6),
+  );
+
+  final scheme = const ColorScheme(
+    brightness: Brightness.light,
+    primary: AppColors.primary,
+    onPrimary: AppColors.onPrimary,
+    primaryContainer: AppColors.primaryContainer,
+    onPrimaryContainer: AppColors.onPrimaryContainer,
+    secondary: AppColors.secondaryLight,
+    onSecondary: AppColors.onSecondaryLight,
+    secondaryContainer: AppColors.secondaryContainerLight,
+    onSecondaryContainer: AppColors.onSecondaryLight,
+    tertiary: AppColors.tertiary,
+    onTertiary: AppColors.onTertiary,
+    tertiaryContainer: AppColors.tertiaryContainer,
+    onTertiaryContainer: AppColors.onTertiaryContainer,
+    error: AppColors.error,
+    onError: AppColors.onError,
+    errorContainer: AppColors.errorContainerDark,
+    onErrorContainer: AppColors.onErrorContainerLight,
+    surface: AppColors.surfaceLight,
+    onSurface: AppColors.onSurfaceLight,
+    onSurfaceVariant: AppColors.onSurfaceVariantLight,
+    outline: AppColors.outlineLight,
+    outlineVariant: AppColors.outlineVariantLight,
+    shadow: Color(0x1A0F172A),
+    scrim: Color(0x66000000),
+    inverseSurface: AppColors.inverseSurfaceLight,
+    onInverseSurface: AppColors.inverseOnSurfaceLight,
+    inversePrimary: AppColors.primaryFixed,
+    surfaceTint: AppColors.primary,
+    surfaceContainerHighest: AppColors.surfaceContainerHighestLight,
+    surfaceContainerHigh: AppColors.surfaceContainerHighLight,
+    surfaceContainer: AppColors.surfaceContainerLight,
+    surfaceContainerLow: AppColors.surfaceContainerLowLight,
+    surfaceContainerLowest: AppColors.surfaceContainerLowestLight,
+    surfaceBright: AppColors.surfaceBrightLight,
+    surfaceDim: AppColors.surfaceDimLight,
+  );
+
+  return buildDuoTheme(scheme, tokens, AppColors.backgroundLight);
+}

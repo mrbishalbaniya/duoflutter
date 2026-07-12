@@ -22,6 +22,7 @@ class DuoMapView extends ConsumerStatefulWidget {
     required this.onProfileFocus,
     this.onZoneSelected,
     this.flyToTarget,
+    this.locateNonce = 0,
     this.followMe = false,
     this.isFullscreen = false,
     this.onToggleFollowMe,
@@ -34,6 +35,7 @@ class DuoMapView extends ConsumerStatefulWidget {
   final ValueChanged<String> onProfileFocus;
   final ValueChanged<ActivityZone>? onZoneSelected;
   final LatLng? flyToTarget;
+  final int locateNonce;
   final bool followMe;
   final bool isFullscreen;
   final VoidCallback? onToggleFollowMe;
@@ -47,6 +49,7 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
   LatLng? _lastFocused;
   LatLng? _lastFlyTarget;
   LatLng? _lastLivePosition;
+  int _lastLocateNonce = 0;
   int _commandToken = 0;
   GlobeFlyToCommand? _flyCommand;
   GlobeCameraCommand? _cameraCommand;
@@ -79,6 +82,18 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
     if (widget.followMe && widget.userCoordinates != oldWidget.userCoordinates) {
       _maybeFollowUser(widget.userCoordinates);
     }
+    if (widget.locateNonce != oldWidget.locateNonce &&
+        widget.locateNonce != _lastLocateNonce) {
+      _lastLocateNonce = widget.locateNonce;
+      _centerOnUser();
+    }
+  }
+
+  void _centerOnUser() {
+    final coords = _effectiveUserCoords;
+    _lastFlyTarget = coords;
+    _issueFlyTo(coords, 13.5);
+    _issueCamera(GlobeCameraAction.recenter);
   }
 
   void _maybeFollowUser(LatLng coords) {
@@ -307,16 +322,9 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
           child: SafeArea(
             bottom: false,
             child: MapFloatingControls(
-            followMe: widget.followMe,
-            isFullscreen: widget.isFullscreen,
-            onZoomIn: () => _issueCamera(GlobeCameraAction.zoomIn),
-            onZoomOut: () => _issueCamera(GlobeCameraAction.zoomOut),
-            onRecenterNorth: () => _issueCamera(GlobeCameraAction.resetNorth),
-            onLocate: () => _issueCamera(GlobeCameraAction.recenter),
-            onOpenSettings: _openSettingsSheet,
-            onToggleFollowMe: widget.onToggleFollowMe,
-            onToggleFullscreen: widget.onToggleFullscreen,
-          ),
+              onRecenterNorth: () => _issueCamera(GlobeCameraAction.resetNorth),
+              onOpenSettings: _openSettingsSheet,
+            ),
           ),
         ),
       ],

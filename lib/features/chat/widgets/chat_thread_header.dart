@@ -81,14 +81,8 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
     final photo = conversation.otherUserProfile.displayPhoto;
 
     final subtitle = isOtherUserTyping
-
         ? 'Typing…'
-
-        : wsConnected
-
-            ? matchSubtitle(conversation.matchCreatedAt)
-
-            : 'Connecting…';
+        : matchSubtitle(conversation.matchCreatedAt);
 
 
 
@@ -219,21 +213,11 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
                     key: ValueKey(subtitle),
 
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-
                           color: isOtherUserTyping
-
                               ? DuoColors.primary
-
-                              : wsConnected
-
-                                  ? Theme.of(context).colorScheme.onSurfaceVariant
-
-                                  : Colors.orange.shade700,
-
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontWeight:
-
                               isOtherUserTyping ? FontWeight.w600 : FontWeight.w400,
-
                         ),
 
                   ),

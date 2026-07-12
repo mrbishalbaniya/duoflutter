@@ -6,7 +6,9 @@ import '../../core/models/match_models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/router/app_router.dart';
-import '../../widgets/duo_ui.dart';
+import '../../../core/theme/duo_theme.dart';
+import '../../../widgets/duo_ui.dart';
+import '../notifications/providers/notifications_providers.dart';
 import 'domain/discover_models.dart';
 import 'providers/discover_providers.dart';
 import 'widgets/discover_empty_state.dart';
@@ -39,6 +41,8 @@ class DiscoverScreen extends ConsumerWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _NotificationBell(),
+                  const SizedBox(width: 8),
                   DuoIconCircleButton(
                     icon: Icons.account_balance_wallet_outlined,
                     onTap: () => context.push(AppRoutes.wallet),
@@ -382,6 +386,45 @@ class _ReceivedGrid extends ConsumerWidget {
             );
           },
         ),
+      ],
+    );
+  }
+}
+
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(notificationUnreadCountProvider);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        DuoIconCircleButton(
+          icon: Icons.notifications_outlined,
+          onTap: () => context.push(AppRoutes.notifications),
+        ),
+        if (unread > 0)
+          Positioned(
+            right: 2,
+            top: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: DuoColors.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                unread > 99 ? '99+' : '$unread',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

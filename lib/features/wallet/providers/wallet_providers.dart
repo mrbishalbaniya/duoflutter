@@ -9,21 +9,85 @@ class WalletData {
   const WalletData({
     required this.wallet,
     required this.plans,
+    this.degraded = false,
+    this.degradedMessage,
   });
 
   final WalletSummary wallet;
   final List<SubscriptionPlan> plans;
+  final bool degraded;
+  final String? degradedMessage;
+}
+
+const _fallbackPlans = [
+  SubscriptionPlan(
+    planId: 'duo_premium_7d',
+    name: '7-Day Pass',
+    description: 'Unlock Liked you for one week.',
+    currency: 'NPR',
+    amount: 149,
+    durationDays: 7,
+  ),
+  SubscriptionPlan(
+    planId: 'duo_premium_30d',
+    name: '30-Day Pass',
+    description: 'Unlock Liked you for one month.',
+    currency: 'NPR',
+    amount: 499,
+    durationDays: 30,
+    badge: 'Popular',
+  ),
+  SubscriptionPlan(
+    planId: 'duo_premium_90d',
+    name: '90-Day Pass',
+    description: 'Best value — three months of Premium.',
+    currency: 'NPR',
+    amount: 999,
+    durationDays: 90,
+    badge: 'Best value',
+  ),
+];
+
+WalletSummary _fallbackWalletSummary(int balance) {
+  return WalletSummary(
+    balance: balance,
+    currency: 'NPR',
+    topUpPresets: const [500, 1000, 2000, 5000],
+    transactions: const [],
+  );
 }
 
 final walletDataProvider = FutureProvider.autoDispose<WalletData>((ref) async {
   final walletRepo = ref.read(walletRepositoryProvider);
-  final results = await Future.wait([
-    walletRepo.getWallet(),
-    walletRepo.getPlans().catchError((_) => <SubscriptionPlan>[]),
-  ]);
+  final cachedBalance = ref.read(authControllerProvider).user?.profile.walletBalance ?? 0;
+
+  WalletSummary wallet;
+  var degraded = false;
+  String? degradedMessage;
+
+  try {
+    wallet = await walletRepo.getWallet();
+  } on ApiException catch (e) {
+    if (e.statusCode == 404) {
+      wallet = _fallbackWalletSummary(cachedBalance);
+      degraded = true;
+      degradedMessage =
+          'Wallet API is not available on this server yet. Showing your cached balance. Pull to refresh after the backend redeploys.';
+    } else {
+      rethrow;
+    }
+  }
+
+  var plans = await walletRepo.getPlans().catchError((_) => <SubscriptionPlan>[]);
+  if (plans.isEmpty) {
+    plans = _fallbackPlans;
+  }
+
   return WalletData(
-    wallet: results[0] as WalletSummary,
-    plans: results[1] as List<SubscriptionPlan>,
+    wallet: wallet,
+    plans: plans,
+    degraded: degraded,
+    degradedMessage: degradedMessage,
   );
 });
 
@@ -126,6 +190,19 @@ class WalletUiController extends StateNotifier<WalletUiState> {
       await refreshAll();
       return result;
     } on ApiException catch (e) {
+      final raw = e.raw;
+      if (e.statusCode == 402 && raw is Map<String, dynamic>) {
+        final required = raw['required'];
+        final balance = raw['balance'];
+        if (required != null && balance != null) {
+          state = state.copyWith(
+            clearPurchasing: true,
+            notice:
+                'Insufficient balance. You have NPR $balance but need NPR $required.',
+          );
+          return null;
+        }
+      }
       state = state.copyWith(clearPurchasing: true, notice: e.message);
       rethrow;
     } catch (_) {

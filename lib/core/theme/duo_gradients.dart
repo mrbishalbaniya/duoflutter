@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 
-import 'duo_theme.dart';
+import 'app_colors.dart';
 
 abstract final class DuoGradients {
   static const brand = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [DuoColors.primary, DuoColors.love, DuoColors.accent],
+    colors: [AppColors.primary, AppColors.love, AppColors.accent],
   );
 
   static const brandBr = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [DuoColors.primary, DuoColors.primaryContainer],
+    colors: [AppColors.primary, AppColors.accent],
   );
 
   static const hero = LinearGradient(
