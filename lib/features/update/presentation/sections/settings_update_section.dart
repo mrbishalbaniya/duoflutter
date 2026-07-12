@@ -84,8 +84,15 @@ class SettingsUpdateSection extends ConsumerWidget {
             onTap: () async {
               final controller = ref.read(updateControllerProvider.notifier);
               final latest = await controller.checkForUpdates(force: true, manual: true);
-              if (!context.mounted || latest == null) return;
+              if (!context.mounted) return;
               final ui = ref.read(updateControllerProvider);
+              if (ui.phase == UpdatePhase.failed && ui.error != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(ui.error!)),
+                );
+                return;
+              }
+              if (latest == null) return;
               if (ui.phase == UpdatePhase.available || ui.hasBlockingUpdate) {
                 await showUpdateDialog(context, blocking: ui.hasBlockingUpdate);
               } else {

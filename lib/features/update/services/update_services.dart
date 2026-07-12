@@ -247,6 +247,8 @@ class UpdateCheckService {
       'checksum_sha256': latest.checksumSha256,
       'file_size_bytes': latest.fileSizeBytes,
       'update_available': latest.updateAvailable,
+      'update_blocked': latest.updateBlocked,
+      'id': latest.versionId,
     });
 
     return latest;

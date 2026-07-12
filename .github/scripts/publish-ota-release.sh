@@ -24,6 +24,10 @@ BUILD_NUMBER="${FULL_VERSION##*+}"
 if [[ "$BUILD_NUMBER" == "$FULL_VERSION" ]]; then
   BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
 fi
+# Prefer CI run number when it is newer than pubspec (legacy builds).
+if [[ -n "${GITHUB_RUN_NUMBER:-}" && "${GITHUB_RUN_NUMBER}" -gt "${BUILD_NUMBER}" ]]; then
+  BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+fi
 
 NOTES_JSON='[]'
 if [[ -f "$RELEASE_NOTES_FILE" ]]; then

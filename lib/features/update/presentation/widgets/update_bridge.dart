@@ -32,6 +32,8 @@ class _UpdateBridgeState extends ConsumerState<UpdateBridge> {
     if (!mounted || latest == null) return;
 
     final state = ref.read(updateControllerProvider);
+    if (state.phase == UpdatePhase.failed) return;
+
     final shouldShow = state.phase == UpdatePhase.available || state.hasBlockingUpdate;
     if (!shouldShow || _dialogShown) return;
 

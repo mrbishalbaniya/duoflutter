@@ -88,6 +88,12 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Stamp CI build number
+        run: |
+          VERSION_NAME=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          sed -i "s/^version:.*/version: ${VERSION_NAME}+${{ github.run_number }}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
+
       - name: Configure Android signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

@@ -16,33 +16,36 @@ class DuoApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    return UpdateBridge(
-      child: PushNotificationBridge(
-        child: Builder(
-          builder: (context) {
-            final brightness = switch (themeMode) {
-              ThemeMode.dark => Brightness.dark,
-              ThemeMode.light => Brightness.light,
-              ThemeMode.system => MediaQuery.platformBrightnessOf(context),
-            };
-            final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
+    return Builder(
+      builder: (context) {
+        final brightness = switch (themeMode) {
+          ThemeMode.dark => Brightness.dark,
+          ThemeMode.light => Brightness.light,
+          ThemeMode.system => MediaQuery.platformBrightnessOf(context),
+        };
+        final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
 
-            return AnimatedTheme(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutCubic,
-              data: theme,
-              child: MaterialApp.router(
-                title: 'Duo',
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.light(),
-                darkTheme: AppTheme.dark(),
-                themeMode: themeMode,
-                routerConfig: router,
-              ),
-            );
-          },
-        ),
-      ),
+        return AnimatedTheme(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          data: theme,
+          child: MaterialApp.router(
+            title: 'Duo',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: themeMode,
+            routerConfig: router,
+            builder: (context, child) {
+              return UpdateBridge(
+                child: PushNotificationBridge(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

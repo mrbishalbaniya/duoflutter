@@ -103,10 +103,21 @@ class UpdateController extends StateNotifier<UpdateUiState> {
     } catch (e) {
       state = state.copyWith(
         phase: UpdatePhase.failed,
-        error: e.toString(),
+        error: _formatCheckError(e),
       );
       return null;
     }
+  }
+
+  String _formatCheckError(Object error) {
+    final message = error.toString();
+    if (message.contains('404')) {
+      return 'Update service is not available on the server yet. Ask your admin to deploy the latest backend and run migrations.';
+    }
+    if (message.contains('500') || message.contains('unexpected error')) {
+      return 'Update service failed on the server. The backend may need the update migration: python manage.py migrate update';
+    }
+    return message;
   }
 
   Future<void> ignoreCurrentVersion() async {
