@@ -26,7 +26,6 @@ class _CallBridgeState extends ConsumerState<CallBridge> {
   Future<void> _bootstrap() async {
     final auth = ref.read(authControllerProvider);
     if (auth.user != null) {
-      ref.read(callControllerProvider.notifier).setCurrentUserId(auth.user!.id);
       await ref.read(callControllerProvider.notifier).connectInbox();
     }
   }

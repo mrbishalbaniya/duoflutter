@@ -78,12 +78,9 @@ class CallController extends StateNotifier<CallState> {
   late final StreamSubscription _signalingSub;
   late final StreamSubscription _inboxSub;
   late final StreamSubscription _qualitySub;
-  int? _currentUserId;
 
   WebRtcCallService get webrtc => _webrtc;
   Stream<dynamic> get remoteStream => _webrtc.remoteStream;
-
-  void setCurrentUserId(int? userId) => _currentUserId = userId;
 
   Future<void> connectInbox() => _inbox.connect();
 
@@ -92,9 +89,7 @@ class CallController extends StateNotifier<CallState> {
     required String callType,
     required String remoteName,
     String? remotePhoto,
-    required int currentUserId,
   }) async {
-    _currentUserId = currentUserId;
     state = state.copyWith(
       phase: CallPhase.outgoing,
       conversationId: conversationId,

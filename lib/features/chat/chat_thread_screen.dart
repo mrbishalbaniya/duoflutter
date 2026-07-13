@@ -278,7 +278,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           callType: callType,
           remoteName: convo.otherUserProfile.displayName,
           remotePhoto: convo.otherUserProfile.photoUrl,
-          currentUserId: user.id,
         );
   }
 }
