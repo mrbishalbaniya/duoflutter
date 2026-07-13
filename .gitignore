@@ -26,3 +26,7 @@ Thumbs.db
 *.apk
 *.aab
 *.ipa
+upload-keystore.jks
+android-signing-secrets.local.txt
+**/*.jks
+key.properties
