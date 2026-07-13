@@ -241,15 +241,6 @@ class _SentGrid extends StatelessWidget {
                   time: entry.likedAt,
                 ),
               ),
-              primaryAction: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 34),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white54),
-                ),
-                onPressed: () => context.go(AppRoutes.match),
-                child: const Text('Keep swiping', style: TextStyle(fontSize: 11)),
-              ),
             );
           },
         ),
