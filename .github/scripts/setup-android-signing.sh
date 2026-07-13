@@ -3,6 +3,12 @@
 set -euo pipefail
 
 if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
+  if [[ "${REQUIRE_RELEASE_SIGNING:-false}" == "true" ]]; then
+    echo "::error::ANDROID_KEYSTORE_BASE64 is required for signed release builds." >&2
+    echo "Create a keystore (see documentation/ANDROID_INSTALL.md) and add GitHub secrets:" >&2
+    echo "  ANDROID_KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_PASSWORD, KEY_ALIAS" >&2
+    exit 1
+  fi
   echo "::warning::ANDROID_KEYSTORE_BASE64 not set — release builds will use debug signing."
   exit 0
 fi

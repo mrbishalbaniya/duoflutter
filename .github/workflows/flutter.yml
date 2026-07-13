@@ -100,6 +100,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          REQUIRE_RELEASE_SIGNING: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
         run: bash .github/scripts/setup-android-signing.sh
 
       - name: Build release APK
@@ -111,6 +112,14 @@ jobs:
             --dart-define=API_BASE_URL=${{ env.API_BASE_URL }} \
             --dart-define=WS_BASE_URL=${{ env.WS_BASE_URL }} \
             --dart-define=GOOGLE_WEB_CLIENT_ID=${GOOGLE_ID}
+
+      - name: Verify release APK signing
+        id: verify_apk
+        env:
+          REQUIRE_RELEASE_SIGNING: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        run: bash .github/scripts/verify-android-release.sh build/app/outputs/flutter-apk/app-release.apk
 
       - name: Build release App Bundle
         env:
@@ -157,6 +166,13 @@ jobs:
 
             - APK: `app-release.apk` (install on Android)
             - AAB: `app-release.aab` (Play Store upload)
+            - Signing SHA-256: `${{ steps.verify_apk.outputs.APK_SHA256_FINGERPRINT }}`
+
+            ### Install help
+            If you see **"package conflicts with an existing package"**:
+            1. Uninstall **all** Duo copies (including Dual Apps / Work profile).
+            2. Disable Play Store auto-restore, reboot, download this APK fresh.
+            3. See `documentation/ANDROID_INSTALL.md` in the repo.
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
