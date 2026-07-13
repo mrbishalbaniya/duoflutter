@@ -39,14 +39,13 @@ class SplashState {
 }
 
 final splashMinDurationProvider = Provider<Duration>((ref) {
-  if (kDebugMode) return const Duration(milliseconds: 1200);
-  return const Duration(milliseconds: 2200);
+  if (kDebugMode) return const Duration(milliseconds: 400);
+  return const Duration(milliseconds: 700);
 });
 
 class SplashController extends StateNotifier<SplashState> {
   SplashController(this._ref, {SplashState? initialState}) : super(initialState ?? const SplashState()) {
     if (initialState != null) return;
-    _loadVersion();
     _startMinTimer();
     _resolveSession();
   }
@@ -88,7 +87,10 @@ class SplashController extends StateNotifier<SplashState> {
 
   Future<void> _resolveSession() async {
     final auth = _ref.read(authControllerProvider.notifier);
-    await auth.bootstrap();
+    await Future.wait([
+      auth.bootstrap(),
+      _loadVersion(),
+    ]);
 
     final status = _ref.read(authControllerProvider).status;
     if (status == AuthStatus.authenticated) {

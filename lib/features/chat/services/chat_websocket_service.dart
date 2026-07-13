@@ -48,6 +48,7 @@ class ChatWebSocketService {
   bool _isConnecting = false;
   bool _isConnected = false;
   bool _isReconnecting = false;
+  bool _appInBackground = false;
   String? _conversationId;
 
   final _eventsController = StreamController<ChatWsEvent>.broadcast();
@@ -57,6 +58,19 @@ class ChatWebSocketService {
   Stream<WsConnectionState> get connectionStream => _connectionController.stream;
   bool get isConnected => _isConnected;
   bool get isReconnecting => _isReconnecting;
+
+  void setAppInBackground(bool inBackground) {
+    _appInBackground = inBackground;
+    if (inBackground) {
+      _reconnectTimer?.cancel();
+      _stopPolling();
+      return;
+    }
+    if (!_isConnected && !_disposed && _conversationId != null) {
+      _scheduleReconnect();
+      _startPolling();
+    }
+  }
 
   /// Connect using the conversation **public_id** (must match WS ticket).
   Future<void> connect(String publicConversationId) async {
@@ -196,6 +210,7 @@ class ChatWebSocketService {
     if (_disposed || _conversationId == null || _isConnecting || _isConnected) {
       return;
     }
+    if (_appInBackground) return;
     _reconnectTimer?.cancel();
     final delayMs = (_reconnectBaseMs * (1 << _reconnectAttempt.clamp(0, 4)))
         .clamp(_reconnectBaseMs, _reconnectMaxMs);
@@ -212,6 +227,7 @@ class ChatWebSocketService {
 
   void _startPolling() {
     if (_pollTimer != null || _disposed || _conversationId == null) return;
+    if (_appInBackground) return;
     _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (!_disposed && !_isConnected) {
         _eventsController.add(const ChatWsEvent('poll_messages', {}));

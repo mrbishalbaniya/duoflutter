@@ -60,6 +60,8 @@ class PushPayloadParser {
         DuoNotificationType.newMatch => "It's a Match!",
         DuoNotificationType.profileLike => 'Someone liked you',
         DuoNotificationType.chatMessage => 'New message',
+        DuoNotificationType.callIncoming => 'Incoming call',
+        DuoNotificationType.callMissed => 'Missed call',
         DuoNotificationType.unknown => title,
       };
     }
@@ -110,8 +112,22 @@ class PushPayloadParser {
       DuoNotificationType.profileLike => '/discover?tab=likes-you',
       DuoNotificationType.newMatch => '/chat',
       DuoNotificationType.chatMessage => '/chat',
+      DuoNotificationType.callIncoming => _callDeepLink(data),
+      DuoNotificationType.callMissed => conversationId.isNotEmpty
+          ? '/chat?conversation=$conversationId'
+          : '/chat',
       DuoNotificationType.unknown => '/chat',
     };
+  }
+
+  static String _callDeepLink(Map<String, String> data) {
+    final conversationId = _pick(data['conversation_id']);
+    final callId = _pick(data['call_id']);
+    final callType = _pick(data['call_type'], 'voice');
+    if (conversationId.isNotEmpty && callId.isNotEmpty) {
+      return '/chat?conversation=$conversationId&call=$callId&call_type=$callType';
+    }
+    return '/chat';
   }
 
   static String _pick(String? a, [String? b, String? c]) {

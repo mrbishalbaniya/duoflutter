@@ -180,8 +180,8 @@ final conversationsProvider = Provider.autoDispose
 });
 
 final chatUnreadTotalProvider = Provider<int>((ref) {
-  final listState = ref.watch(
-    conversationsListProvider(const ConversationListFilter()),
+  final conversations = ref.watch(
+    conversationsListProvider(const ConversationListFilter()).select((s) => s.conversations),
   );
-  return totalUnreadCount(listState.conversations);
+  return totalUnreadCount(conversations);
 });

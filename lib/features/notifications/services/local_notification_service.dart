@@ -7,12 +7,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../../core/storage/local_storage.dart';
 import '../domain/notification_item.dart';
+import 'notification_image_loader.dart';
 import 'push_debug_log.dart';
 
 class LocalNotificationService {
-  LocalNotificationService() : _plugin = FlutterLocalNotificationsPlugin();
+  LocalNotificationService({NotificationImageLoader? imageLoader})
+      : _plugin = FlutterLocalNotificationsPlugin(),
+        _imageLoader = imageLoader ?? NotificationImageLoader();
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final NotificationImageLoader _imageLoader;
   bool _initialized = false;
 
   static const androidChatChannel = AndroidNotificationChannel(
@@ -46,7 +50,7 @@ class LocalNotificationService {
   );
 
   Future<void> initialize({
-    required void Function(String? payload) onNotificationTap,
+    required void Function(String? payload, {String? actionId}) onNotificationTap,
   }) async {
     if (_initialized) return;
 
@@ -60,7 +64,7 @@ class LocalNotificationService {
     await _plugin.initialize(
       settings: const InitializationSettings(android: androidInit, iOS: iosInit),
       onDidReceiveNotificationResponse: (response) {
-        onNotificationTap(response.payload);
+        onNotificationTap(response.payload, actionId: response.actionId);
       },
       onDidReceiveBackgroundNotificationResponse: _backgroundTapHandler,
     );
@@ -112,6 +116,9 @@ class LocalNotificationService {
 
     final channel = _channelFor(display.type);
     final actions = _actionsFor(display.type);
+    final largeIcon = await _imageLoader.largeIcon(
+      display.iconUrl.isNotEmpty ? display.iconUrl : display.imageUrl,
+    );
 
     final androidDetails = AndroidNotificationDetails(
       channel.id,
@@ -122,6 +129,7 @@ class LocalNotificationService {
           ? Priority.max
           : Priority.high,
       icon: '@drawable/ic_notification',
+      largeIcon: largeIcon,
       color: const Color(0xFFB83280),
       groupKey: 'duo_${display.type.value}',
       styleInformation: BigTextStyleInformation(
@@ -164,6 +172,8 @@ class LocalNotificationService {
       DuoNotificationType.chatMessage => androidChatChannel,
       DuoNotificationType.newMatch => androidMatchChannel,
       DuoNotificationType.profileLike => androidLikeChannel,
+      DuoNotificationType.callIncoming => androidChatChannel,
+      DuoNotificationType.callMissed => androidChatChannel,
       DuoNotificationType.unknown => androidChatChannel,
     };
   }
@@ -178,6 +188,12 @@ class LocalNotificationService {
         ],
       DuoNotificationType.profileLike => [
           const AndroidNotificationAction('open_likes', 'See who'),
+        ],
+      DuoNotificationType.callIncoming => [
+          const AndroidNotificationAction('open_chat', 'Answer'),
+        ],
+      DuoNotificationType.callMissed => [
+          const AndroidNotificationAction('open_chat', 'Call back'),
         ],
       DuoNotificationType.unknown => const [],
     };

@@ -23,6 +23,7 @@ class ActivityWebSocketService {
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _disposed = false;
+  bool _appInBackground = false;
 
   final _eventsController = StreamController<ActivityWsEvent>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
@@ -82,7 +83,7 @@ class ActivityWebSocketService {
   }
 
   void _scheduleReconnect() {
-    if (_disposed) return;
+    if (_disposed || _appInBackground) return;
     _reconnectTimer?.cancel();
     final delayMs = (_reconnectBaseMs * (1 << _reconnectAttempt.clamp(0, 4)))
         .clamp(_reconnectBaseMs, _reconnectMaxMs);
@@ -116,6 +117,11 @@ class ActivityWebSocketService {
         'nearby_km': 140,
       },
     });
+  }
+
+  void setAppInBackground(bool inBackground) {
+    _appInBackground = inBackground;
+    if (inBackground) _reconnectTimer?.cancel();
   }
 
   bool send(Map<String, dynamic> payload) {

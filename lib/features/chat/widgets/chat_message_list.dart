@@ -119,12 +119,11 @@ class _ChatMessageListState extends State<ChatMessageList> {
   @override
   void initState() {
     super.initState();
+    // Existing messages should not animate on first paint — only new arrivals.
+    _animatedKeys.addAll(widget.entries.map((e) => e.stableKey));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() {
-        _allowEntranceAnimation = true;
-        _animatedKeys.addAll(widget.entries.map((e) => e.stableKey));
-      });
+      setState(() => _allowEntranceAnimation = true);
     });
   }
 

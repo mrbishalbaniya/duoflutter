@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../call/providers/call_providers.dart';
+import '../auth/auth_controller.dart';
 import 'providers/chat_thread_controller.dart';
 import 'widgets/chat_dialogs.dart';
 import 'widgets/chat_thread_composer_pane.dart';
@@ -181,8 +183,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               conversation: convo,
               isOtherUserTyping: headerSlice.$3,
               wsConnected: headerSlice.$4,
-              onVoiceCall: () => _showCallSnack(context, 'Voice call'),
-              onVideoCall: () => _showCallSnack(context, 'Video call'),
+              onVoiceCall: () => _startCall(context, ref, convo, 'voice'),
+              onVideoCall: () => _startCall(context, ref, convo, 'video'),
               onMute: () => notifier.updateSettings(muted: !convo.isMuted),
               onPin: () => notifier.updateSettings(pinned: !convo.isPinned),
               onNickname: () async {
@@ -263,9 +265,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
-  void _showCallSnack(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label is not available yet.')),
-    );
+  void _startCall(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic convo,
+    String callType,
+  ) {
+    final user = ref.read(authControllerProvider).user;
+    if (user == null) return;
+    ref.read(callControllerProvider.notifier).startOutgoingCall(
+          conversationId: convo.publicId,
+          callType: callType,
+          remoteName: convo.otherUserProfile.displayName,
+          remotePhoto: convo.otherUserProfile.photoUrl,
+          currentUserId: user.id,
+        );
   }
 }

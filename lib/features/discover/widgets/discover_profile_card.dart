@@ -31,7 +31,7 @@ class DiscoverProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photo = profile.displayPhoto;
+    final photo = profile.optimizedDisplayPhoto;
     final distance = profile.previewDistanceKm;
 
     return GestureDetector(

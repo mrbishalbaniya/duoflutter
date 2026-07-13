@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/google_auth_service.dart';
+import '../cache/api_cache_store.dart';
 import '../network/dio_client.dart';
+import '../network/network_status.dart';
 import '../storage/local_storage.dart';
 import '../storage/token_storage.dart';
 import '../../repositories/auth_repository.dart';
@@ -26,8 +28,17 @@ final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) => GoogleAut
 
 final localStorageProvider = Provider<LocalStorage>((ref) => LocalStorage());
 
+final apiCacheStoreProvider = Provider<ApiCacheStore>((ref) {
+  return ApiCacheStore(ref.watch(localStorageProvider).cache);
+});
+
 final dioClientProvider = Provider<DioClient>((ref) {
-  return DioClient(tokenStorage: ref.watch(tokenStorageProvider));
+  final network = ref.read(networkStatusProvider.notifier);
+  return DioClient(
+    tokenStorage: ref.watch(tokenStorageProvider),
+    onNetworkOnline: network.markOnline,
+    onNetworkOffline: network.markOffline,
+  );
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

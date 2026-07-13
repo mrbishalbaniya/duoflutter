@@ -87,3 +87,71 @@ class PushStatus extends Equatable {
   @override
   List<Object?> get props => [supported, configured, permission, enabled];
 }
+
+class NotificationPreferences extends Equatable {
+  const NotificationPreferences({
+    this.pushEnabled = true,
+    this.chatEnabled = true,
+    this.matchEnabled = true,
+    this.likesEnabled = true,
+    this.marketingEnabled = false,
+    this.announcementsEnabled = true,
+    this.verificationEnabled = true,
+    this.paymentEnabled = true,
+    this.soundEnabled = true,
+    this.vibrationEnabled = true,
+  });
+
+  factory NotificationPreferences.fromJson(Map<String, dynamic> json) {
+    return NotificationPreferences(
+      pushEnabled: json['push_enabled'] as bool? ?? true,
+      chatEnabled: json['chat_enabled'] as bool? ?? true,
+      matchEnabled: json['match_enabled'] as bool? ?? true,
+      likesEnabled: json['likes_enabled'] as bool? ?? true,
+      marketingEnabled: json['marketing_enabled'] as bool? ?? false,
+      announcementsEnabled: json['announcements_enabled'] as bool? ?? true,
+      verificationEnabled: json['verification_enabled'] as bool? ?? true,
+      paymentEnabled: json['payment_enabled'] as bool? ?? true,
+      soundEnabled: json['sound_enabled'] as bool? ?? true,
+      vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
+    );
+  }
+
+  final bool pushEnabled;
+  final bool chatEnabled;
+  final bool matchEnabled;
+  final bool likesEnabled;
+  final bool marketingEnabled;
+  final bool announcementsEnabled;
+  final bool verificationEnabled;
+  final bool paymentEnabled;
+  final bool soundEnabled;
+  final bool vibrationEnabled;
+
+  Map<String, bool> toJson() => {
+        'push_enabled': pushEnabled,
+        'chat_enabled': chatEnabled,
+        'match_enabled': matchEnabled,
+        'likes_enabled': likesEnabled,
+        'marketing_enabled': marketingEnabled,
+        'announcements_enabled': announcementsEnabled,
+        'verification_enabled': verificationEnabled,
+        'payment_enabled': paymentEnabled,
+        'sound_enabled': soundEnabled,
+        'vibration_enabled': vibrationEnabled,
+      };
+
+  @override
+  List<Object?> get props => [
+        pushEnabled,
+        chatEnabled,
+        matchEnabled,
+        likesEnabled,
+        marketingEnabled,
+        announcementsEnabled,
+        verificationEnabled,
+        paymentEnabled,
+        soundEnabled,
+        vibrationEnabled,
+      ];
+}

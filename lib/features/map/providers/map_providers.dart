@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+
+import '../../../core/lifecycle/app_lifecycle_service.dart';
 
 import '../../../core/models/match_models.dart';
 import '../../../core/providers/core_providers.dart';
@@ -17,6 +20,7 @@ import '../services/activity_websocket_service.dart';
 import '../map_weather_models.dart';
 import '../services/location_service.dart';
 import '../services/map_weather_service.dart';
+import '../../chat/providers/chat_providers.dart';
 import 'map_screen_controller.dart';
 
 final locationServiceProvider = Provider<LocationService>((ref) => LocationService());
@@ -61,7 +65,17 @@ final rawMatchesProvider = FutureProvider.autoDispose<List<MatchSession>>((ref) 
 
 final matchConversationIdsProvider =
     FutureProvider.autoDispose<Map<int, String>>((ref) async {
+  final cache = ref.read(chatCacheServiceProvider);
+  final filterKey = cache.filterKey(archived: false, unreadOnly: false);
+  final cached = cache.readConversationList(filterKey);
+  if (cached != null && cached.conversations.isNotEmpty) {
+    return {
+      for (final c in cached.conversations)
+        if (c.matchId != null) c.matchId!: c.publicId,
+    };
+  }
   final conversations = await ref.read(chatRepositoryProvider).getConversations();
+  cache.writeConversationList(filterKey, conversations);
   return {
     for (final c in conversations)
       if (c.matchId != null) c.matchId!: c.publicId,
@@ -186,6 +200,9 @@ final mapViewportProvider =
 final activityZonesNotifierProvider = StateNotifierProvider.autoDispose<
     ActivityZonesNotifier, AsyncValue<List<ActivityZone>>>((ref) {
   final notifier = ActivityZonesNotifier(repository: ref.read(mapRepositoryProvider));
+  ref.listen(appLifecycleProvider, (_, next) {
+    notifier.setAppInBackground(next != AppLifecycleState.resumed);
+  });
   ref.onDispose(notifier.dispose);
   return notifier;
 });
@@ -203,16 +220,22 @@ class ActivityZonesNotifier extends StateNotifier<AsyncValue<List<ActivityZone>>
   StreamSubscription? _wsSub;
   Timer? _restTimer;
   Timer? _debounceTimer;
+  bool _wsHealthy = false;
 
   Future<void> _init() async {
     _wsSub = _ws.events.listen((event) {
       if (event.type == 'zones' || event.type == 'activity_zones') {
+        _wsHealthy = true;
         state = AsyncValue.data(parseActivityZones(event.data));
+      } else if (event.type == 'connected' || event.type == 'pong') {
+        _wsHealthy = true;
       }
     });
 
     await _ws.connect();
-    _restTimer = Timer.periodic(const Duration(seconds: 90), (_) => _fetchRest());
+    _restTimer = Timer.periodic(const Duration(seconds: 120), (_) {
+      if (!_wsHealthy) _fetchRest();
+    });
   }
 
   void updateRequest(ActivityZonesRequest next) {
@@ -231,6 +254,7 @@ class ActivityZonesNotifier extends StateNotifier<AsyncValue<List<ActivityZone>>
   void _pushViewport() {
     final request = _request;
     if (request == null) return;
+    _wsHealthy = false;
     _ws.sendViewport(
       latMin: request.bbox.latMin,
       latMax: request.bbox.latMax,
@@ -255,6 +279,18 @@ class ActivityZonesNotifier extends StateNotifier<AsyncValue<List<ActivityZone>>
     } catch (e, st) {
       if (!state.hasValue) state = AsyncValue.error(e, st);
     }
+  }
+
+  void setAppInBackground(bool inBackground) {
+    _ws.setAppInBackground(inBackground);
+    if (inBackground) {
+      _restTimer?.cancel();
+      _restTimer = null;
+      return;
+    }
+    _restTimer ??= Timer.periodic(const Duration(seconds: 120), (_) {
+      if (!_wsHealthy) _fetchRest();
+    });
   }
 
   @override

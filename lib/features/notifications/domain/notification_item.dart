@@ -5,6 +5,8 @@ enum DuoNotificationType {
   chatMessage('chat_message'),
   profileLike('profile_like'),
   newMatch('new_match'),
+  callIncoming('call_incoming'),
+  callMissed('call_missed'),
   unknown('unknown');
 
   const DuoNotificationType(this.value);
@@ -23,6 +25,8 @@ enum DuoNotificationType {
         DuoNotificationType.chatMessage => 'Message',
         DuoNotificationType.profileLike => 'Like',
         DuoNotificationType.newMatch => 'Match',
+        DuoNotificationType.callIncoming => 'Call',
+        DuoNotificationType.callMissed => 'Missed call',
         DuoNotificationType.unknown => 'Update',
       };
 
@@ -30,6 +34,8 @@ enum DuoNotificationType {
         DuoNotificationType.chatMessage => '💬',
         DuoNotificationType.profileLike => '❤️',
         DuoNotificationType.newMatch => '💘',
+        DuoNotificationType.callIncoming => '📞',
+        DuoNotificationType.callMissed => '📵',
         DuoNotificationType.unknown => '🔔',
       };
 }

@@ -185,6 +185,8 @@ class NotificationCard extends StatelessWidget {
       DuoNotificationType.chatMessage => const Color(0xFF5C8DFF),
       DuoNotificationType.profileLike => DuoColors.primary,
       DuoNotificationType.newMatch => const Color(0xFFE91E8C),
+      DuoNotificationType.callIncoming => const Color(0xFF4CAF50),
+      DuoNotificationType.callMissed => const Color(0xFFFF9800),
       DuoNotificationType.unknown => DuoColors.primaryContainer,
     };
   }

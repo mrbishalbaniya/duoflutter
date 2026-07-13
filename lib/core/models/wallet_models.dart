@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../config/app_config.dart';
+
 class SubscriptionPlan extends Equatable {
   const SubscriptionPlan({
     required this.planId,
@@ -124,10 +126,19 @@ class EsewaMobileSdkConfig extends Equatable {
   });
 
   factory EsewaMobileSdkConfig.fromJson(Map<String, dynamic> json) {
+    final clientId = (json['client_id'] as String? ?? '').trim().isNotEmpty
+        ? (json['client_id'] as String).trim()
+        : AppConfig.esewaMobileClientId;
+    final secretId = (json['secret_id'] as String? ?? '').trim().isNotEmpty
+        ? (json['secret_id'] as String).trim()
+        : AppConfig.esewaMobileSecretId;
+    final environment = (json['environment'] as String? ?? '').trim().isNotEmpty
+        ? (json['environment'] as String).trim()
+        : AppConfig.esewaMobileEnvironment;
     return EsewaMobileSdkConfig(
-      environment: json['environment'] as String? ?? 'test',
-      clientId: json['client_id'] as String? ?? '',
-      secretId: json['secret_id'] as String? ?? '',
+      environment: environment,
+      clientId: clientId,
+      secretId: secretId,
       productId: json['product_id'] as String? ?? '',
       productName: json['product_name'] as String? ?? 'Duo Wallet Top-up',
       productPrice: json['product_price'] as String? ?? '0',

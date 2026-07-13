@@ -37,10 +37,15 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   final Ref _ref;
+  Future<void>? _bootstrapFuture;
 
   AuthRepository get _auth => _ref.read(authRepositoryProvider);
 
-  Future<void> bootstrap() async {
+  Future<void> bootstrap() {
+    return _bootstrapFuture ??= _bootstrapImpl();
+  }
+
+  Future<void> _bootstrapImpl() async {
     try {
       final hasSession = await _auth.hasSession();
       if (!hasSession) {

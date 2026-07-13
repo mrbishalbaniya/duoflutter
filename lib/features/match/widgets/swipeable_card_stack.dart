@@ -150,8 +150,8 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
     final photo = profile.profilePhotos.isNotEmpty
-        ? profile.profilePhotos.first
-        : profile.displayPhoto;
+        ? profile.optimizedProfilePhotos.first
+        : profile.optimizedDisplayPhoto;
     final heroTag = widget.heroTagBuilder?.call(profile);
 
     Widget card = ClipRRect(

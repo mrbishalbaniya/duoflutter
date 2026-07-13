@@ -5,6 +5,7 @@ import 'core/router/app_router.dart';
 import 'core/storage/local_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
+import 'features/call/presentation/call_bridge.dart';
 import 'features/notifications/presentation/widgets/push_notification_bridge.dart';
 import 'features/update/presentation/widgets/update_bridge.dart';
 
@@ -39,7 +40,9 @@ class DuoApp extends ConsumerWidget {
             builder: (context, child) {
               return UpdateBridge(
                 child: PushNotificationBridge(
-                  child: child ?? const SizedBox.shrink(),
+                  child: CallBridge(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               );
             },

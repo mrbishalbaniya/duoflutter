@@ -28,5 +28,7 @@ Thumbs.db
 *.ipa
 upload-keystore.jks
 android-signing-secrets.local.txt
+GITHUB_SECRETS_COPY_PASTE.txt
+android-b64-only.txt
 **/*.jks
 key.properties

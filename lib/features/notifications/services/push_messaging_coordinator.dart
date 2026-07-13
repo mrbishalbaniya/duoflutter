@@ -132,7 +132,12 @@ class PushMessagingCoordinator {
     await _ingestAndNavigate(message, markRead: true);
   }
 
-  void _handleLocalNotificationTap(String? payload) {
+  void _handleLocalNotificationTap(String? payload, {String? actionId}) {
+    if (actionId == 'open_likes') {
+      PushDebugLog.info('Notification action: open likes');
+      _navigateToPayload('/discover?tab=likes-you');
+      return;
+    }
     if (payload == null || payload.isEmpty) return;
     PushDebugLog.info('Local notification tapped → $payload');
     _navigateToPayload(payload);
@@ -197,7 +202,7 @@ class PushMessagingCoordinator {
     await store.upsert(parsed.toItem());
 
     final local = LocalNotificationService();
-    await local.initialize(onNotificationTap: (_) {});
+    await local.initialize(onNotificationTap: (_, {actionId}) {});
     await local.showPushNotification(
       display: ParsedPushDisplay(
         notificationId: parsed.id.hashCode,

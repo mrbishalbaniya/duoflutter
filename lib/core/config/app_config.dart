@@ -80,5 +80,16 @@ class AppConfig {
 
   static const appName = 'Duo';
 
+  /// eSewa native SDK credentials — configure via `--dart-define` (never fetch from API).
+  static const esewaMobileClientId = String.fromEnvironment('ESEWA_MOBILE_CLIENT_ID');
+  static const esewaMobileSecretId = String.fromEnvironment('ESEWA_MOBILE_SECRET_ID');
+  static const esewaMobileEnvironment = String.fromEnvironment(
+    'ESEWA_MOBILE_ENVIRONMENT',
+    defaultValue: 'test',
+  );
+
+  static bool get isEsewaNativeSdkConfigured =>
+      esewaMobileClientId.isNotEmpty && esewaMobileSecretId.isNotEmpty;
+
   static bool get isGoogleAuthConfigured => googleWebClientId.isNotEmpty;
 }

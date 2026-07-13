@@ -17,7 +17,7 @@ class ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photo = conversation.otherUserProfile.displayPhoto;
+    final photo = conversation.otherUserProfile.optimizedAvatarPhoto;
     final typing = conversation.isOtherUserTyping;
     final scheme = Theme.of(context).colorScheme;
     final preview = typing

@@ -177,6 +177,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
 
 final matchDeckControllerProvider =
     StateNotifierProvider.autoDispose<MatchDeckController, MatchDeckState>((ref) {
+  ref.keepAlive();
   final controller = MatchDeckController(ref);
   controller.initialize();
   return controller;

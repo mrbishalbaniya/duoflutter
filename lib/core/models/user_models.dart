@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'package:duo_mobile/core/media/cloudinary_url.dart';
+
 class DuoProfile extends Equatable {
   const DuoProfile({
     this.id,
@@ -168,6 +170,18 @@ class DuoProfile extends Equatable {
     }
     return photos;
   }
+
+  /// Cloudinary-optimized delivery URL for discover/match cards.
+  String get optimizedDisplayPhoto =>
+      cloudinaryDeliveryUrl(displayPhoto, preset: CloudinaryPreset.discoverCard);
+
+  /// Cloudinary-optimized avatar URL for lists and headers.
+  String get optimizedAvatarPhoto =>
+      cloudinaryDeliveryUrl(displayPhoto, preset: CloudinaryPreset.avatar);
+
+  List<String> get optimizedProfilePhotos => profilePhotos
+      .map((url) => cloudinaryDeliveryUrl(url, preset: CloudinaryPreset.gallery))
+      .toList();
 
   int? get resolvedUserId => userId ?? id;
 

@@ -3,9 +3,11 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/lifecycle/app_lifecycle_service.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers/core_providers.dart';
@@ -35,6 +37,9 @@ final chatThreadControllerProvider = StateNotifierProvider.autoDispose
         .scheduleRefresh(),
   );
   ref.onDispose(controller.dispose);
+  ref.listen(appLifecycleProvider, (_, next) {
+    controller.setAppInBackground(next != AppLifecycleState.resumed);
+  });
   return controller;
 });
 
@@ -1417,6 +1422,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         return MapEntry('$key', 0);
       },
     );
+  }
+
+  void setAppInBackground(bool inBackground) {
+    _ws.setAppInBackground(inBackground);
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
 import 'api_exception.dart';
+import 'retry_interceptor.dart';
 
 class AuthInterceptor extends QueuedInterceptor {
   AuthInterceptor({
@@ -15,12 +16,17 @@ class AuthInterceptor extends QueuedInterceptor {
   final Dio _dio;
   final TokenStorage _tokenStorage;
   bool _refreshing = false;
+  Future<void>? _refreshFuture;
 
   @override
   Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    if (options.extra['skipAuthRefresh'] == true) {
+      handler.next(options);
+      return;
+    }
     final token = await _tokenStorage.getAccessToken();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -47,44 +53,67 @@ class AuthInterceptor extends QueuedInterceptor {
     }
 
     if (_refreshing) {
-      handler.next(err);
+      try {
+        await _refreshFuture;
+        await _retryRequest(err.requestOptions, handler, err);
+      } catch (_) {
+        handler.next(err);
+      }
       return;
     }
 
     _refreshing = true;
+    _refreshFuture = _refreshTokens();
     try {
-      final refresh = await _tokenStorage.getRefreshToken();
-      if (refresh == null || refresh.isEmpty) {
-        handler.next(err);
-        return;
-      }
-
-      final refreshResponse = await _dio.post<Map<String, dynamic>>(
-        '/auth/refresh/',
-        data: {'refresh': refresh},
-        options: Options(extra: {'skipAuthRefresh': true}),
-      );
-
-      final access = refreshResponse.data?['access'] as String?;
-      if (access == null) {
-        await _tokenStorage.clear();
-        handler.next(err);
-        return;
-      }
-
-      await _tokenStorage.saveAccessToken(access);
-
-      final retry = err.requestOptions;
-      retry.headers['Authorization'] = 'Bearer $access';
-      final response = await _dio.fetch<dynamic>(retry);
-      handler.resolve(response);
-    } on DioException catch (refreshError) {
-      if (refreshError.response?.statusCode == 401) {
-        await _tokenStorage.clear();
-      }
+      await _refreshFuture;
+      await _retryRequest(err.requestOptions, handler, err);
+    } catch (_) {
       handler.next(err);
     } finally {
       _refreshing = false;
+      _refreshFuture = null;
+    }
+  }
+
+  Future<void> _refreshTokens() async {
+    final refresh = await _tokenStorage.getRefreshToken();
+    if (refresh == null || refresh.isEmpty) {
+      throw StateError('no_refresh_token');
+    }
+
+    final refreshResponse = await _dio.post<Map<String, dynamic>>(
+      '/auth/refresh/',
+      data: {'refresh': refresh},
+      options: Options(extra: {'skipAuthRefresh': true}),
+    );
+
+    final access = refreshResponse.data?['access'] as String?;
+    if (access == null) {
+      await _tokenStorage.clear();
+      throw StateError('refresh_failed');
+    }
+    await _tokenStorage.saveAccessToken(access);
+  }
+
+  Future<void> _retryRequest(
+    RequestOptions options,
+    ErrorInterceptorHandler handler,
+    DioException original,
+  ) async {
+    final token = await _tokenStorage.getAccessToken();
+    if (token == null || token.isEmpty) {
+      handler.next(original);
+      return;
+    }
+    options.headers['Authorization'] = 'Bearer $token';
+    try {
+      final response = await _dio.fetch<dynamic>(options);
+      handler.resolve(response);
+    } on DioException catch (retryError) {
+      if (retryError.response?.statusCode == 401) {
+        await _tokenStorage.clear();
+      }
+      handler.next(original);
     }
   }
 }
@@ -107,19 +136,31 @@ class LoggingInterceptor extends Interceptor {
   }
 }
 
+typedef NetworkStatusCallback = void Function();
+
 class DioClient {
-  DioClient({required TokenStorage tokenStorage})
-      : _tokenStorage = tokenStorage,
+  DioClient({
+    required TokenStorage tokenStorage,
+    NetworkStatusCallback? onNetworkOnline,
+    NetworkStatusCallback? onNetworkOffline,
+  })  : _tokenStorage = tokenStorage,
         dio = Dio(
           BaseOptions(
             baseUrl: AppConfig.apiBaseUrl,
-            connectTimeout: const Duration(seconds: 30),
-            receiveTimeout: const Duration(seconds: 30),
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            connectTimeout: const Duration(seconds: 20),
+            receiveTimeout: const Duration(seconds: 25),
+            sendTimeout: const Duration(seconds: 25),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
           ),
         ) {
     dio.interceptors.addAll([
       AuthInterceptor(dio: dio, tokenStorage: tokenStorage),
+      RetryInterceptor(dio: dio),
+      if (onNetworkOnline != null && onNetworkOffline != null)
+        NetworkStatusInterceptor(onNetworkOnline, onNetworkOffline),
       if (kDebugMode) LoggingInterceptor(),
     ]);
   }
@@ -184,5 +225,27 @@ class DioClient {
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
+  }
+}
+
+class NetworkStatusInterceptor extends Interceptor {
+  NetworkStatusInterceptor(this._onOnline, this._onOffline);
+
+  final NetworkStatusCallback _onOnline;
+  final NetworkStatusCallback _onOffline;
+
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    _onOnline();
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.connectionTimeout) {
+      _onOffline();
+    }
+    handler.next(err);
   }
 }
