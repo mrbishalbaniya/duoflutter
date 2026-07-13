@@ -12,6 +12,9 @@ fi
 
 if ! command -v apksigner >/dev/null 2>&1; then
   SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+  if [[ -z "$SDK_ROOT" && -f android/local.properties ]]; then
+    SDK_ROOT=$(grep -E '^sdk\.dir=' android/local.properties | cut -d= -f2- | tr -d '\r' | sed 's#\\:#/#g' | sed 's#\\(/[^\\]\)#\1#g')
+  fi
   if [[ -n "$SDK_ROOT" ]]; then
     APKSIGNER=$(find "$SDK_ROOT/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -n 1 || true)
     if [[ -n "${APKSIGNER:-}" ]]; then
@@ -20,14 +23,21 @@ if ! command -v apksigner >/dev/null 2>&1; then
   fi
 fi
 
-if ! command -v apksigner >/dev/null 2>&1; then
+APKSIGNER_BIN=""
+if command -v apksigner >/dev/null 2>&1; then
+  APKSIGNER_BIN="apksigner"
+elif [[ -n "${APKSIGNER:-}" && -x "$APKSIGNER" ]]; then
+  APKSIGNER_BIN="$APKSIGNER"
+fi
+
+if [[ -z "$APKSIGNER_BIN" ]]; then
   echo "::error::apksigner not found. Install Android SDK build-tools in CI." >&2
   exit 1
 fi
 
-apksigner verify --verbose "$APK_PATH" >/dev/null
+"$APKSIGNER_BIN" verify --verbose "$APK_PATH" >/dev/null
 
-CERTS=$(apksigner verify --print-certs "$APK_PATH")
+CERTS=$("$APKSIGNER_BIN" verify --print-certs "$APK_PATH")
 echo "$CERTS"
 
 if [[ "$REQUIRE_RELEASE_SIGNING" == "true" ]] && echo "$CERTS" | grep -q "CN=Android Debug"; then
