@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/update_models.dart';
 import '../repositories/update_repository.dart';
+import '../repositories/github_update_repository.dart';
 import '../data/update_local_store.dart';
 
 typedef UpdateDownloadProgress = void Function({
@@ -207,11 +208,14 @@ class UpdateInstallService {
 class UpdateCheckService {
   UpdateCheckService({
     required UpdateRepository repository,
+    required GithubUpdateRepository githubRepository,
     required UpdateLocalStore store,
   })  : _repository = repository,
+        _githubRepository = githubRepository,
         _store = store;
 
   final UpdateRepository _repository;
+  final GithubUpdateRepository _githubRepository;
   final UpdateLocalStore _store;
 
   static const checkInterval = Duration(hours: 24);
@@ -233,10 +237,19 @@ class UpdateCheckService {
 
   Future<AppUpdateInfo> checkForUpdates({bool force = false}) async {
     final installed = await installedInfo();
-    final latest = await _repository.checkVersion(
-      installedVersion: installed.version,
-      buildNumber: installed.buildNumber,
-    );
+    AppUpdateInfo latest;
+
+    try {
+      latest = await _repository.checkVersion(
+        installedVersion: installed.version,
+        buildNumber: installed.buildNumber,
+      );
+      if (latest.apkUrl.isEmpty) {
+        latest = await _githubRepository.fetchLatestRelease(installed: installed);
+      }
+    } catch (_) {
+      latest = await _githubRepository.fetchLatestRelease(installed: installed);
+    }
 
     await _store.setLastCheckedAt(DateTime.now());
     await _store.setCachedVersion({
@@ -246,12 +259,23 @@ class UpdateCheckService {
       'release_notes': latest.releaseNotes,
       'checksum_sha256': latest.checksumSha256,
       'file_size_bytes': latest.fileSizeBytes,
+      'file_size': latest.fileSize,
       'update_available': latest.updateAvailable,
       'update_blocked': latest.updateBlocked,
       'id': latest.versionId,
+      'channel': latest.channel,
     });
 
     return latest;
+  }
+
+  Future<AppUpdateInfo> checkGithubRelease({bool allowRedownload = false}) {
+    return installedInfo().then(
+      (installed) => _githubRepository.fetchLatestRelease(
+        installed: installed,
+        allowRedownload: allowRedownload,
+      ),
+    );
   }
 
   bool shouldPrompt(AppUpdateInfo latest, {String? ignoredVersion}) {

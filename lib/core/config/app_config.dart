@@ -92,4 +92,11 @@ class AppConfig {
       esewaMobileClientId.isNotEmpty && esewaMobileSecretId.isNotEmpty;
 
   static bool get isGoogleAuthConfigured => googleWebClientId.isNotEmpty;
+
+  /// Direct APK download from GitHub Releases (Android sideload / OTA fallback).
+  static const githubLatestApkUrl =
+      'https://github.com/mrbishalbaniya/duoflutter/releases/latest/download/app-release.apk';
+
+  static const githubReleasesApiUrl =
+      'https://api.github.com/repos/mrbishalbaniya/duoflutter/releases/latest';
 }

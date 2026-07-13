@@ -8,6 +8,7 @@ import '../../../core/providers/core_providers.dart';
 import '../data/update_local_store.dart';
 import '../models/update_models.dart';
 import '../repositories/update_repository.dart';
+import '../repositories/github_update_repository.dart';
 import '../services/update_services.dart';
 
 final updateLocalStoreProvider = Provider<UpdateLocalStore>((ref) {
@@ -18,9 +19,14 @@ final updateRepositoryProvider = Provider<UpdateRepository>((ref) {
   return UpdateRepository(ref.watch(dioClientProvider));
 });
 
+final githubUpdateRepositoryProvider = Provider<GithubUpdateRepository>((ref) {
+  return GithubUpdateRepository();
+});
+
 final updateCheckServiceProvider = Provider<UpdateCheckService>((ref) {
   return UpdateCheckService(
     repository: ref.watch(updateRepositoryProvider),
+    githubRepository: ref.watch(githubUpdateRepositoryProvider),
     store: ref.watch(updateLocalStoreProvider),
   );
 });
@@ -81,7 +87,10 @@ class UpdateController extends StateNotifier<UpdateUiState> {
     try {
       final installed = await _check.installedInfo();
       final latest = await _check.checkForUpdates(force: force);
-      final history = await _repo.fetchHistory();
+      var history = const <AppUpdateInfo>[];
+      try {
+        history = await _repo.fetchHistory();
+      } catch (_) {}
       final storage = await _download.folderSizeBytes();
 
       final shouldPrompt = _check.shouldPrompt(
@@ -254,6 +263,50 @@ class UpdateController extends StateNotifier<UpdateUiState> {
       clearLocalApk: true,
       message: 'Update cache cleared.',
     );
+  }
+
+  Future<AppUpdateInfo?> prepareGithubDownload() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      state = state.copyWith(
+        phase: UpdatePhase.failed,
+        error: 'APK download is only available on Android.',
+      );
+      return null;
+    }
+
+    state = state.copyWith(
+      phase: UpdatePhase.checking,
+      clearError: true,
+      clearMessage: true,
+      message: 'Fetching latest release from GitHub…',
+    );
+
+    try {
+      final installed = await _check.installedInfo();
+      final latest = await _check.checkGithubRelease(allowRedownload: true);
+      await _store.setLastCheckedAt(DateTime.now());
+
+      state = state.copyWith(
+        installed: installed,
+        latest: latest,
+        lastCheckedAt: DateTime.now(),
+        phase: UpdatePhase.available,
+        message: 'Duo ${latest.latestVersion} is ready to download.',
+      );
+      return latest;
+    } catch (e) {
+      state = state.copyWith(
+        phase: UpdatePhase.failed,
+        error: 'Could not reach GitHub releases. Check your connection and try again.',
+      );
+      return null;
+    }
+  }
+
+  Future<void> downloadLatestGithubRelease() async {
+    final latest = await prepareGithubDownload();
+    if (latest == null) return;
+    await startDownload();
   }
 }
 

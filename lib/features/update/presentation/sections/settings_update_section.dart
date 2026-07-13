@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/update_models.dart';
 import '../../providers/update_providers.dart';
@@ -27,6 +28,10 @@ class SettingsUpdateSection extends ConsumerWidget {
     final state = ref.watch(updateControllerProvider);
     final installed = state.installed;
     final latest = state.latest;
+    final isBusy = state.phase == UpdatePhase.checking ||
+        state.phase == UpdatePhase.downloading ||
+        state.phase == UpdatePhase.verifying ||
+        state.phase == UpdatePhase.installing;
 
     return SettingsSection(
       title: 'App updates',
@@ -53,6 +58,16 @@ class SettingsUpdateSection extends ConsumerWidget {
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                         ),
+                        if (latest != null && latest.channel == 'github') ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Latest on GitHub: ${latest.latestVersion}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -79,11 +94,13 @@ class SettingsUpdateSection extends ConsumerWidget {
             icon: Icons.system_update_alt_rounded,
             title: 'Check for updates',
             description: state.lastCheckedAt == null
-                ? 'Never checked'
+                ? 'Checks Duo server and GitHub releases'
                 : 'Last checked ${_formatLastChecked(state.lastCheckedAt!)}',
-            onTap: () async {
+            onTap: isBusy
+                ? null
+                : () async {
               final controller = ref.read(updateControllerProvider.notifier);
-              final latest = await controller.checkForUpdates(force: true, manual: true);
+              final latestResult = await controller.checkForUpdates(force: true, manual: true);
               if (!context.mounted) return;
               final ui = ref.read(updateControllerProvider);
               if (ui.phase == UpdatePhase.failed && ui.error != null) {
@@ -92,12 +109,53 @@ class SettingsUpdateSection extends ConsumerWidget {
                 );
                 return;
               }
-              if (latest == null) return;
+              if (latestResult == null) return;
               if (ui.phase == UpdatePhase.available || ui.hasBlockingUpdate) {
                 await showUpdateDialog(context, blocking: ui.hasBlockingUpdate);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(ui.message ?? 'You are up to date.')),
+                );
+              }
+            },
+          ),
+          const SettingsDivider(),
+          SettingsRow(
+            icon: Icons.download_rounded,
+            title: 'Download latest APK',
+            description: 'Install the newest build from GitHub Releases',
+            enabled: !isBusy,
+            onTap: () async {
+              final controller = ref.read(updateControllerProvider.notifier);
+              final latest = await controller.prepareGithubDownload();
+              if (!context.mounted || latest == null) {
+                final ui = ref.read(updateControllerProvider);
+                if (context.mounted && ui.error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(ui.error!)),
+                  );
+                }
+                return;
+              }
+              if (!context.mounted) return;
+              await showUpdateDialog(context, blocking: false);
+              if (!context.mounted) return;
+              await controller.startDownload();
+            },
+          ),
+          const SettingsDivider(),
+          SettingsRow(
+            icon: Icons.link_rounded,
+            title: 'GitHub release page',
+            description: 'Open duoflutter releases in browser',
+            onTap: () async {
+              final uri = Uri.parse(
+                'https://github.com/mrbishalbaniya/duoflutter/releases/latest',
+              );
+              if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Could not open GitHub releases.')),
                 );
               }
             },
