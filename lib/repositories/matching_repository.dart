@@ -17,6 +17,10 @@ class MatchingRepository {
     return SwipeResult.fromJson(response.data!);
   }
 
+  Future<void> unlike({required int toUserId}) async {
+    await _client.post('/matching/unlike/', data: {'to_user_id': toUserId});
+  }
+
   Future<List<MatchSession>> getMatches() async {
     final response = await _client.get<List<dynamic>>('/matching/matches/');
     return (response.data ?? [])

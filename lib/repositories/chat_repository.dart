@@ -149,6 +149,14 @@ class ChatRepository {
     await _client.post('/chat/conversations/$conversationId/unmatch/');
   }
 
+  Future<void> block(String conversationId) async {
+    await _client.post('/chat/conversations/$conversationId/block/');
+  }
+
+  Future<void> unmatchAndBlock(String conversationId) async {
+    await _client.post('/chat/conversations/$conversationId/unmatch-and-block/');
+  }
+
   Future<void> report(String conversationId, {required String reason}) async {
     await _client.post('/chat/conversations/$conversationId/report/', data: {
       'reason': reason,

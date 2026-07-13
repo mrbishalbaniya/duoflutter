@@ -67,3 +67,7 @@ final discoverSearchProvider = StateProvider<String>((ref) => '');
 final discoverLikingBackProvider = StateProvider<Set<int>>((ref) => {});
 
 final discoverRemovedLikesProvider = StateProvider<Set<int>>((ref) => {});
+
+final discoverUnlikingProvider = StateProvider<Set<int>>((ref) => {});
+
+final discoverRemovedSentProvider = StateProvider<Set<int>>((ref) => {});

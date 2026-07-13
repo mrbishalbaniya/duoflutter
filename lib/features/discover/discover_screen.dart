@@ -29,6 +29,8 @@ class DiscoverScreen extends ConsumerWidget {
     final search = ref.watch(discoverSearchProvider);
     final likingBack = ref.watch(discoverLikingBackProvider);
     final removed = ref.watch(discoverRemovedLikesProvider);
+    final unliking = ref.watch(discoverUnlikingProvider);
+    final removedSent = ref.watch(discoverRemovedSentProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -79,9 +81,10 @@ class DiscoverScreen extends ConsumerWidget {
                   onRetry: () => ref.invalidate(discoverDataProvider),
                 ),
                 data: (discover) => RefreshIndicator(
-                  onRefresh: () async {
+                    onRefresh: () async {
                     ref.invalidate(discoverDataProvider);
                     ref.read(discoverRemovedLikesProvider.notifier).state = {};
+                    ref.read(discoverRemovedSentProvider.notifier).state = {};
                   },
                   child: _DiscoverFeed(
                     data: discover,
@@ -89,6 +92,8 @@ class DiscoverScreen extends ConsumerWidget {
                     search: search,
                     likingBack: likingBack,
                     removed: removed,
+                    unliking: unliking,
+                    removedSent: removedSent,
                   ),
                 ),
               ),
@@ -107,6 +112,8 @@ class _DiscoverFeed extends ConsumerWidget {
     required this.search,
     required this.likingBack,
     required this.removed,
+    required this.unliking,
+    required this.removedSent,
   });
 
   final DiscoverData data;
@@ -114,6 +121,8 @@ class _DiscoverFeed extends ConsumerWidget {
   final String search;
   final Set<int> likingBack;
   final Set<int> removed;
+  final Set<int> unliking;
+  final Set<int> removedSent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -123,7 +132,13 @@ class _DiscoverFeed extends ConsumerWidget {
         search: search,
       ),
       DiscoverTab.sent => _SentGrid(
-        entries: filterLiked(data.sent, search),
+        entries: filterLiked(data.sent, search)
+            .where((entry) {
+              final userId = entry.profile.userId;
+              return userId == null || !removedSent.contains(userId);
+            })
+            .toList(),
+        unliking: unliking,
       ),
       DiscoverTab.received => _ReceivedGrid(
         list: data.received,
@@ -206,13 +221,49 @@ class _VisitorsGrid extends ConsumerWidget {
   }
 }
 
-class _SentGrid extends StatelessWidget {
-  const _SentGrid({required this.entries});
+class _SentGrid extends ConsumerWidget {
+  const _SentGrid({
+    required this.entries,
+    required this.unliking,
+  });
 
   final List<LikedProfileEntry> entries;
+  final Set<int> unliking;
+
+  Future<void> _unlike(BuildContext context, WidgetRef ref, LikedProfileEntry entry) async {
+    final userId = entry.profile.userId;
+    if (userId == null) return;
+
+    discoverHaptic();
+    ref.read(discoverUnlikingProvider.notifier).state = {...unliking, userId};
+
+    try {
+      await ref.read(matchingRepositoryProvider).unlike(toUserId: userId);
+      ref.read(discoverRemovedSentProvider.notifier).state = {
+        ...ref.read(discoverRemovedSentProvider),
+        userId,
+      };
+      ref.invalidate(discoverDataProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Like removed.')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } finally {
+      ref.read(discoverUnlikingProvider.notifier).state = {
+        ...ref.read(discoverUnlikingProvider),
+      }..remove(userId);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (entries.isEmpty) return const DiscoverEmptyState(tab: DiscoverTab.sent);
 
     return ListView(
@@ -223,6 +274,8 @@ class _SentGrid extends StatelessWidget {
           builder: (context, index) {
             final entry = entries[index];
             final tag = profileHeroTag(entry.profile);
+            final userId = entry.profile.userId;
+            final isUnliking = userId != null && unliking.contains(userId);
             return DiscoverProfileCard(
               profile: entry.profile,
               timeLabel: interactionTimeLabel(
@@ -239,6 +292,18 @@ class _SentGrid extends StatelessWidget {
                   action: entry.action,
                   kind: 'sent',
                   time: entry.likedAt,
+                ),
+              ),
+              primaryAction: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 34),
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white54),
+                ),
+                onPressed: isUnliking ? null : () => _unlike(context, ref, entry),
+                child: Text(
+                  isUnliking ? 'Removing…' : 'Unlike',
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
             );

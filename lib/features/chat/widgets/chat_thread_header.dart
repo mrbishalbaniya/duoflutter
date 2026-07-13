@@ -29,6 +29,10 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
     this.onUnmatch,
 
+    this.onBlock,
+
+    this.onUnmatchAndBlock,
+
     this.onMute,
 
     this.onPin,
@@ -56,6 +60,10 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onVideoCall;
 
   final VoidCallback? onUnmatch;
+
+  final VoidCallback? onBlock;
+
+  final VoidCallback? onUnmatchAndBlock;
 
   final VoidCallback? onMute;
 
@@ -300,9 +308,17 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
                 onReport?.call();
 
+              case 'block':
+
+                onBlock?.call();
+
               case 'unmatch':
 
                 onUnmatch?.call();
+
+              case 'unmatchBlock':
+
+                onUnmatchAndBlock?.call();
 
             }
 
@@ -342,7 +358,23 @@ class ChatThreadHeader extends StatelessWidget implements PreferredSizeWidget {
 
             const PopupMenuItem(
 
+              value: 'block',
+
+              child: Text('Block', style: TextStyle(color: Colors.redAccent)),
+
+            ),
+
+            const PopupMenuItem(
+
               value: 'unmatch',
+
+              child: Text('Unmatch', style: TextStyle(color: Colors.redAccent)),
+
+            ),
+
+            const PopupMenuItem(
+
+              value: 'unmatchBlock',
 
               child: Text('Unmatch & block', style: TextStyle(color: Colors.redAccent)),
 

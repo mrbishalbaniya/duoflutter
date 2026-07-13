@@ -1384,6 +1384,28 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     }
   }
 
+  Future<bool> block() async {
+    try {
+      await repository.block(_activeConversationId);
+      onConversationsChanged();
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return false;
+    }
+  }
+
+  Future<bool> unmatchAndBlock() async {
+    try {
+      await repository.unmatchAndBlock(_activeConversationId);
+      onConversationsChanged();
+      return true;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return false;
+    }
+  }
+
   Future<bool> report(String reason) async {
     try {
       await repository.report(_activeConversationId, reason: reason);

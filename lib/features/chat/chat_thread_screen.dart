@@ -223,10 +223,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   }
                 }
               },
+              onBlock: () async {
+                final ok = await showBlockDialog(context);
+                if (ok) {
+                  final success = await notifier.block();
+                  if (success && context.mounted) context.pop();
+                }
+              },
               onUnmatch: () async {
                 final ok = await showUnmatchDialog(context);
                 if (ok) {
                   final success = await notifier.unmatch();
+                  if (success && context.mounted) context.pop();
+                }
+              },
+              onUnmatchAndBlock: () async {
+                final ok = await showUnmatchAndBlockDialog(context);
+                if (ok) {
+                  final success = await notifier.unmatchAndBlock();
                   if (success && context.mounted) context.pop();
                 }
               },

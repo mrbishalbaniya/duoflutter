@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
-Future<bool> showUnmatchDialog(BuildContext context) {
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String content,
+  required String confirmLabel,
+  bool destructive = false,
+}) {
   return showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Unmatch & block?'),
-          content: const Text(
-            'You will lose this conversation and match. This cannot be undone.',
-          ),
+          title: Text(title),
+          content: Text(content),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -15,12 +19,46 @@ Future<bool> showUnmatchDialog(BuildContext context) {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('Unmatch'),
+              style: destructive
+                  ? FilledButton.styleFrom(backgroundColor: Colors.redAccent)
+                  : null,
+              child: Text(confirmLabel),
             ),
           ],
         ),
       ).then((v) => v ?? false);
+}
+
+Future<bool> showBlockDialog(BuildContext context) {
+  return showConfirmDialog(
+    context,
+    title: 'Block this user?',
+    content:
+        'They will no longer be able to message you, and you will not see them in your matches.',
+    confirmLabel: 'Block',
+    destructive: true,
+  );
+}
+
+Future<bool> showUnmatchDialog(BuildContext context) {
+  return showConfirmDialog(
+    context,
+    title: 'Unmatch?',
+    content: 'You will lose this match and conversation. This cannot be undone.',
+    confirmLabel: 'Unmatch',
+    destructive: true,
+  );
+}
+
+Future<bool> showUnmatchAndBlockDialog(BuildContext context) {
+  return showConfirmDialog(
+    context,
+    title: 'Unmatch & block?',
+    content:
+        'You will lose this conversation and match, and they will be blocked. This cannot be undone.',
+    confirmLabel: 'Unmatch & block',
+    destructive: true,
+  );
 }
 
 Future<bool> showDeleteConversationDialog(BuildContext context) {
