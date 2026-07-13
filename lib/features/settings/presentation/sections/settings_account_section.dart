@@ -38,7 +38,7 @@ class SettingsAccountSection extends StatelessWidget {
           child: SettingsRow(
             icon: Icons.account_balance_wallet_outlined,
             title: 'Duo Wallet',
-            description: 'Top up with eSewa and buy Premium passes',
+            description: 'Buy coins with eSewa and spend on Premium',
             trailing: Text(
               balanceLabel,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),

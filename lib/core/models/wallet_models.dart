@@ -18,7 +18,7 @@ class SubscriptionPlan extends Equatable {
       planId: json['plan_id'] as String? ?? '',
       name: json['name'] as String? ?? 'Premium',
       description: json['description'] as String? ?? '',
-      currency: json['currency'] as String? ?? 'NPR',
+      currency: json['currency'] as String? ?? 'COIN',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       durationDays: json['duration_days'] as int? ?? 0,
       badge: json['badge'] as String?,
@@ -73,7 +73,7 @@ class WalletTransaction extends Equatable {
   String get displayTitle {
     if (description.isNotEmpty) return description;
     return switch (type) {
-      'top_up' => 'Wallet top-up',
+      'top_up' => 'Coin pack purchase',
       'purchase' => 'Premium purchase',
       'adjustment' => 'Balance adjustment',
       _ => 'Transaction',
@@ -95,7 +95,7 @@ class WalletSummary extends Equatable {
   factory WalletSummary.fromJson(Map<String, dynamic> json) {
     return WalletSummary(
       balance: (json['balance'] as num?)?.toInt() ?? 0,
-      currency: json['currency'] as String? ?? 'NPR',
+      currency: json['currency'] as String? ?? 'COIN',
       topUpPresets: (json['top_up_presets'] as List<dynamic>? ?? [])
           .map((e) => (e as num).toInt())
           .toList(),
@@ -216,7 +216,7 @@ class WalletPurchaseResult extends Equatable {
               planId: '',
               name: 'Premium',
               description: '',
-              currency: 'NPR',
+              currency: 'COIN',
               amount: 0,
               durationDays: 0,
             ),

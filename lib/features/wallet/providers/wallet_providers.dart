@@ -24,7 +24,7 @@ const _fallbackPlans = [
     planId: 'duo_premium_7d',
     name: '7-Day Pass',
     description: 'Unlock Liked you for one week.',
-    currency: 'NPR',
+    currency: 'COIN',
     amount: 149,
     durationDays: 7,
   ),
@@ -32,7 +32,7 @@ const _fallbackPlans = [
     planId: 'duo_premium_30d',
     name: '30-Day Pass',
     description: 'Unlock Liked you for one month.',
-    currency: 'NPR',
+    currency: 'COIN',
     amount: 499,
     durationDays: 30,
     badge: 'Popular',
@@ -41,7 +41,7 @@ const _fallbackPlans = [
     planId: 'duo_premium_90d',
     name: '90-Day Pass',
     description: 'Best value — three months of Premium.',
-    currency: 'NPR',
+    currency: 'COIN',
     amount: 999,
     durationDays: 90,
     badge: 'Best value',
@@ -51,7 +51,7 @@ const _fallbackPlans = [
 WalletSummary _fallbackWalletSummary(int balance) {
   return WalletSummary(
     balance: balance,
-    currency: 'NPR',
+    currency: 'COIN',
     topUpPresets: const [500, 1000, 2000, 5000],
     transactions: const [],
   );
@@ -139,10 +139,10 @@ class WalletUiController extends StateNotifier<WalletUiState> {
 
   void handleWalletReturn(String? result) {
     if (result == 'success') {
-      setNotice('Wallet topped up successfully.');
+      setNotice('Coins added successfully.');
       refreshAll();
     } else if (result == 'failed') {
-      setNotice('Top-up was not completed.');
+      setNotice('Coin purchase was not completed.');
     }
   }
 
@@ -201,7 +201,7 @@ class WalletUiController extends StateNotifier<WalletUiState> {
           state = state.copyWith(
             clearPurchasing: true,
             notice:
-                'Insufficient balance. You have NPR $balance but need NPR $required.',
+                'Insufficient coins. You have $balance but need $required.',
           );
           return null;
         }

@@ -53,7 +53,7 @@ class WalletBalanceCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Available balance',
+                'Your coins',
                 style: TextStyle(
                   color: scheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -72,14 +72,37 @@ class WalletBalanceCard extends StatelessWidget {
           const SizedBox(height: 8),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
-            child: Text(
-              hidden ? 'NPR ••••••' : formatNpr(balance),
-              key: ValueKey(hidden),
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
+            child: hidden
+                ? Row(
+                    key: const ValueKey(true),
+                    children: [
+                      Icon(Icons.toll_rounded, color: DuoColors.primary, size: 28),
+                      const SizedBox(width: 8),
+                      Text(
+                        '••••••',
+                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    key: const ValueKey(false),
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Icon(Icons.toll_rounded, color: DuoColors.primary, size: 28),
+                      const SizedBox(width: 8),
+                      Text(
+                        formatCoinAmount(balance),
+                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                      ),
+                    ],
                   ),
-            ),
           ),
           if (isPremium && premiumExpiry != null && premiumExpiry!.isNotEmpty) ...[
             const SizedBox(height: 12),

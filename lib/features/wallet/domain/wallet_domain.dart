@@ -2,13 +2,17 @@ import 'package:intl/intl.dart';
 
 import '../../../core/models/wallet_models.dart';
 
-String formatNpr(int amount) {
-  final formatter = NumberFormat.currency(
-    locale: 'en_NP',
-    symbol: 'NPR ',
-    decimalDigits: 0,
-  );
-  return formatter.format(amount).trim();
+String formatCoins(int amount) {
+  final formatted = NumberFormat('#,##0', 'en_NP').format(amount);
+  return '$formatted coins';
+}
+
+String formatCoinAmount(int amount) {
+  return NumberFormat('#,##0', 'en_NP').format(amount);
+}
+
+String formatNprPrice(int amount) {
+  return 'NPR ${NumberFormat('#,##0', 'en_NP').format(amount)}';
 }
 
 String formatTxnDate(String iso) {
@@ -20,7 +24,7 @@ String formatTxnDate(String iso) {
 String formatTxnAmount(String amount) {
   final num = double.tryParse(amount) ?? 0;
   final abs = NumberFormat('#,##0', 'en_NP').format(num.abs());
-  return num >= 0 ? '+NPR $abs' : '-NPR $abs';
+  return num >= 0 ? '+$abs coins' : '-$abs coins';
 }
 
 String groupLabelForDate(String iso) {

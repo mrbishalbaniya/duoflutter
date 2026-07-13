@@ -13,7 +13,6 @@ import 'providers/wallet_providers.dart';
 import 'services/esewa_payment_service.dart';
 import 'widgets/esewa_payment_webview.dart';
 import 'widgets/wallet_balance_card.dart';
-import 'widgets/wallet_premium_plans_section.dart';
 import 'widgets/wallet_skeleton.dart';
 import 'widgets/wallet_topup_section.dart';
 import 'widgets/wallet_transaction_list.dart';
@@ -95,7 +94,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       }
 
       if (toppedUp) {
-        ref.read(walletUiProvider.notifier).setNotice('Wallet topped up successfully.');
+        ref.read(walletUiProvider.notifier).setNotice('Coins added successfully.');
         await ref.read(walletUiProvider.notifier).refreshAll();
       } else {
         ref.read(walletUiProvider.notifier).setNotice(
@@ -120,11 +119,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     }
   }
 
-  Future<void> _purchase(String planId) async {
-    try {
-      await ref.read(walletUiProvider.notifier).purchasePlan(planId);
-    } on ApiException catch (_) {}
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +142,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'DUO WALLET',
+                            'DUO COINS',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -173,7 +167,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text(
-                  'Top up with eSewa and use your balance for Duo Premium passes.',
+                  'Buy coins with eSewa and spend them on Duo Premium from Discover.',
                   style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
               ),
@@ -271,15 +265,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                             onTopUp: _startTopUp,
                           ),
                           const SizedBox(height: 22),
-                          WalletPremiumPlansSection(
-                            plans: walletData.plans,
-                            balance: balance,
-                            busy: ui.busy,
-                            purchasingPlanId: ui.purchasingPlanId,
-                            isPremium: user?.profile.isPremium ?? false,
-                            onPurchase: _purchase,
-                          ),
-                          const SizedBox(height: 22),
                           WalletTransactionList(
                             transactions: wallet.transactions,
                             query: ui.transactionQuery,
@@ -324,7 +309,7 @@ class _WalletError extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             if (fallbackBalance > 0) ...[
               const SizedBox(height: 8),
-              Text('Cached balance: ${formatNpr(fallbackBalance)}'),
+              Text('Cached balance: ${formatCoins(fallbackBalance)}'),
             ],
             const SizedBox(height: 20),
             FilledButton(onPressed: onRetry, child: const Text('Try again')),

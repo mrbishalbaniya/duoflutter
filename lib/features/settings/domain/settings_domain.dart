@@ -14,10 +14,11 @@ String? validatePasswordChange({
 
 String formatWalletBalance(int? balance) {
   final value = balance ?? 0;
-  return 'NPR ${value.toString().replaceAllMapped(
+  final formatted = value.toString().replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
         (match) => '${match[1]},',
-      )}';
+      );
+  return '$formatted coins';
 }
 
 String formatPhoneLabel(String? countryCode, String? number) {

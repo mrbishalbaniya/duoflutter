@@ -98,7 +98,7 @@ class PremiumUpgradeSheet extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Balance: ${formatNpr(wallet.balance)}',
+                      'Coins: ${formatCoinAmount(wallet.balance)}',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 12),
@@ -112,7 +112,7 @@ class PremiumUpgradeSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Top up via eSewa',
+                      'Buy coins via eSewa',
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
@@ -126,7 +126,7 @@ class PremiumUpgradeSheet extends ConsumerWidget {
                                   ? null
                                   : () => _topUp(context, ref, amount),
                               icon: const EsewaLogo(size: 12),
-                              label: Text(formatNpr(amount)),
+                              label: Text(formatCoinAmount(amount)),
                             ),
                           )
                           .toList(),
@@ -166,7 +166,7 @@ class PremiumUpgradeSheet extends ConsumerWidget {
         await ref.read(walletUiProvider.notifier).refreshAll();
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wallet topped up successfully.')),
+          const SnackBar(content: Text('Coins added successfully.')),
         );
       } else if (success == false) {
         if (context.mounted) {
@@ -221,7 +221,7 @@ class _PlanTile extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         title: Text(plan.name),
-        subtitle: Text('${plan.durationDays} days · ${formatNpr(plan.amount)}'),
+        subtitle: Text('${plan.durationDays} days · ${formatCoins(plan.amount)}'),
         trailing: FilledButton(
           onPressed: !canAfford || busy || loading
               ? null

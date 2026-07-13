@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import 'package:intl/intl.dart';
-
 import '../../../core/theme/duo_theme.dart';
+import '../domain/wallet_domain.dart';
 import 'esewa_logo.dart';
 
 class WalletTopUpSection extends StatelessWidget {
@@ -29,7 +28,7 @@ class WalletTopUpSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'TOP UP',
+          'BUY COINS',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,
@@ -57,17 +56,17 @@ class WalletTopUpSection extends StatelessWidget {
                       crossAxisCount: crossCount,
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 8,
-                      childAspectRatio: 1.8,
+                      childAspectRatio: 1.35,
                     ),
                     itemCount: presets.length,
                     itemBuilder: (context, index) {
-                      final amount = presets[index];
-                      return _TopUpChip(
-                        amount: amount,
+                      final coins = presets[index];
+                      return _CoinPackChip(
+                        coins: coins,
                         disabled: busy,
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          onTopUp(amount);
+                          onTopUp(coins);
                         },
                       ).animate(delay: (40 * index).ms).fadeIn().scale(
                             begin: const Offset(0.96, 0.96),
@@ -81,7 +80,7 @@ class WalletTopUpSection extends StatelessWidget {
               Text(
                 toppingUp
                     ? 'Redirecting to eSewa…'
-                    : 'Secure top-up in NPR via eSewa ePay',
+                    : '1 NPR via eSewa = 1 Duo Coin · Secure payment with eSewa ePay',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 11,
@@ -96,21 +95,23 @@ class WalletTopUpSection extends StatelessWidget {
   }
 }
 
-class _TopUpChip extends StatelessWidget {
-  const _TopUpChip({
-    required this.amount,
+class _CoinPackChip extends StatelessWidget {
+  const _CoinPackChip({
+    required this.coins,
     required this.disabled,
     required this.onTap,
   });
 
-  final int amount;
+  final int coins;
   final bool disabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: scheme.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: disabled ? null : onTap,
@@ -122,14 +123,35 @@ class _TopUpChip extends StatelessWidget {
               color: DuoColors.esewaGreen.withValues(alpha: 0.25),
             ),
           ),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const EsewaLogo(size: 14),
-              const SizedBox(width: 6),
-              Text(
-                _formatPreset(amount),
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.toll_rounded, size: 16, color: DuoColors.primary),
+                  const SizedBox(width: 4),
+                  Text(
+                    formatCoinAmount(coins),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const EsewaLogo(size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    formatNprPrice(coins),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -137,8 +159,4 @@ class _TopUpChip extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatPreset(int amount) {
-  return NumberFormat('#,##0', 'en_NP').format(amount);
 }

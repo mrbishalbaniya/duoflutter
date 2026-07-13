@@ -162,7 +162,7 @@ class _PlanRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${plan.durationDays} days · ${formatNpr(plan.amount)}',
+                      '${plan.durationDays} days · ${formatCoins(plan.amount)}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -171,7 +171,7 @@ class _PlanRow extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'Top up ${formatNpr(plan.amount - balance)} more',
+                          'Need ${formatCoins(plan.amount - balance)} more',
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(context).colorScheme.error.withValues(alpha: 0.85),
