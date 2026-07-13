@@ -34,6 +34,7 @@ class CallSignalingService {
       queryParameters: {'ticket': ticket},
     );
     _channel = WebSocketChannel.connect(uri);
+    await _channel!.ready;
     _subscription = _channel!.stream.listen(
       (raw) {
         try {

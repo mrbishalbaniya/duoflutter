@@ -78,10 +78,11 @@ class WebRtcCallService {
 
   Future<void> addIceCandidate(Map<String, dynamic> raw) async {
     final candidate = RTCIceCandidate(
-      raw['candidate'] as String?,
-      raw['sdpMid'] as String?,
-      raw['sdpMLineIndex'] as int?,
+      '${raw['candidate'] ?? ''}',
+      (raw['sdpMid'] ?? raw['sdp_mid']) as String?,
+      (raw['sdpMLineIndex'] ?? raw['sdp_mline_index']) as int?,
     );
+    if ((candidate.candidate ?? '').isEmpty) return;
     await _peer?.addCandidate(candidate);
   }
 

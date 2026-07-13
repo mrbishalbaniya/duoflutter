@@ -17,21 +17,38 @@ class CallBridge extends ConsumerStatefulWidget {
 }
 
 class _CallBridgeState extends ConsumerState<CallBridge> {
+  int? _connectedForUserId;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncInbox());
   }
 
-  Future<void> _bootstrap() async {
-    final auth = ref.read(authControllerProvider);
-    if (auth.user != null) {
+  Future<void> _syncInbox() async {
+    final userId = ref.read(authControllerProvider).user?.id;
+    if (userId == null) {
+      _connectedForUserId = null;
+      return;
+    }
+    if (_connectedForUserId == userId) return;
+    _connectedForUserId = userId;
+    try {
       await ref.read(callControllerProvider.notifier).connectInbox();
+    } catch (_) {
+      _connectedForUserId = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.user?.id != next.user?.id) {
+        _connectedForUserId = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncInbox());
+      }
+    });
+
     final call = ref.watch(callControllerProvider);
 
     return Stack(

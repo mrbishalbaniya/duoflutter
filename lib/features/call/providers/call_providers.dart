@@ -79,10 +79,19 @@ class CallController extends StateNotifier<CallState> {
   late final StreamSubscription _inboxSub;
   late final StreamSubscription _qualitySub;
 
+  bool _offerSent = false;
+
   WebRtcCallService get webrtc => _webrtc;
   Stream<dynamic> get remoteStream => _webrtc.remoteStream;
 
   Future<void> connectInbox() => _inbox.connect();
+
+  Future<List<Map<String, dynamic>>> _resolveIceServers(
+    List<Map<String, dynamic>> fromSession,
+  ) async {
+    if (fromSession.isNotEmpty) return fromSession;
+    return _repository.getIceServers();
+  }
 
   Future<void> startOutgoingCall({
     required String conversationId,
@@ -90,6 +99,7 @@ class CallController extends StateNotifier<CallState> {
     required String remoteName,
     String? remotePhoto,
   }) async {
+    _offerSent = false;
     state = state.copyWith(
       phase: CallPhase.outgoing,
       conversationId: conversationId,
@@ -103,15 +113,15 @@ class CallController extends StateNotifier<CallState> {
         conversationId: conversationId,
         callType: callType,
       );
-      state = state.copyWith(callId: session.id, phase: CallPhase.connecting);
+      state = state.copyWith(callId: session.id, phase: CallPhase.outgoing);
       await _signaling.connect(conversationId);
+      final iceServers = await _resolveIceServers(session.iceServers);
       await _webrtc.initialize(
-        iceServers: session.iceServers,
+        iceServers: iceServers,
         video: callType == 'video',
         onIceCandidate: (c) => _signaling.sendIceCandidate(session.id, c.toMap()),
       );
-      final sdp = await _webrtc.createOffer();
-      _signaling.sendOffer(session.id, sdp, 'offer');
+      // Wait for call_accepted, then create/send the offer.
     } catch (e) {
       state = state.copyWith(phase: CallPhase.ended, error: '$e');
     }
@@ -144,12 +154,13 @@ class CallController extends StateNotifier<CallState> {
     try {
       final session = await _repository.acceptCall(callId);
       await _signaling.connect(conversationId);
+      final iceServers = await _resolveIceServers(session.iceServers);
       await _webrtc.initialize(
-        iceServers: session.iceServers,
+        iceServers: iceServers,
         video: state.isVideo,
         onIceCandidate: (c) => _signaling.sendIceCandidate(callId, c.toMap()),
       );
-      state = state.copyWith(phase: CallPhase.active);
+      state = state.copyWith(phase: CallPhase.connecting);
     } catch (e) {
       state = state.copyWith(phase: CallPhase.ended, error: '$e');
     }
@@ -176,6 +187,7 @@ class CallController extends StateNotifier<CallState> {
   }
 
   Future<void> _cleanup() async {
+    _offerSent = false;
     await _webrtc.dispose();
     await _signaling.disconnect();
   }
@@ -184,12 +196,28 @@ class CallController extends StateNotifier<CallState> {
     state = const CallState();
   }
 
+  Future<void> _sendOfferIfNeeded() async {
+    final callId = state.callId;
+    if (!state.isOutgoing || callId == null || _offerSent) return;
+    _offerSent = true;
+    try {
+      final sdp = await _webrtc.createOffer();
+      _signaling.sendOffer(callId, sdp, 'offer');
+      state = state.copyWith(phase: CallPhase.connecting);
+    } catch (e) {
+      _offerSent = false;
+      state = state.copyWith(phase: CallPhase.ended, error: '$e');
+    }
+  }
+
   Future<void> _onSignal(CallSignalEvent event) async {
     final callId = state.callId;
     if (callId == null) return;
     switch (event.type) {
       case 'call_accepted':
-        state = state.copyWith(phase: CallPhase.active);
+        state = state.copyWith(phase: CallPhase.connecting);
+        await _sendOfferIfNeeded();
+        break;
       case 'call_offer':
         final sdp = '${event.data['payload']?['sdp'] ?? event.data['sdp']}';
         final sdpType = '${event.data['payload']?['type'] ?? event.data['sdp_type'] ?? 'offer'}';
@@ -199,6 +227,7 @@ class CallController extends StateNotifier<CallState> {
           _signaling.sendAnswer(callId, answer, 'answer');
           state = state.copyWith(phase: CallPhase.active);
         }
+        break;
       case 'call_answer':
         final sdp = '${event.data['payload']?['sdp'] ?? event.data['sdp']}';
         final sdpType = '${event.data['payload']?['type'] ?? event.data['sdp_type'] ?? 'answer'}';
@@ -206,9 +235,11 @@ class CallController extends StateNotifier<CallState> {
           await _webrtc.applyRemoteAnswer(sdp, sdpType);
           state = state.copyWith(phase: CallPhase.active);
         }
+        break;
       case 'ice_candidate':
         final payload = event.data['payload'] as Map<String, dynamic>? ?? event.data;
         await _webrtc.addIceCandidate(Map<String, dynamic>.from(payload));
+        break;
       case 'call_ended':
       case 'call_rejected':
       case 'call_cancelled':
@@ -216,20 +247,34 @@ class CallController extends StateNotifier<CallState> {
       case 'call_busy':
         await _cleanup();
         state = const CallState(phase: CallPhase.ended);
+        break;
       default:
         break;
     }
   }
 
   void _onInbox(CallSignalEvent event) {
-    if (event.type != 'call_incoming') return;
-    handleIncoming(
-      callId: '${event.data['call_id']}',
-      conversationId: '${event.data['conversation_id']}',
-      callType: '${event.data['call_type'] ?? 'voice'}',
-      remoteName: '${event.data['caller_name'] ?? 'Someone'}',
-      remotePhoto: event.data['caller_photo'] as String?,
-    );
+    switch (event.type) {
+      case 'call_incoming':
+        handleIncoming(
+          callId: '${event.data['call_id']}',
+          conversationId: '${event.data['conversation_id']}',
+          callType: '${event.data['call_type'] ?? 'voice'}',
+          remoteName: '${event.data['caller_name'] ?? 'Someone'}',
+          remotePhoto: event.data['caller_photo'] as String?,
+        );
+        break;
+      case 'call_accepted':
+      case 'call_ended':
+      case 'call_rejected':
+      case 'call_cancelled':
+      case 'call_missed':
+      case 'call_busy':
+        unawaited(_onSignal(event));
+        break;
+      default:
+        break;
+    }
   }
 
   @override
