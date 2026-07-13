@@ -68,6 +68,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
   MatchDeckController(this._ref) : super(const MatchDeckState());
 
   final Ref _ref;
+  final Set<int> _swipedUserIds = {};
 
   ProfileRepository get _profiles => _ref.read(profileRepositoryProvider);
   MatchingRepository get _matching => _ref.read(matchingRepositoryProvider);
@@ -87,8 +88,14 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
 
     try {
       final profiles = await _profiles.discoverProfiles();
+      final filtered = profiles
+          .where((profile) {
+            final id = profile.resolvedUserId;
+            return id == null || !_swipedUserIds.contains(id);
+          })
+          .toList(growable: false);
       state = state.copyWith(
-        profiles: profiles,
+        profiles: filtered,
         loading: false,
         refreshing: false,
       );
@@ -148,6 +155,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
     }
 
     state = state.copyWith(swiping: true);
+    _swipedUserIds.add(userId);
     _removeProfile(profile);
 
     try {
@@ -157,6 +165,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
       }
       return result;
     } catch (_) {
+      _swipedUserIds.remove(userId);
       state = state.copyWith(stackKey: state.stackKey + 1);
       await loadProfiles(refresh: true);
       rethrow;

@@ -1,8 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/media/cloudinary_url.dart';
+import '../../../core/media/media_url.dart';
 import '../../../core/models/user_models.dart';
+import '../../../core/widgets/duo_network_image.dart';
 import '../domain/match_domain.dart';
 import 'match_card_overlay.dart';
 
@@ -149,28 +151,23 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final depth = (total - 1) - index;
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
-    final photo = profile.profilePhotos.isNotEmpty
-        ? profile.optimizedProfilePhotos.first
-        : profile.optimizedDisplayPhoto;
+    final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard);
     final heroTag = widget.heroTagBuilder?.call(profile);
+    final photoWidget = DuoNetworkImage(
+      url: photo,
+      fit: BoxFit.cover,
+      preset: CloudinaryPreset.matchCard,
+      memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.matchCard),
+    );
 
     Widget card = ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (photo.isNotEmpty)
-            heroTag != null && isTop
-                ? Hero(
-                    tag: heroTag,
-                    child: CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover),
-                  )
-                : CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
-          else
-            Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: const Icon(Icons.person, size: 80, color: Colors.white24),
-            ),
+          heroTag != null && isTop
+              ? Hero(tag: heroTag, child: photoWidget)
+              : photoWidget,
           widget.overlayBuilder?.call(profile, isTop) ??
               MatchCardOverlay(profile: profile, isTopCard: isTop),
         ],

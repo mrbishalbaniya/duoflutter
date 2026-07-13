@@ -1,9 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../core/media/cloudinary_url.dart';
+import '../../../core/media/media_url.dart';
 import '../../../core/models/user_models.dart';
 import '../../../core/theme/duo_theme.dart';
+import '../../../core/widgets/duo_network_image.dart';
 
 class DiscoverProfileCard extends StatelessWidget {
   const DiscoverProfileCard({
@@ -31,7 +33,7 @@ class DiscoverProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photo = profile.optimizedDisplayPhoto;
+    final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.discoverCard);
     final distance = profile.previewDistanceKm;
 
     return GestureDetector(
@@ -184,20 +186,11 @@ class _Photo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (photo.isEmpty) {
-      return Container(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: const Icon(Icons.person, size: 64, color: Colors.white24),
-      );
-    }
-    return CachedNetworkImage(
-      imageUrl: photo,
+    return DuoNetworkImage(
+      url: photo,
       fit: BoxFit.cover,
-      color: locked ? Colors.black45 : null,
-      colorBlendMode: locked ? BlendMode.darken : null,
-      placeholder: (_, __) => Container(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      ),
+      preset: CloudinaryPreset.discoverCard,
+      memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.discoverCard),
     );
   }
 }
