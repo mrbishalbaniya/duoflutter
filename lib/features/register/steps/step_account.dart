@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/providers/core_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../widgets/google_sign_in_button.dart';
 import '../../auth/auth_controller.dart';
@@ -29,19 +28,14 @@ class _StepAccountState extends ConsumerState<StepAccount> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  final _otpController = TextEditingController();
 
   String _phone = '';
   bool _showPassword = false;
   bool _showConfirm = false;
   bool _googleLoading = false;
-  bool _otpLoading = false;
-  bool _otpSending = false;
-  bool _otpSent = false;
   String? _formError;
   String? _googleError;
   String? _phoneFieldError;
-  bool _otpAutoSendStarted = false;
 
   @override
   void initState() {
@@ -58,7 +52,6 @@ class _StepAccountState extends ConsumerState<StepAccount> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -91,66 +84,12 @@ class _StepAccountState extends ConsumerState<StepAccount> {
       return;
     }
     _patchFromForm();
-    _otpAutoSendStarted = false;
-    _otpSent = false;
-    ref.read(registrationControllerProvider.notifier).setAccountSubStep(AccountSubStep.otp);
-    setState(() => _formError = null);
-  }
-
-  Future<void> _sendOtp({bool silent = false}) async {
-    final email = ref.read(registrationControllerProvider).data.email.trim().toLowerCase();
-    if (email.isEmpty) {
-      setState(() => _formError = 'Email is missing. Go back and enter your email address.');
-      return;
-    }
-    setState(() {
-      _otpSending = true;
-      _formError = null;
-    });
-    try {
-      await ref.read(authRepositoryProvider).sendEmailOtp(email);
-      if (!mounted) return;
-      setState(() => _otpSent = true);
-      if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verification code sent to your email.')),
+    ref.read(registrationControllerProvider.notifier).patchData(
+          (d) => d.copyWith(otpVerified: true, signedUpWithGoogle: false),
         );
-      }
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _formError = e.message);
-    } finally {
-      if (mounted) setState(() => _otpSending = false);
-    }
-  }
-
-  Future<void> _verifyOtpAndContinue() async {
-    final otpError = validateOtp(_otpController.text.trim());
-    if (otpError != null) {
-      setState(() => _formError = otpError);
-      return;
-    }
-    setState(() {
-      _otpLoading = true;
-      _formError = null;
-    });
-    try {
-      final email = ref.read(registrationControllerProvider).data.email.trim().toLowerCase();
-      await ref.read(authRepositoryProvider).verifyEmailOtp(
-            email: email,
-            otp: _otpController.text.trim(),
-          );
-      ref.read(registrationControllerProvider.notifier).patchData(
-            (d) => d.copyWith(otpVerified: true, signedUpWithGoogle: false),
-          );
-      HapticFeedback.mediumImpact();
-      await widget.onContinue();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _formError = e.message);
-    } finally {
-      if (mounted) setState(() => _otpLoading = false);
-    }
+    HapticFeedback.mediumImpact();
+    await widget.onContinue();
+    setState(() => _formError = null);
   }
 
   Future<void> _submitGooglePhone() async {
@@ -207,57 +146,11 @@ class _StepAccountState extends ConsumerState<StepAccount> {
     }
   }
 
-  bool get _showAlreadyExistsHint {
-    final msg = (_formError ?? '').toLowerCase();
-    return msg.contains('already exists') || msg.contains('already registered');
-  }
-
-  Widget _loginHint(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Text.rich(
-        TextSpan(
-          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-          children: [
-            const TextSpan(text: 'Already have an account? '),
-            WidgetSpan(
-              alignment: PlaceholderAlignment.baseline,
-              baseline: TextBaseline.alphabetic,
-              child: GestureDetector(
-                onTap: () => context.go(AppRoutes.login),
-                child: Text(
-                  'Log in',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
-            ),
-            const TextSpan(text: ' or go back and use a different address.'),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final reg = ref.watch(registrationControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final strength = getPasswordStrength(_passwordController.text);
-
-    if (reg.accountSubStep == AccountSubStep.otp &&
-        !reg.data.signedUpWithGoogle &&
-        !reg.data.otpVerified &&
-        !_otpAutoSendStarted) {
-      _otpAutoSendStarted = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _sendOtp(silent: true);
-      });
-    }
 
     if (reg.accountSubStep == AccountSubStep.phone) {
       return RegistrationStepCard(
@@ -305,62 +198,9 @@ class _StepAccountState extends ConsumerState<StepAccount> {
       );
     }
 
-    if (reg.accountSubStep == AccountSubStep.otp && !reg.data.signedUpWithGoogle && !reg.data.otpVerified) {
-      final email = reg.data.email.trim().toLowerCase();
-      return RegistrationStepCard(
-        title: 'Verify your email',
-        subtitle: email.isNotEmpty
-            ? 'We sent a 6-digit code to $email. Check your inbox and spam folder.'
-            : 'Enter the email you used to sign up, then verify with the code we send.',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextFormField(
-              controller: _otpController,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'Verification code',
-                hintText: '000000',
-                counterText: '',
-              ),
-            ),
-            RegistrationFieldError(message: _formError),
-            if (_showAlreadyExistsHint) _loginHint(context),
-            const SizedBox(height: 8),
-            Text(
-              _otpSending
-                  ? 'Sending verification email…'
-                  : _otpSent
-                      ? 'We sent a 6-digit code to $email'
-                      : 'Preparing verification…',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: (_otpSending || _otpLoading) ? null : () => _sendOtp(),
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-              child: Text(_otpSending ? 'Sending…' : 'Resend code'),
-            ),
-            RegistrationStepNavigation(
-              showBack: true,
-              loading: _otpLoading,
-              onBack: () {
-                _otpAutoSendStarted = false;
-                ref.read(registrationControllerProvider.notifier).setAccountSubStep(AccountSubStep.form);
-              },
-              onNext: _verifyOtpAndContinue,
-              nextLabel: 'Verify & continue',
-            ),
-          ],
-        ),
-      );
-    }
-
     return RegistrationStepCard(
       title: 'Create your account',
-      subtitle: 'Sign up with Google or register with email. Email users verify with a 6-digit code.',
+      subtitle: 'Sign up with Google or register with your email and password.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -376,7 +216,7 @@ class _StepAccountState extends ConsumerState<StepAccount> {
           if (AppConfig.isGoogleAuthConfigured) ...[
             GoogleSignInButton(
               loading: _googleLoading,
-              enabled: !_otpLoading,
+              enabled: true,
               onPressed: _signInWithGoogle,
             ),
             const SizedBox(height: 20),
