@@ -38,7 +38,7 @@ class DuoNetworkImage extends StatelessWidget {
     final deliveryUrl = cloudinaryDeliveryUrl(trimmed, preset: preset);
     final cacheWidth = memCacheWidth ?? cloudinaryMemCacheWidth(preset);
 
-    final image = CachedNetworkImage(
+    Widget image = CachedNetworkImage(
       imageUrl: deliveryUrl,
       width: width,
       height: height,
@@ -51,9 +51,13 @@ class DuoNetworkImage extends StatelessWidget {
       errorWidget: (_, __, ___) => _placeholder(context, failed: true),
     );
 
+    if (width == null && height == null) {
+      image = SizedBox.expand(child: image);
+    }
+
     Widget child = image;
     if (borderRadius != null) {
-      child = ClipRRect(borderRadius: borderRadius!, child: image);
+      child = ClipRRect(borderRadius: borderRadius!, child: child);
     }
     if (semanticLabel != null) {
       child = Semantics(label: semanticLabel, image: true, child: child);
@@ -63,18 +67,19 @@ class DuoNetworkImage extends StatelessWidget {
 
   Widget _placeholder(BuildContext context, {bool failed = false}) {
     final theme = Theme.of(context);
+    final icon = Icon(
+      failed ? Icons.broken_image_outlined : Icons.image_outlined,
+      size: (width != null && height != null)
+          ? (width! < height! ? width! : height!) * 0.28
+          : 32,
+      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+    );
     return Container(
       width: width,
       height: height,
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
       alignment: Alignment.center,
-      child: Icon(
-        failed ? Icons.broken_image_outlined : Icons.image_outlined,
-        size: (width != null && height != null)
-            ? (width! < height! ? width! : height!) * 0.28
-            : 24,
-        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-      ),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      child: width == null && height == null ? Center(child: icon) : icon,
     );
   }
 }

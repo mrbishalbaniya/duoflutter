@@ -24,16 +24,17 @@ class MatchCardOverlay extends StatelessWidget {
     final age = profile.age;
     final ageText = age != null ? ', $age' : '';
 
+    // Let swipe gestures pass through most of the overlay; only the info
+    // control absorbs taps.
     return Positioned.fill(
-      child: IgnorePointer(
-        ignoring: false,
-        child: Stack(
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 180,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 180,
+            child: const IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -41,21 +42,23 @@ class MatchCardOverlay extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: 0.55),
-                      Colors.black.withValues(alpha: 0.9),
+                      Color(0x8C000000),
+                      Color(0xE6000000),
                     ],
                   ),
                 ),
               ),
             ),
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 20,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 20,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: IgnorePointer(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -134,28 +137,28 @@ class MatchCardOverlay extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (onInfoTap != null)
-                    Material(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: infoDisabled ? null : onInfoTap,
-                        child: const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: Colors.white,
-                          ),
+                ),
+                if (onInfoTap != null)
+                  Material(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: infoDisabled ? null : onInfoTap,
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: Colors.white,
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

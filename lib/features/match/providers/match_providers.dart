@@ -18,7 +18,6 @@ class MatchDeckState {
     this.profiles = const [],
     this.loading = true,
     this.refreshing = false,
-    this.swiping = false,
     this.stackKey = 0,
     this.detailOpen = false,
     this.filtersOpen = false,
@@ -28,7 +27,6 @@ class MatchDeckState {
   final List<DuoProfile> profiles;
   final bool loading;
   final bool refreshing;
-  final bool swiping;
   final int stackKey;
   final bool detailOpen;
   final bool filtersOpen;
@@ -39,13 +37,13 @@ class MatchDeckState {
   List<DuoProfile> get deckProfiles =>
       profiles.length <= 4 ? profiles : profiles.sublist(0, 4);
 
-  bool get controlsDisabled => swiping || detailOpen || filtersOpen;
+  /// Sheets/detail block controls — do not lock the deck while a swipe API runs.
+  bool get controlsDisabled => detailOpen || filtersOpen;
 
   MatchDeckState copyWith({
     List<DuoProfile>? profiles,
     bool? loading,
     bool? refreshing,
-    bool? swiping,
     int? stackKey,
     bool? detailOpen,
     bool? filtersOpen,
@@ -55,7 +53,6 @@ class MatchDeckState {
       profiles: profiles ?? this.profiles,
       loading: loading ?? this.loading,
       refreshing: refreshing ?? this.refreshing,
-      swiping: swiping ?? this.swiping,
       stackKey: stackKey ?? this.stackKey,
       detailOpen: detailOpen ?? this.detailOpen,
       filtersOpen: filtersOpen ?? this.filtersOpen,
@@ -69,6 +66,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
 
   final Ref _ref;
   final Set<int> _swipedUserIds = {};
+  final Set<int> _inFlightSwipeIds = {};
 
   ProfileRepository get _profiles => _ref.read(profileRepositoryProvider);
   MatchingRepository get _matching => _ref.read(matchingRepositoryProvider);
@@ -79,11 +77,15 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
     await _syncDefaultLocation();
   }
 
-  Future<void> loadProfiles({bool refresh = false}) async {
+  Future<void> loadProfiles({bool refresh = false, bool clearSwiped = false}) async {
     if (refresh) {
       state = state.copyWith(refreshing: true);
     } else {
       state = state.copyWith(loading: true);
+    }
+
+    if (clearSwiped) {
+      _swipedUserIds.clear();
     }
 
     try {
@@ -139,29 +141,31 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
     await _profiles.updateProfile(filters.toApiPayload());
     await _ref.read(authControllerProvider.notifier).refreshUser();
     state = state.copyWith(stackKey: state.stackKey + 1);
-    await loadProfiles(refresh: true);
+    await loadProfiles(refresh: true, clearSwiped: true);
   }
 
   Future<SwipeResult?> swipeProfile({
     required DuoProfile profile,
     required SwipeAction action,
   }) async {
-    if (state.swiping) return null;
-
     final userId = profile.resolvedUserId;
     if (userId == null) {
       _removeProfile(profile);
       return null;
     }
 
-    state = state.copyWith(swiping: true);
+    if (_inFlightSwipeIds.contains(userId) || _swipedUserIds.contains(userId)) {
+      return null;
+    }
+
+    _inFlightSwipeIds.add(userId);
     _swipedUserIds.add(userId);
     _removeProfile(profile);
 
     try {
       final result = await _matching.swipe(toUserId: userId, action: action);
       if (state.profiles.isEmpty) {
-        await loadProfiles(refresh: true);
+        await loadProfiles(refresh: true, clearSwiped: true);
       }
       return result;
     } catch (_) {
@@ -170,7 +174,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
       await loadProfiles(refresh: true);
       rethrow;
     } finally {
-      state = state.copyWith(swiping: false);
+      _inFlightSwipeIds.remove(userId);
     }
   }
 

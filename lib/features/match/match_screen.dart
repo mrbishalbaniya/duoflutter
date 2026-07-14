@@ -56,6 +56,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
                       if (!deck.refreshing && !deck.loading) {
                         ref.read(matchDeckControllerProvider.notifier).loadProfiles(
                               refresh: true,
+                              clearSwiped: true,
                             );
                       }
                     },
@@ -73,7 +74,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
                           onAdjustFilters: () => showDiscoveryFiltersSheet(context, ref),
                           onRefresh: () => ref
                               .read(matchDeckControllerProvider.notifier)
-                              .loadProfiles(refresh: true),
+                              .loadProfiles(refresh: true, clearSwiped: true),
                         )
                       : _MatchDeckView(
                           key: ValueKey(deck.stackKey),
@@ -112,7 +113,6 @@ class _MatchDeckView extends ConsumerWidget {
               key: stackKey,
               profiles: displayDeck,
               disabled: deck.controlsDisabled,
-              heroTagBuilder: matchProfileHeroTag,
               overlayBuilder: (profile, isTop) => MatchCardOverlay(
                 profile: profile,
                 isTopCard: isTop,

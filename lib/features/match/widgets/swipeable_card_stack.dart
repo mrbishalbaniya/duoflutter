@@ -152,22 +152,25 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
     final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard);
-    final heroTag = widget.heroTagBuilder?.call(profile);
-    final photoWidget = DuoNetworkImage(
-      url: photo,
-      fit: BoxFit.cover,
-      preset: CloudinaryPreset.matchCard,
-      memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.matchCard),
-    );
 
     Widget card = ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          heroTag != null && isTop
-              ? Hero(tag: heroTag, child: photoWidget)
-              : photoWidget,
+          // Positioned.fill avoids a blank/white paint when CachedNetworkImage
+          // does not expand to the stack without explicit sizing.
+          Positioned.fill(
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: DuoNetworkImage(
+                url: photo,
+                fit: BoxFit.cover,
+                preset: CloudinaryPreset.matchCard,
+                memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.matchCard),
+              ),
+            ),
+          ),
           widget.overlayBuilder?.call(profile, isTop) ??
               MatchCardOverlay(profile: profile, isTopCard: isTop),
         ],
