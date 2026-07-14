@@ -36,6 +36,7 @@ class SwipeableCardStack extends StatefulWidget {
 
 class SwipeableCardStackState extends State<SwipeableCardStack>
     with SingleTickerProviderStateMixin {
+  late List<DuoProfile> _cards;
   Offset _drag = Offset.zero;
   bool _flying = false;
   late AnimationController _flyController;
@@ -44,6 +45,7 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
   @override
   void initState() {
     super.initState();
+    _cards = List<DuoProfile>.from(widget.profiles);
     _flyController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: _swipeAnimationMs),
@@ -53,11 +55,22 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
   @override
   void didUpdateWidget(covariant SwipeableCardStack oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldTop = oldWidget.profiles.isEmpty ? null : oldWidget.profiles.last.resolvedUserId;
-    final newTop = widget.profiles.isEmpty ? null : widget.profiles.last.resolvedUserId;
-    if (oldTop != newTop && !_flying) {
-      _drag = Offset.zero;
+    if (_flying) return;
+
+    if (!_sameDeck(_cards, widget.profiles)) {
+      setState(() {
+        _cards = List<DuoProfile>.from(widget.profiles);
+        _drag = Offset.zero;
+      });
     }
+  }
+
+  bool _sameDeck(List<DuoProfile> a, List<DuoProfile> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].resolvedUserId != b[i].resolvedUserId) return false;
+    }
+    return true;
   }
 
   @override
@@ -67,12 +80,12 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
   }
 
   Future<void> swipeTop(SwipeDirection direction) async {
-    if (widget.disabled || _flying || widget.profiles.isEmpty) return;
+    if (widget.disabled || _flying || _cards.isEmpty) return;
     await _flyOff(direction);
   }
 
   Future<void> _flyOff(SwipeDirection direction) async {
-    if (_flying || widget.profiles.isEmpty) return;
+    if (_flying || _cards.isEmpty) return;
     setState(() => _flying = true);
 
     final start = _drag;
@@ -89,15 +102,26 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
   }
 
   void _commit(SwipeDirection direction) {
-    if (widget.profiles.isEmpty) {
+    if (_cards.isEmpty) {
       _resetDrag();
       return;
     }
-    final profile = widget.profiles.last;
+    final profile = _cards.last;
     final accepted = widget.onSwipe(direction, profile);
-    _resetDrag();
-    if (!accepted) {
-      // Parent rejected — card stays; drag already reset.
+
+    if (!mounted) return;
+
+    if (accepted) {
+      // Drop the card locally so the next person is visible immediately —
+      // waiting for parent rebuild used to snap the same person back.
+      setState(() {
+        _cards = List<DuoProfile>.from(_cards)..removeLast();
+        _drag = Offset.zero;
+        _flying = false;
+      });
+      _flyController.reset();
+    } else {
+      _resetDrag();
     }
   }
 
@@ -130,19 +154,19 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.profiles.isEmpty) return const SizedBox.shrink();
+    if (_cards.isEmpty) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            for (var i = 0; i < widget.profiles.length; i++)
+            for (var i = 0; i < _cards.length; i++)
               _buildCard(
                 context: context,
-                profile: widget.profiles[i],
+                profile: _cards[i],
                 index: i,
-                total: widget.profiles.length,
+                total: _cards.length,
                 constraints: constraints,
               ),
           ],
@@ -163,7 +187,7 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
     final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard);
-    final cardKey = ValueKey('match-card-${profile.resolvedUserId ?? profile.displayName}-$index');
+    final cardKey = ValueKey('match-card-${profile.resolvedUserId ?? profile.displayName}');
 
     final card = KeyedSubtree(
       key: cardKey,

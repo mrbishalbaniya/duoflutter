@@ -78,9 +78,9 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
                               .loadProfiles(refresh: true, clearSwiped: true),
                         )
                       : _MatchDeckView(
-                          key: ValueKey(
-                            'deck-${deck.stackKey}-${deck.profiles.map((p) => p.resolvedUserId).join(',')}',
-                          ),
+                          // Remount only on explicit refresh/filter — not every swipe
+                          // (rebuilding the full id list remounted the same top card).
+                          key: ValueKey('deck-${deck.stackKey}'),
                           stackKey: _stackKey,
                           deck: deck,
                         ),

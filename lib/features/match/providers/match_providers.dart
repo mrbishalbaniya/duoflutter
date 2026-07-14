@@ -67,6 +67,7 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
   final Ref _ref;
   final Set<int> _swipedUserIds = {};
   final Set<int> _inFlightSwipeIds = {};
+  bool _refilling = false;
 
   ProfileRepository get _profiles => _ref.read(profileRepositoryProvider);
   MatchingRepository get _matching => _ref.read(matchingRepositoryProvider);
@@ -90,14 +91,8 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
 
     try {
       final profiles = await _profiles.discoverProfiles();
-      final filtered = profiles
-          .where((profile) {
-            final id = profile.resolvedUserId;
-            return id == null || !_swipedUserIds.contains(id);
-          })
-          .toList(growable: false);
       state = state.copyWith(
-        profiles: filtered,
+        profiles: _filterAndDedupe(profiles),
         loading: false,
         refreshing: false,
       );
@@ -108,6 +103,20 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
         refreshing: false,
       );
     }
+  }
+
+  List<DuoProfile> _filterAndDedupe(List<DuoProfile> profiles) {
+    final seen = <int>{};
+    final filtered = <DuoProfile>[];
+    for (final profile in profiles) {
+      final id = profile.resolvedUserId;
+      if (id != null) {
+        if (_swipedUserIds.contains(id) || seen.contains(id)) continue;
+        seen.add(id);
+      }
+      filtered.add(profile);
+    }
+    return filtered;
   }
 
   Future<void> _syncDefaultLocation() async {
@@ -151,10 +160,12 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
     final userId = profile.resolvedUserId;
     if (userId == null) {
       _removeProfile(profile);
+      await _refillIfNeeded();
       return null;
     }
 
     if (_inFlightSwipeIds.contains(userId) || _swipedUserIds.contains(userId)) {
+      _removeProfile(profile);
       return null;
     }
 
@@ -164,13 +175,12 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
 
     try {
       final result = await _matching.swipe(toUserId: userId, action: action);
-      if (state.profiles.isEmpty) {
-        await loadProfiles(refresh: true, clearSwiped: true);
-      }
+      await _refillIfNeeded();
       return result;
     } catch (_) {
       _swipedUserIds.remove(userId);
       state = state.copyWith(stackKey: state.stackKey + 1);
+      // Keep session swipes — only restore this failed one by refetching.
       await loadProfiles(refresh: true);
       rethrow;
     } finally {
@@ -178,11 +188,26 @@ class MatchDeckController extends StateNotifier<MatchDeckState> {
     }
   }
 
+  /// Auto-refill when the deck runs out — never clear session swipes, or
+  /// recycled discover results will immediately show the same people again.
+  Future<void> _refillIfNeeded() async {
+    if (state.profiles.isNotEmpty || _refilling) return;
+    _refilling = true;
+    try {
+      await loadProfiles(refresh: true, clearSwiped: false);
+    } finally {
+      _refilling = false;
+    }
+  }
+
   void _removeProfile(DuoProfile profile) {
     final id = profile.resolvedUserId;
     state = state.copyWith(
       profiles: state.profiles
-          .where((p) => p.resolvedUserId != id)
+          .where((p) {
+            if (id != null) return p.resolvedUserId != id;
+            return !identical(p, profile);
+          })
           .toList(growable: false),
     );
   }
