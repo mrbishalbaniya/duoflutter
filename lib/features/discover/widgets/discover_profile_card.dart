@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -31,10 +33,20 @@ class DiscoverProfileCard extends StatelessWidget {
   final VoidCallback? onLockedTap;
   final int animationIndex;
 
+  String get _distanceLabel {
+    final distance = profile.previewDistanceKm;
+    if (distance == null) return 'Nearby';
+    final rounded = distance == distance.roundToDouble()
+        ? distance.toStringAsFixed(0)
+        : distance.toStringAsFixed(1);
+    return '$rounded km away';
+  }
+
   @override
   Widget build(BuildContext context) {
     final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.discoverCard);
-    final distance = profile.previewDistanceKm;
+    final name = profile.displayName;
+    final ageText = profile.age != null ? ', ${profile.age}' : '';
 
     return GestureDetector(
       onTap: locked ? onLockedTap : onTap,
@@ -52,40 +64,20 @@ class DiscoverProfileCard extends StatelessWidget {
                 )
               else
                 _Photo(photo: photo, locked: locked),
-              DecoratedBox(
+              const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: locked ? 0.55 : 0.8),
+                      Color(0x26000000),
+                      Color(0xE6000000),
                     ],
-                    stops: const [0.35, 1.0],
+                    stops: [0.35, 0.65, 1.0],
                   ),
                 ),
               ),
-              if (locked)
-                Container(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.lock_rounded, color: Colors.white, size: 36),
-                      const SizedBox(height: 8),
-                      Text(
-                        distance != null
-                            ? '${distance.toStringAsFixed(1)} km away'
-                            : 'Nearby',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               Positioned(
                 left: 12,
                 right: 12,
@@ -93,12 +85,38 @@ class DiscoverProfileCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!locked) ...[
+                    if (locked) ...[
+                      // Match web Discover: blurred name + age, distance below.
+                      ClipRect(
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(sigmaX: 5.5, sigmaY: 5.5),
+                          child: Text(
+                            '$name$ageText',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _distanceLabel,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ] else ...[
                       Row(
                         children: [
                           Expanded(
                             child: Text(
-                              '${profile.displayName}${profile.age != null ? ', ${profile.age}' : ''}',
+                              '$name$ageText',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -130,26 +148,18 @@ class DiscoverProfileCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                    ] else
                       Text(
-                        'Premium member',
+                        timeLabel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    Text(
-                      timeLabel,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (primaryAction != null || secondaryAction != null) ...[
+                    ],
+                    if (!locked && (primaryAction != null || secondaryAction != null)) ...[
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -186,11 +196,22 @@ class _Photo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DuoNetworkImage(
+    final image = DuoNetworkImage(
       url: photo,
       fit: BoxFit.cover,
       preset: CloudinaryPreset.discoverCard,
       memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.discoverCard),
+    );
+
+    if (!locked) return SizedBox.expand(child: image);
+
+    return SizedBox.expand(
+      child: ClipRect(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: image,
+        ),
+      ),
     );
   }
 }
