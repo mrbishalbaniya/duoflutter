@@ -24,7 +24,7 @@ Future<void> showUpdateDialog(
       return FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.94, end: 1).animate(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(
             CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           ),
           child: child,
@@ -46,7 +46,8 @@ class UpdateDialog extends ConsumerStatefulWidget {
 class _UpdateDialogState extends ConsumerState<UpdateDialog> {
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final state = ref.watch(updateControllerProvider);
     final latest = state.latest;
     final installed = state.installed;
@@ -56,92 +57,117 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
     }
 
     final canSkip = !widget.blocking && latest.canSkip;
+    final headline = latest.emergencyUpdate
+        ? 'Critical update required'
+        : latest.forceUpdate
+            ? 'Update required'
+            : 'Update available';
+    final visibleNotes = latest.visibleNotes;
+    final moreCount = latest.moreNotesCount;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Material(
-              color: scheme.surfaceContainerHigh.withValues(alpha: 0.96),
+              color: scheme.surfaceContainerHigh.withValues(alpha: 0.98),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.asset('assets/logo.png', width: 52, height: 52),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  latest.emergencyUpdate
-                                      ? 'Critical update required'
-                                      : latest.forceUpdate
-                                          ? 'Update required'
-                                          : 'Update available',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                                Text(
-                                  'Duo ${latest.latestVersion} · ${latest.fileSize}',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _VersionRow(
-                        label: 'Installed',
-                        value: installed == null
-                            ? '—'
-                            : '${installed.version} (${installed.buildNumber})',
+                      Text(
+                        headline,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                       const SizedBox(height: 6),
-                      _VersionRow(
-                        label: 'Latest',
-                        value: '${latest.latestVersion} (${latest.buildNumber})',
-                        highlight: true,
-                      ),
-                      if (latest.releaseNotes.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'What\'s new',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                      Text(
+                        'Duo ${latest.latestVersion} (Build ${latest.buildNumber})'
+                        '${latest.fileSize.isNotEmpty && latest.fileSize != 'Unknown' ? ' · ${latest.fileSize}' : ''}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 8),
-                        ...latest.releaseNotes.take(6).map(
-                              (note) => Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(Icons.fiber_manual_record, size: 8, color: scheme.primary),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(note)),
-                                  ],
+                      ),
+                      if (latest.releaseTitle.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          latest.releaseTitle,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      _VersionBlock(
+                        label: 'Installed Version',
+                        value: installed == null ? '—' : installed.version,
+                      ),
+                      const SizedBox(height: 12),
+                      _VersionBlock(
+                        label: 'Latest Version',
+                        value: '${latest.latestVersion} (Build ${latest.buildNumber})',
+                        emphasize: true,
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        "What's New",
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ...visibleNotes.map(
+                        (note) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 7),
+                                child: Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: scheme.onSurfaceVariant,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  note,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    height: 1.35,
+                                    color: scheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (moreCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 4),
+                          child: Text(
+                            '+$moreCount more improvements',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
                             ),
-                      ],
+                          ),
+                        ),
                       if (state.phase == UpdatePhase.downloading ||
                           state.phase == UpdatePhase.paused ||
                           state.phase == UpdatePhase.readyToInstall) ...[
@@ -150,7 +176,7 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
                           borderRadius: BorderRadius.circular(99),
                           child: LinearProgressIndicator(
                             value: state.progress > 0 ? state.progress : null,
-                            minHeight: 10,
+                            minHeight: 8,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -158,19 +184,19 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
                           state.phase == UpdatePhase.readyToInstall
                               ? 'Ready to install'
                               : '${(state.progress * 100).toStringAsFixed(0)}% · ${formatSpeed(state.downloadSpeedBps)} · ${formatEta(state.etaSeconds)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                       if (state.error != null) ...[
                         const SizedBox(height: 12),
                         Text(
                           state.error!,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.error),
+                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
                         ),
                       ],
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 22),
                       _buildActions(context, state, latest, canSkip),
                     ],
                   ),
@@ -180,7 +206,7 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
           ),
         ),
       ),
-    ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04, end: 0);
+    ).animate().fadeIn(duration: 240.ms).slideY(begin: 0.03, end: 0);
   }
 
   Widget _buildActions(
@@ -207,7 +233,7 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
               child: const Text('Pause'),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: OutlinedButton(
               onPressed: () {
@@ -230,7 +256,7 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
               child: const Text('Resume'),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: OutlinedButton(
               onPressed: controller.cancelDownload,
@@ -253,11 +279,11 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
               child: const Text('Later'),
             ),
           ),
-        if (canSkip) const SizedBox(width: 10),
+        if (canSkip) const SizedBox(width: 12),
         Expanded(
           child: FilledButton(
             onPressed: state.phase == UpdatePhase.downloading ? null : controller.startDownload,
-            child: Text(latest.emergencyUpdate ? 'Update now' : 'Download update'),
+            child: const Text('Update Now'),
           ),
         ),
       ],
@@ -265,30 +291,39 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
   }
 }
 
-class _VersionRow extends StatelessWidget {
-  const _VersionRow({
+class _VersionBlock extends StatelessWidget {
+  const _VersionBlock({
     required this.label,
     required this.value,
-    this.highlight = false,
+    this.emphasize = false,
   });
 
   final String label;
   final String value;
-  final bool highlight;
+  final bool emphasize;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        const Spacer(),
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
         Text(
           value,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: highlight ? scheme.primary : scheme.onSurface,
-              ),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: emphasize ? scheme.primary : scheme.onSurface,
+          ),
         ),
       ],
     );

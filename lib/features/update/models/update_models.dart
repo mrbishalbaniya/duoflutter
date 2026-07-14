@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../utils/release_notes.dart';
+
 class AppUpdateInfo extends Equatable {
   const AppUpdateInfo({
     required this.latestVersion,
@@ -13,6 +15,7 @@ class AppUpdateInfo extends Equatable {
     required this.fileSize,
     required this.fileSizeBytes,
     required this.checksumSha256,
+    this.releaseTitle = '',
     this.publishedAt,
     this.channel = 'stable',
     this.platform = 'android',
@@ -23,17 +26,25 @@ class AppUpdateInfo extends Equatable {
   });
 
   factory AppUpdateInfo.fromJson(Map<String, dynamic> json) {
-    final notes = json['release_notes'];
+    final version = json['latest_version'] as String? ??
+        json['version'] as String? ??
+        '0.0.0';
+    final rawTitle = (json['release_title'] as String?) ??
+        (json['title'] as String?) ??
+        '';
+    final notes = sanitizeReleaseNotes(json['release_notes']);
+
     return AppUpdateInfo(
-      latestVersion: json['latest_version'] as String? ?? '0.0.0',
-      minimumVersion: json['minimum_version'] as String? ?? '0.0.0',
-      buildNumber: json['build_number'] as int? ?? 0,
+      latestVersion: version,
+      minimumVersion: json['minimum_version'] as String? ?? version,
+      buildNumber: json['build_number'] as int? ?? json['build'] as int? ?? 0,
       apkUrl: json['apk_url'] as String? ?? '',
-      releaseNotes: notes is List ? notes.map((e) => e.toString()).toList() : const [],
+      releaseTitle: resolveReleaseTitle(rawTitle, version: version),
+      releaseNotes: notes,
       forceUpdate: json['force_update'] as bool? ?? false,
       softUpdate: json['soft_update'] as bool? ?? true,
       emergencyUpdate: json['emergency_update'] as bool? ?? false,
-      fileSize: json['file_size'] as String? ?? '',
+      fileSize: json['file_size'] as String? ?? json['size'] as String? ?? '',
       fileSizeBytes: json['file_size_bytes'] as int? ?? 0,
       checksumSha256: (json['checksum_sha256'] as String? ?? '').toLowerCase(),
       publishedAt: json['published_at'] as String?,
@@ -50,6 +61,7 @@ class AppUpdateInfo extends Equatable {
   final String minimumVersion;
   final int buildNumber;
   final String apkUrl;
+  final String releaseTitle;
   final List<String> releaseNotes;
   final bool forceUpdate;
   final bool softUpdate;
@@ -67,11 +79,16 @@ class AppUpdateInfo extends Equatable {
 
   bool get canSkip => softUpdate && !forceUpdate && !emergencyUpdate && !updateBlocked;
 
+  List<String> get visibleNotes => visibleReleaseNotes(releaseNotes);
+
+  int get moreNotesCount => hiddenReleaseNoteCount(releaseNotes);
+
   @override
   List<Object?> get props => [
         latestVersion,
         buildNumber,
         apkUrl,
+        releaseTitle,
         updateAvailable,
         updateBlocked,
         checksumSha256,

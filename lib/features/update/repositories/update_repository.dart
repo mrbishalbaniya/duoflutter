@@ -41,6 +41,8 @@ class UpdateRepository {
             'minimum_version': item['version'],
             'build_number': item['build_number'],
             'release_notes': item['release_notes'],
+            'release_title': item['release_title'] ?? item['title'],
+            'title': item['title'] ?? item['release_title'],
             'checksum_sha256': item['checksum_sha256'],
             'file_size': item['file_size'],
             'published_at': item['published_at'],

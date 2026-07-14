@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/config/app_config.dart';
 import '../models/update_models.dart';
+import '../utils/release_notes.dart';
 import '../utils/update_utils.dart';
 
 class GithubUpdateRepository {
@@ -30,14 +31,11 @@ class GithubUpdateRepository {
     final tag = (data['tag_name'] as String? ?? '0.0.0').trim();
     final version = tag.replaceFirst(RegExp(r'^v'), '');
     final body = (data['body'] as String? ?? '').trim();
-    final releaseNotes = body.isEmpty
-        ? const <String>['Latest Duo mobile release from GitHub.']
-        : body
-            .split('\n')
-            .map((line) => line.trim())
-            .where((line) => line.isNotEmpty)
-            .take(8)
-            .toList();
+    final releaseNotes = sanitizeReleaseNotes(body);
+    final releaseTitle = resolveReleaseTitle(
+      data['name'] as String?,
+      version: version.isEmpty ? installed.version : version,
+    );
 
     var fileSizeBytes = 0;
     final assets = data['assets'];
@@ -60,11 +58,12 @@ class GithubUpdateRepository {
       minimumVersion: installed.version,
       buildNumber: installed.buildNumber + (semverNewer ? 1 : 0),
       apkUrl: AppConfig.githubLatestApkUrl,
+      releaseTitle: releaseTitle,
       releaseNotes: releaseNotes,
       forceUpdate: false,
       softUpdate: true,
       emergencyUpdate: false,
-      fileSize: fileSizeBytes > 0 ? formatBytes(fileSizeBytes) : 'APK',
+      fileSize: fileSizeBytes > 0 ? formatBytes(fileSizeBytes) : '',
       fileSizeBytes: fileSizeBytes,
       checksumSha256: '',
       publishedAt: data['published_at'] as String?,

@@ -205,7 +205,11 @@ class SettingsUpdateSection extends ConsumerWidget {
               final item = state.history[index];
               return ListTile(
                 title: Text('${item.latestVersion} (build ${item.buildNumber})'),
-                subtitle: Text((item.releaseNotes.isNotEmpty ? item.releaseNotes.first : 'Release').toString()),
+                subtitle: Text(
+                  item.releaseTitle.isNotEmpty
+                      ? item.releaseTitle
+                      : (item.releaseNotes.isNotEmpty ? item.releaseNotes.first : 'Release'),
+                ),
                 trailing: item.updateAvailable ? const Icon(Icons.new_releases_outlined) : null,
               );
             },
