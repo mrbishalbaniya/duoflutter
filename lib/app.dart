@@ -7,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/call/presentation/call_bridge.dart';
 import 'features/notifications/presentation/widgets/push_notification_bridge.dart';
+import 'features/security/presentation/widgets/biometric_unlock_bridge.dart';
 import 'features/update/presentation/widgets/update_bridge.dart';
 
 class DuoApp extends ConsumerWidget {
@@ -41,7 +42,9 @@ class DuoApp extends ConsumerWidget {
               return UpdateBridge(
                 child: PushNotificationBridge(
                   child: CallBridge(
-                    child: child ?? const SizedBox.shrink(),
+                    child: BiometricUnlockBridge(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               );

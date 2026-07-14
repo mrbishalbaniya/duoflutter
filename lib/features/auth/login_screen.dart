@@ -9,6 +9,8 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/duo_theme.dart';
 import '../../widgets/duo_ui.dart';
 import '../../widgets/google_sign_in_button.dart';
+import '../security/presentation/dialogs/two_factor_login_dialog.dart';
+import '../security/providers/security_providers.dart';
 import 'auth_controller.dart';
 import 'domain/login_domain.dart';
 import 'providers/login_providers.dart';
@@ -28,11 +30,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _biometricAvailable = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _readQueryParams());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _readQueryParams();
+      _checkBiometric();
+    });
+  }
+
+  Future<void> _checkBiometric() async {
+    final bio = ref.read(biometricAuthServiceProvider);
+    final enabled = await bio.isLocallyEnabled();
+    final caps = await bio.getCapabilities();
+    if (mounted) {
+      setState(() => _biometricAvailable = enabled && caps.supported);
+    }
   }
 
   void _readQueryParams() {
@@ -53,10 +68,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
 
-    final success = await ref.read(loginControllerProvider.notifier).signInWithEmail(
-          email: _emailController.text,
-          password: _passwordController.text,
-        );
+    final controller = ref.read(loginControllerProvider.notifier);
+    final success = await controller.signInWithEmail(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+    if (!mounted) return;
+
+    if (success) {
+      HapticFeedback.mediumImpact();
+      _navigateAfterAuth();
+      return;
+    }
+
+    final ui = ref.read(loginControllerProvider);
+    final challenge = ui.pendingChallenge;
+    if (challenge == null) return;
+
+    final code = await showTwoFactorLoginDialog(
+      context,
+      challenge: challenge,
+      onResendEmailOtp: controller.resendTwoFactorOtp,
+    );
+    if (!mounted || code == null || code.isEmpty) {
+      controller.clearChallenge();
+      return;
+    }
+
+    final verified = await controller.completeTwoFactor(code);
+    if (verified && mounted) {
+      HapticFeedback.mediumImpact();
+      _navigateAfterAuth();
+    }
+  }
+
+  Future<void> _signInWithBiometric() async {
+    HapticFeedback.lightImpact();
+    final success = await ref.read(loginControllerProvider.notifier).signInWithBiometric();
     if (success && mounted) {
       HapticFeedback.mediumImpact();
       _navigateAfterAuth();
@@ -226,6 +274,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         loading: ui.isLoading,
                                         onPressed: ui.isBusy ? null : _submit,
                                       ),
+                                      if (_biometricAvailable) ...[
+                                        const SizedBox(height: 12),
+                                        OutlinedButton.icon(
+                                          onPressed: ui.isBusy ? null : _signInWithBiometric,
+                                          icon: ui.isBiometricLoading
+                                              ? const SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                )
+                                              : const Icon(Icons.fingerprint_rounded),
+                                          label: Text(
+                                            ui.isBiometricLoading
+                                                ? 'Verifying…'
+                                                : 'Sign in with biometrics',
+                                          ),
+                                        ),
+                                      ],
                                       const SizedBox(height: 24),
                                       Row(
                                         children: [

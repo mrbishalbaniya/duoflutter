@@ -173,6 +173,10 @@ class SecurityRepository {
     return response.data?['marked'] as int? ?? 0;
   }
 
+  Future<void> deleteEvent(int id) async {
+    await _client.delete('/security/events/$id/read/');
+  }
+
   Future<String> enableBiometric(String password) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/security/biometric/enable/',

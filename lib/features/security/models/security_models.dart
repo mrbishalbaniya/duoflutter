@@ -1,5 +1,31 @@
 import 'package:equatable/equatable.dart';
 
+class SecurityRecommendation extends Equatable {
+  const SecurityRecommendation({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.action,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String action;
+
+  factory SecurityRecommendation.fromJson(Map<String, dynamic> json) {
+    return SecurityRecommendation(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      action: json['action'] as String? ?? '',
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, action];
+}
+
 class SecurityOverview extends Equatable {
   const SecurityOverview({
     required this.twoFactorEnabled,
@@ -11,6 +37,13 @@ class SecurityOverview extends Equatable {
     required this.rememberDeviceDays,
     required this.currentDeviceId,
     required this.hasBackupCodes,
+    this.backupCodesRemaining = 0,
+    this.securityScore = 0,
+    this.recommendations = const [],
+    this.emailVerified = false,
+    this.phoneVerified = false,
+    this.trustedDeviceActive = false,
+    this.recentSuspicious = false,
   });
 
   final bool twoFactorEnabled;
@@ -22,8 +55,16 @@ class SecurityOverview extends Equatable {
   final int rememberDeviceDays;
   final String currentDeviceId;
   final bool hasBackupCodes;
+  final int backupCodesRemaining;
+  final int securityScore;
+  final List<SecurityRecommendation> recommendations;
+  final bool emailVerified;
+  final bool phoneVerified;
+  final bool trustedDeviceActive;
+  final bool recentSuspicious;
 
   factory SecurityOverview.fromJson(Map<String, dynamic> json) {
+    final recs = json['recommendations'];
     return SecurityOverview(
       twoFactorEnabled: json['two_factor_enabled'] as bool? ?? false,
       twoFactorMethod: json['two_factor_method'] as String?,
@@ -34,6 +75,18 @@ class SecurityOverview extends Equatable {
       rememberDeviceDays: json['remember_device_days'] as int? ?? 30,
       currentDeviceId: json['current_device_id'] as String? ?? '',
       hasBackupCodes: json['has_backup_codes'] as bool? ?? false,
+      backupCodesRemaining: json['backup_codes_remaining'] as int? ?? 0,
+      securityScore: json['security_score'] as int? ?? 0,
+      recommendations: recs is List
+          ? recs
+              .whereType<Map>()
+              .map((e) => SecurityRecommendation.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      emailVerified: json['email_verified'] as bool? ?? false,
+      phoneVerified: json['phone_verified'] as bool? ?? false,
+      trustedDeviceActive: json['trusted_device_active'] as bool? ?? false,
+      recentSuspicious: json['recent_suspicious'] as bool? ?? false,
     );
   }
 
@@ -48,6 +101,8 @@ class SecurityOverview extends Equatable {
         rememberDeviceDays,
         currentDeviceId,
         hasBackupCodes,
+        securityScore,
+        recommendations,
       ];
 }
 
@@ -64,6 +119,8 @@ class UserDevice extends Equatable {
     required this.browser,
     required this.ipAddress,
     required this.location,
+    this.country = '',
+    this.city = '',
     required this.isTrusted,
     required this.isTrustedActive,
     required this.isCurrent,
@@ -82,6 +139,8 @@ class UserDevice extends Equatable {
   final String browser;
   final String? ipAddress;
   final String location;
+  final String country;
+  final String city;
   final bool isTrusted;
   final bool isTrustedActive;
   final bool isCurrent;
@@ -101,6 +160,8 @@ class UserDevice extends Equatable {
       browser: json['browser'] as String? ?? '',
       ipAddress: json['ip_address'] as String?,
       location: json['location'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      city: json['city'] as String? ?? '',
       isTrusted: json['is_trusted'] as bool? ?? false,
       isTrustedActive: json['is_trusted_active'] as bool? ?? false,
       isCurrent: json['is_current'] as bool? ?? false,
@@ -112,6 +173,13 @@ class UserDevice extends Equatable {
   static DateTime? _parseDate(dynamic value) {
     if (value is! String || value.isEmpty) return null;
     return DateTime.tryParse(value);
+  }
+
+  String get locationLabel {
+    if (city.isNotEmpty && country.isNotEmpty) return '$city, $country';
+    if (location.isNotEmpty) return location;
+    if (country.isNotEmpty) return country;
+    return 'Unknown location';
   }
 
   String get displayIcon {
@@ -130,10 +198,13 @@ class LoginHistoryEntry extends Equatable {
     required this.success,
     required this.ipAddress,
     required this.location,
+    this.country = '',
+    this.city = '',
     required this.deviceName,
     required this.browser,
     required this.osName,
     required this.failureReason,
+    this.eventType = 'login',
     required this.isCurrent,
     required this.createdAt,
   });
@@ -142,10 +213,13 @@ class LoginHistoryEntry extends Equatable {
   final bool success;
   final String? ipAddress;
   final String location;
+  final String country;
+  final String city;
   final String deviceName;
   final String browser;
   final String osName;
   final String failureReason;
+  final String eventType;
   final bool isCurrent;
   final DateTime? createdAt;
 
@@ -155,10 +229,13 @@ class LoginHistoryEntry extends Equatable {
       success: json['success'] as bool? ?? true,
       ipAddress: json['ip_address'] as String?,
       location: json['location'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      city: json['city'] as String? ?? '',
       deviceName: json['device_name'] as String? ?? '',
       browser: json['browser'] as String? ?? '',
       osName: json['os_name'] as String? ?? '',
       failureReason: json['failure_reason'] as String? ?? '',
+      eventType: json['event_type'] as String? ?? 'login',
       isCurrent: json['is_current'] as bool? ?? false,
       createdAt: UserDevice._parseDate(json['created_at']),
     );
@@ -175,6 +252,7 @@ class SecurityEvent extends Equatable {
     required this.title,
     required this.message,
     required this.ipAddress,
+    this.severity = 'info',
     required this.isRead,
     required this.createdAt,
   });
@@ -184,6 +262,7 @@ class SecurityEvent extends Equatable {
   final String title;
   final String message;
   final String? ipAddress;
+  final String severity;
   final bool isRead;
   final DateTime? createdAt;
 
@@ -194,13 +273,14 @@ class SecurityEvent extends Equatable {
       title: json['title'] as String? ?? 'Security alert',
       message: json['message'] as String? ?? '',
       ipAddress: json['ip_address'] as String?,
+      severity: json['severity'] as String? ?? 'info',
       isRead: json['is_read'] as bool? ?? false,
       createdAt: UserDevice._parseDate(json['created_at']),
     );
   }
 
   @override
-  List<Object?> get props => [id, eventType, isRead];
+  List<Object?> get props => [id, eventType, isRead, severity];
 }
 
 class TotpSetupData extends Equatable {
@@ -230,9 +310,21 @@ class TwoFactorLoginChallenge extends Equatable {
   final List<String> methods;
 
   factory TwoFactorLoginChallenge.fromJson(Map<String, dynamic> json) {
+    final methodsRaw = json['methods'];
+    final methods = <String>[];
+    if (methodsRaw is List) {
+      for (final item in methodsRaw) {
+        if (item is String && item.isNotEmpty) methods.add(item);
+        if (item is List) {
+          for (final nested in item) {
+            if (nested is String && nested.isNotEmpty) methods.add(nested);
+          }
+        }
+      }
+    }
     return TwoFactorLoginChallenge(
-      challengeToken: json['challenge_token'] as String,
-      methods: (json['methods'] as List<dynamic>? ?? []).cast<String>(),
+      challengeToken: json['challenge_token'] as String? ?? '',
+      methods: methods,
     );
   }
 

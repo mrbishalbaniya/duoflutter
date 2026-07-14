@@ -70,6 +70,12 @@ class _SecurityCenterBody extends ConsumerWidget {
           icon: Icons.security_rounded,
         ),
         const SizedBox(height: 16),
+        _SecurityScoreCard(overview: overview),
+        if (overview.recommendations.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _RecommendationsCard(overview: overview),
+        ],
+        const SizedBox(height: 16),
         SettingsSection(
           title: 'Account access',
           animationIndex: 0,
@@ -211,5 +217,134 @@ class _SecurityCenterBody extends ConsumerWidget {
       );
       if (ok) ref.invalidate(securityOverviewProvider);
     });
+  }
+}
+
+class _SecurityScoreCard extends StatelessWidget {
+  const _SecurityScoreCard({required this.overview});
+
+  final SecurityOverview overview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final score = overview.securityScore.clamp(0, 100);
+    final color = score >= 80
+        ? Colors.green
+        : score >= 50
+            ? scheme.tertiary
+            : scheme.error;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: score / 100,
+                    strokeWidth: 7,
+                    color: color,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                  ),
+                  Text(
+                    '$score%',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Security score',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    score >= 80
+                        ? 'Your account is well protected.'
+                        : 'Improve your score by completing the recommendations below.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecommendationsCard extends ConsumerWidget {
+  const _RecommendationsCard({required this.overview});
+
+  final SecurityOverview overview;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Text(
+              'Recommendations',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          for (final rec in overview.recommendations.take(4)) ...[
+            ListTile(
+              leading: Icon(_iconFor(rec.action)),
+              title: Text(rec.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(rec.description),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _open(context, rec.action),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  IconData _iconFor(String action) {
+    switch (action) {
+      case 'two_factor':
+        return Icons.phonelink_lock_outlined;
+      case 'biometric':
+        return Icons.fingerprint_outlined;
+      case 'devices':
+        return Icons.devices_outlined;
+      case 'email':
+        return Icons.mark_email_read_outlined;
+      case 'phone':
+        return Icons.phone_iphone_outlined;
+      default:
+        return Icons.shield_outlined;
+    }
+  }
+
+  void _open(BuildContext context, String action) {
+    switch (action) {
+      case 'two_factor':
+        context.push(AppRoutes.securityTwoFactor);
+      case 'biometric':
+        context.push(AppRoutes.securityBiometric);
+      case 'devices':
+        context.push(AppRoutes.securityDevices);
+      default:
+        break;
+    }
   }
 }

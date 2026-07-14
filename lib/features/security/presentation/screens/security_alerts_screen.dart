@@ -44,22 +44,51 @@ class SecurityAlertsScreen extends ConsumerWidget {
                 final time = event.createdAt != null
                     ? DateFormat('MMM d · HH:mm').format(event.createdAt!.toLocal())
                     : '';
-                return AnimatedOpacity(
-                  opacity: event.isRead ? 0.7 : 1,
-                  duration: const Duration(milliseconds: 250),
-                  child: Card(
-                    color: event.isRead ? null : scheme.primaryContainer.withValues(alpha: 0.25),
-                    child: ListTile(
-                      leading: Icon(_iconFor(event.eventType), color: scheme.primary),
-                      title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text([event.message, time].where((s) => s.isNotEmpty).join('\n')),
-                      onTap: () async {
-                        if (!event.isRead) {
-                          await ref.read(securityRepositoryProvider).markEventRead(event.id);
-                          ref.invalidate(securityEventsProvider);
-                          ref.invalidate(securityOverviewProvider);
-                        }
-                      },
+                final severityColor = switch (event.severity) {
+                  'critical' => scheme.error,
+                  'warning' => scheme.tertiary,
+                  _ => scheme.primary,
+                };
+                return Dismissible(
+                  key: ValueKey('alert-${event.id}'),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    decoration: BoxDecoration(
+                      color: scheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.delete_outline, color: scheme.onErrorContainer),
+                  ),
+                  onDismissed: (_) async {
+                    await ref.read(securityRepositoryProvider).deleteEvent(event.id);
+                    ref.invalidate(securityEventsProvider);
+                    ref.invalidate(securityOverviewProvider);
+                  },
+                  child: AnimatedOpacity(
+                    opacity: event.isRead ? 0.72 : 1,
+                    duration: const Duration(milliseconds: 250),
+                    child: Card(
+                      color: event.isRead ? null : severityColor.withValues(alpha: 0.12),
+                      child: ListTile(
+                        leading: Icon(_iconFor(event.eventType), color: severityColor),
+                        title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(
+                          [
+                            event.message,
+                            if (event.severity.isNotEmpty) event.severity.toUpperCase(),
+                            time,
+                          ].where((s) => s.isNotEmpty).join('\n'),
+                        ),
+                        onTap: () async {
+                          if (!event.isRead) {
+                            await ref.read(securityRepositoryProvider).markEventRead(event.id);
+                            ref.invalidate(securityEventsProvider);
+                            ref.invalidate(securityOverviewProvider);
+                          }
+                        },
+                      ),
                     ),
                   ),
                 );
@@ -81,14 +110,11 @@ class SecurityAlertsScreen extends ConsumerWidget {
       case 'two_fa_enabled':
       case 'two_fa_disabled':
         return Icons.phonelink_lock_outlined;
-      case 'biometric_enabled':
-      case 'biometric_disabled':
-        return Icons.fingerprint_outlined;
-      case 'failed_login':
       case 'suspicious_login':
+      case 'failed_login':
         return Icons.warning_amber_rounded;
       default:
-        return Icons.notifications_outlined;
+        return Icons.shield_outlined;
     }
   }
 }

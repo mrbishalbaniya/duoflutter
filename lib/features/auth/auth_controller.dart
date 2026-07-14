@@ -75,6 +75,36 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> completeTwoFactorLogin({
+    required String challengeToken,
+    required String code,
+  }) async {
+    state = state.copyWith(error: null);
+    try {
+      final user = await _auth.completeTwoFactorLogin(
+        challengeToken: challengeToken,
+        code: code,
+      );
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      rethrow;
+    }
+  }
+
+  Future<void> loginWithBiometric(String token) async {
+    state = state.copyWith(error: null);
+    try {
+      final user = await _auth.loginWithBiometric(token);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      rethrow;
+    }
+  }
+
   Future<void> loginWithGoogle() async {
     state = state.copyWith(error: null);
     try {
