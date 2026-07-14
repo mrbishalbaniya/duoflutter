@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/match_models.dart';
+import '../../core/models/user_models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/router/app_router.dart';
 import '../../widgets/duo_ui.dart';
@@ -77,7 +78,9 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
                               .loadProfiles(refresh: true, clearSwiped: true),
                         )
                       : _MatchDeckView(
-                          key: ValueKey(deck.stackKey),
+                          key: ValueKey(
+                            'deck-${deck.stackKey}-${deck.profiles.map((p) => p.resolvedUserId).join(',')}',
+                          ),
                           stackKey: _stackKey,
                           deck: deck,
                         ),
@@ -101,8 +104,8 @@ class _MatchDeckView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Bottom → top: last entry is the front card (current profile).
     final displayDeck = deck.deckProfiles.reversed.toList();
-    final current = deck.currentProfile!;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -134,7 +137,11 @@ class _MatchDeckView extends ConsumerWidget {
           MatchActionBar(
             disabled: deck.controlsDisabled,
             onSkip: () => stackKey.currentState?.swipeTop(SwipeDirection.left),
-            onInfo: () => _openDetail(context, ref, current),
+            onInfo: () {
+              // Always read latest current profile at tap time.
+              final live = ref.read(matchDeckControllerProvider).currentProfile;
+              if (live != null) _openDetail(context, ref, live);
+            },
             onLike: () => stackKey.currentState?.swipeTop(SwipeDirection.right),
           ),
           const SizedBox(height: 88),
@@ -143,12 +150,11 @@ class _MatchDeckView extends ConsumerWidget {
     );
   }
 
-  void _openDetail(BuildContext context, WidgetRef ref, profile) {
+  void _openDetail(BuildContext context, WidgetRef ref, DuoProfile profile) {
     ref.read(matchDeckControllerProvider.notifier).setDetailOpen(true);
     showMatchProfileDetail(
       context,
       profile: profile,
-      heroTag: matchProfileHeroTag(profile),
     ).whenComplete(
       () => ref.read(matchDeckControllerProvider.notifier).setDetailOpen(false),
     );
@@ -157,7 +163,7 @@ class _MatchDeckView extends ConsumerWidget {
   Future<void> _handleSwipe(
     BuildContext context,
     WidgetRef ref,
-    profile,
+    DuoProfile profile,
     SwipeAction action,
   ) async {
     try {

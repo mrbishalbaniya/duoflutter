@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/media/media_url.dart';
 import '../../../core/models/user_models.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../core/theme/duo_theme.dart';
@@ -9,13 +10,12 @@ import '../../../core/theme/duo_theme.dart';
 Future<void> showMatchProfileDetail(
   BuildContext context, {
   required DuoProfile profile,
-  required String heroTag,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => MatchProfileDetailSheet(profile: profile, heroTag: heroTag),
+    builder: (_) => MatchProfileDetailSheet(profile: profile),
   );
 }
 
@@ -23,11 +23,9 @@ class MatchProfileDetailSheet extends ConsumerStatefulWidget {
   const MatchProfileDetailSheet({
     super.key,
     required this.profile,
-    required this.heroTag,
   });
 
   final DuoProfile profile;
-  final String heroTag;
 
   @override
   ConsumerState<MatchProfileDetailSheet> createState() =>
@@ -49,7 +47,14 @@ class _MatchProfileDetailSheetState extends ConsumerState<MatchProfileDetailShee
   @override
   Widget build(BuildContext context) {
     final p = widget.profile;
-    final photos = p.profilePhotos;
+    final photos = p.allPhotos
+        .map((url) => resolveMediaUrl(url) ?? url)
+        .where((url) => url.isNotEmpty)
+        .toList();
+    if (photos.isEmpty) {
+      final fallback = resolveProfilePhotoUrl(p);
+      if (fallback.isNotEmpty) photos.add(fallback);
+    }
     final extraPhotos = photos.length > 1 ? photos.sublist(1) : <String>[];
     final scheme = Theme.of(context).colorScheme;
 
@@ -94,11 +99,12 @@ class _MatchProfileDetailSheetState extends ConsumerState<MatchProfileDetailShee
                     height: 220,
                     width: double.infinity,
                     child: photos.isNotEmpty
-                        ? Hero(
-                            tag: widget.heroTag,
-                            child: CachedNetworkImage(
-                              imageUrl: photos.first,
-                              fit: BoxFit.cover,
+                        ? CachedNetworkImage(
+                            imageUrl: photos.first,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => Container(
+                              color: scheme.surfaceContainerHighest,
+                              child: const Icon(Icons.person, size: 80),
                             ),
                           )
                         : Container(

@@ -1,10 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/media/cloudinary_url.dart';
 import '../../../core/media/media_url.dart';
 import '../../../core/models/user_models.dart';
-import '../../../core/widgets/duo_network_image.dart';
 import '../domain/match_domain.dart';
 import 'match_card_overlay.dart';
 
@@ -22,14 +22,13 @@ class SwipeableCardStack extends StatefulWidget {
     required this.disabled,
     required this.onSwipe,
     this.overlayBuilder,
-    this.heroTagBuilder,
   });
 
+  /// Bottom → top order. Last item is the swipeable front card.
   final List<DuoProfile> profiles;
   final bool disabled;
   final SwipeCommitCallback onSwipe;
   final Widget Function(DuoProfile profile, bool isTop)? overlayBuilder;
-  final String Function(DuoProfile profile)? heroTagBuilder;
 
   @override
   SwipeableCardStackState createState() => SwipeableCardStackState();
@@ -49,6 +48,16 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
       vsync: this,
       duration: const Duration(milliseconds: _swipeAnimationMs),
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant SwipeableCardStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldTop = oldWidget.profiles.isEmpty ? null : oldWidget.profiles.last.resolvedUserId;
+    final newTop = widget.profiles.isEmpty ? null : widget.profiles.last.resolvedUserId;
+    if (oldTop != newTop && !_flying) {
+      _drag = Offset.zero;
+    }
   }
 
   @override
@@ -75,28 +84,30 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
 
     _flyController.reset();
     await _flyController.forward();
+    if (!mounted) return;
     _commit(direction);
   }
 
   void _commit(SwipeDirection direction) {
-    final profile = widget.profiles.last;
-    final accepted = widget.onSwipe(direction, profile);
-    if (!accepted && mounted) {
-      setState(() {
-        _drag = Offset.zero;
-        _flying = false;
-      });
-      _flyController.reset();
+    if (widget.profiles.isEmpty) {
+      _resetDrag();
       return;
     }
-
-    if (mounted) {
-      setState(() {
-        _drag = Offset.zero;
-        _flying = false;
-      });
-      _flyController.reset();
+    final profile = widget.profiles.last;
+    final accepted = widget.onSwipe(direction, profile);
+    _resetDrag();
+    if (!accepted) {
+      // Parent rejected — card stays; drag already reset.
     }
+  }
+
+  void _resetDrag() {
+    if (!mounted) return;
+    setState(() {
+      _drag = Offset.zero;
+      _flying = false;
+    });
+    _flyController.reset();
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -152,147 +163,163 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
     final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard);
+    final cardKey = ValueKey('match-card-${profile.resolvedUserId ?? profile.displayName}-$index');
 
-    Widget card = ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Positioned.fill avoids a blank/white paint when CachedNetworkImage
-          // does not expand to the stack without explicit sizing.
-          Positioned.fill(
-            child: ColoredBox(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: DuoNetworkImage(
-                url: photo,
-                fit: BoxFit.cover,
-                preset: CloudinaryPreset.matchCard,
-                memCacheWidth: cloudinaryMemCacheWidth(CloudinaryPreset.matchCard),
-              ),
-            ),
+    final card = KeyedSubtree(
+      key: cardKey,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _CardPhoto(url: photo),
+              widget.overlayBuilder?.call(profile, isTop) ??
+                  MatchCardOverlay(profile: profile, isTopCard: isTop),
+            ],
           ),
-          widget.overlayBuilder?.call(profile, isTop) ??
-              MatchCardOverlay(profile: profile, isTopCard: isTop),
-        ],
+        ),
       ),
     );
 
     if (!isTop) {
       return Positioned.fill(
-        child: Transform.translate(
-          offset: Offset(0, yOffset),
-          child: Transform.scale(
-            scale: scale,
-            child: card,
+        child: IgnorePointer(
+          child: Transform.translate(
+            offset: Offset(0, yOffset),
+            child: Transform.scale(scale: scale, child: card),
           ),
         ),
       );
     }
 
-    final rotation = (_drag.dx / 180).clamp(-_rotationRange, _rotationRange) *
-        (3.14159 / 180);
+    final rotation = (_drag.dx / 180).clamp(-_rotationRange, _rotationRange) * (3.14159 / 180);
     final likeOpacity = (_drag.dx / 120).clamp(0.0, 1.0);
     final skipOpacity = (-_drag.dx / 120).clamp(0.0, 1.0);
 
-    if (_flying && _flyAnimation != null) {
-      return AnimatedBuilder(
-        animation: _flyAnimation!,
-        builder: (context, child) {
-          final offset = _flyAnimation!.value;
-          final rot = (offset.dx / 180).clamp(-_rotationRange, _rotationRange) *
-              (3.14159 / 180);
-          return _positionedTopCard(
-            offset: offset,
-            rotation: rot,
-            likeOpacity: likeOpacity,
-            skipOpacity: skipOpacity,
-            child: child!,
-          );
-        },
-        child: card,
-      );
-    }
-
-    return GestureDetector(
-      onPanUpdate: widget.disabled
-          ? null
-          : (d) => setState(() => _drag += d.delta),
-      onPanEnd: widget.disabled ? null : _onPanEnd,
-      child: _positionedTopCard(
-        offset: _drag,
-        rotation: rotation,
-        likeOpacity: likeOpacity,
-        skipOpacity: skipOpacity,
-        child: card,
+    // IMPORTANT: Positioned.fill must be the direct Stack child — never wrap it
+    // in GestureDetector first (that breaks layout → blank grey cards).
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: widget.disabled || _flying
+            ? null
+            : (d) => setState(() => _drag += d.delta),
+        onPanEnd: widget.disabled || _flying ? null : _onPanEnd,
+        child: AnimatedBuilder(
+          animation: _flying && _flyAnimation != null ? _flyAnimation! : const AlwaysStoppedAnimation(0),
+          builder: (context, child) {
+            final offset = _flying && _flyAnimation != null ? _flyAnimation!.value : _drag;
+            final rot = _flying && _flyAnimation != null
+                ? (offset.dx / 180).clamp(-_rotationRange, _rotationRange) * (3.14159 / 180)
+                : rotation;
+            final like = _flying ? (offset.dx / 120).clamp(0.0, 1.0) : likeOpacity;
+            final skip = _flying ? (-offset.dx / 120).clamp(0.0, 1.0) : skipOpacity;
+            return Transform.translate(
+              offset: offset,
+              child: Transform.rotate(
+                angle: rot,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (offset.dx > 14)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withValues(alpha: 0.35 * like),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (offset.dx < -14)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withValues(alpha: 0.35 * skip),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    child!,
+                    if (like > 0.08)
+                      Positioned(
+                        top: 36,
+                        left: 24,
+                        child: Opacity(
+                          opacity: like,
+                          child: _SwipeStamp(label: 'LIKE', color: Colors.green.shade400),
+                        ),
+                      ),
+                    if (skip > 0.08)
+                      Positioned(
+                        top: 36,
+                        right: 24,
+                        child: Opacity(
+                          opacity: skip,
+                          child: const _SwipeStamp(label: 'NOPE', color: Colors.redAccent),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+          child: card,
+        ),
       ),
     );
   }
+}
 
-  Widget _positionedTopCard({
-    required Offset offset,
-    required double rotation,
-    required double likeOpacity,
-    required double skipOpacity,
-    required Widget child,
-  }) {
-    return Positioned.fill(
-      child: Transform.translate(
-        offset: offset,
-        child: Transform.rotate(
-          angle: rotation,
-          child: Stack(
-            children: [
-              if (offset.dx > 14)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.green.withValues(alpha: 0.35 * likeOpacity),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (offset.dx < -14)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withValues(alpha: 0.35 * skipOpacity),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              child,
-              if (likeOpacity > 0.08)
-                Positioned(
-                  top: 36,
-                  left: 24,
-                  child: Opacity(
-                    opacity: likeOpacity,
-                    child: _SwipeStamp(label: 'LIKE', color: Colors.green.shade400),
-                  ),
-                ),
-              if (skipOpacity > 0.08)
-                Positioned(
-                  top: 36,
-                  right: 24,
-                  child: Opacity(
-                    opacity: skipOpacity,
-                    child: const _SwipeStamp(label: 'NOPE', color: Colors.redAccent),
-                  ),
-                ),
-            ],
+class _CardPhoto extends StatelessWidget {
+  const _CardPhoto({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final delivery = cloudinaryDeliveryUrl(url, preset: CloudinaryPreset.matchCard);
+    final imageUrl = delivery.isNotEmpty ? delivery : url;
+
+    if (imageUrl.isEmpty) {
+      return ColoredBox(
+        color: scheme.surfaceContainerHighest,
+        child: const Center(child: Icon(Icons.person, size: 80, color: Colors.white24)),
+      );
+    }
+
+    return ColoredBox(
+      color: scheme.surfaceContainerHighest,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        fadeInDuration: const Duration(milliseconds: 160),
+        placeholder: (_, __) => ColoredBox(
+          color: scheme.surfaceContainerHighest,
+          child: const Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
           ),
+        ),
+        errorWidget: (_, __, ___) => ColoredBox(
+          color: scheme.surfaceContainerHighest,
+          child: const Center(child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.white38)),
         ),
       ),
     );
