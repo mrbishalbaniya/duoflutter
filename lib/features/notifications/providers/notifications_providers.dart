@@ -5,7 +5,7 @@ import '../../../core/providers/core_providers.dart';
 import '../data/notification_local_store.dart';
 import '../domain/notification_item.dart';
 import '../services/local_notification_service.dart';
-import '../services/push_messaging_coordinator.dart';
+import '../services/notification_service.dart';
 import '../../settings/providers/settings_providers.dart';
 
 final notificationLocalStoreProvider = Provider<NotificationLocalStore>((ref) {
@@ -21,8 +21,8 @@ final localNotificationServiceProvider = Provider<LocalNotificationService>((ref
   return LocalNotificationService();
 });
 
-final pushMessagingCoordinatorProvider = Provider<PushMessagingCoordinator>((ref) {
-  return PushMessagingCoordinator(
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  return NotificationService(
     pushService: ref.watch(pushNotificationServiceProvider),
     repository: ref.watch(notificationRepositoryProvider),
     storage: ref.watch(localStorageProvider),
@@ -30,6 +30,9 @@ final pushMessagingCoordinatorProvider = Provider<PushMessagingCoordinator>((ref
     localNotifications: ref.watch(localNotificationServiceProvider),
   );
 });
+
+/// Legacy alias — prefer [notificationServiceProvider].
+final pushMessagingCoordinatorProvider = notificationServiceProvider;
 
 class NotificationsState {
   const NotificationsState({

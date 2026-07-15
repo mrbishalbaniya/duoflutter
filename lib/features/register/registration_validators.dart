@@ -95,6 +95,9 @@ String? validateBasicInfo(RegistrationData data) {
 }
 
 String? validateLocation(RegistrationData data) {
+  if (!data.gpsEnabled) {
+    return 'We need your GPS location to continue. Tap detect and allow permission.';
+  }
   if (data.country.trim().isEmpty) return 'Country is required';
   if (data.province.isEmpty) return 'Select a province';
   if (data.district.trim().length < 2) return 'District is required';

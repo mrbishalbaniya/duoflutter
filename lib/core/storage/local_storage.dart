@@ -26,6 +26,7 @@ class LocalStorage {
   static const _pushTokenKey = 'duo_push_token';
   static const _pendingNotificationTapKey = 'duo_pending_notification_tap';
   static const _firebaseOptionsKey = 'duo_firebase_options';
+  static const _lastNotifiedUpdateKey = 'duo_last_notified_update_version';
 
   String get themeMode {
     final stored = settings.get(_themeKey) ?? settings.get('theme_mode');
@@ -75,6 +76,17 @@ class LocalStorage {
       await settings.delete(_pendingNotificationTapKey);
     } else {
       await settings.put(_pendingNotificationTapKey, payload);
+    }
+  }
+
+  String? get lastNotifiedUpdateVersion =>
+      settings.get(_lastNotifiedUpdateKey) as String?;
+
+  Future<void> setLastNotifiedUpdateVersion(String? value) async {
+    if (value == null || value.isEmpty) {
+      await settings.delete(_lastNotifiedUpdateKey);
+    } else {
+      await settings.put(_lastNotifiedUpdateKey, value);
     }
   }
 }

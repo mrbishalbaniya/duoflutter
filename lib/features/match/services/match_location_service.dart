@@ -9,12 +9,22 @@ class DetectedLocation {
     required this.city,
     required this.latitude,
     required this.longitude,
+    this.country = 'Nepal',
+    this.province = '',
+    this.district = '',
+    this.municipality = '',
+    this.accuracyMeters,
   });
 
   final String label;
   final String city;
   final double latitude;
   final double longitude;
+  final String country;
+  final String province;
+  final String district;
+  final String municipality;
+  final double? accuracyMeters;
 }
 
 class MatchLocationService {
@@ -46,22 +56,28 @@ class MatchLocationService {
       ),
     );
 
-    final reverseLabel = await _reverseGeocodeLabel(
-      position.latitude,
-      position.longitude,
-    );
-    final city = normalizeCityPref(reverseLabel ?? 'Kathmandu, Nepal');
-    final label = reverseLabel ?? '$city, Nepal';
+    final details = await _reverseGeocodeDetails(position.latitude, position.longitude);
+    final municipality = details?['municipality'] ?? 'Kathmandu';
+    final district = details?['district'] ?? municipality;
+    final province = details?['province'] ?? 'Bagmati';
+    final country = details?['country'] ?? 'Nepal';
+    final city = normalizeCityPref(municipality);
+    final label = details?['label'] ?? '$city, $country';
 
     return DetectedLocation(
       label: label,
       city: city,
       latitude: position.latitude,
       longitude: position.longitude,
+      country: country,
+      province: province,
+      district: district,
+      municipality: municipality,
+      accuracyMeters: position.accuracy,
     );
   }
 
-  Future<String?> _reverseGeocodeLabel(double lat, double lng) async {
+  Future<Map<String, String>?> _reverseGeocodeDetails(double lat, double lng) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         'https://nominatim.openstreetmap.org/reverse',
@@ -80,16 +96,36 @@ class MatchLocationService {
       final address = response.data?['address'] as Map<String, dynamic>?;
       if (address == null) return null;
 
-      final city = address['city'] ??
-          address['town'] ??
-          address['village'] ??
-          address['municipality'] ??
-          address['county'] ??
-          address['state'];
-      if (city == null) return null;
+      String pick(List<String> keys) {
+        for (final key in keys) {
+          final value = address[key];
+          if (value != null && value.toString().trim().isNotEmpty) {
+            return value.toString().trim();
+          }
+        }
+        return '';
+      }
 
-      final country = address['country'] ?? 'Nepal';
-      return '$city, $country';
+      final municipality = pick(const [
+        'city',
+        'town',
+        'municipality',
+        'village',
+        'suburb',
+        'county',
+      ]);
+      final district = pick(const ['county', 'district', 'state_district', 'city_district']);
+      final province = pick(const ['state', 'province', 'region']);
+      final country = pick(const ['country']).isEmpty ? 'Nepal' : pick(const ['country']);
+      final city = municipality.isNotEmpty ? municipality : (district.isNotEmpty ? district : 'Kathmandu');
+
+      return {
+        'municipality': city,
+        'district': district.isNotEmpty ? district : city,
+        'province': province.isNotEmpty ? province : 'Bagmati',
+        'country': country,
+        'label': '$city, $country',
+      };
     } catch (_) {
       return null;
     }

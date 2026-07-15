@@ -1,12 +1,28 @@
 import 'package:equatable/equatable.dart';
 
-/// Backend-supported FCM notification types (see DuoBackend/notifications/dispatch.py).
+/// All backend FCM types (DuoBackend/notifications/constants.py) plus local types.
 enum DuoNotificationType {
   chatMessage('chat_message'),
+  messageReaction('message_reaction'),
   profileLike('profile_like'),
+  superLike('super_like'),
   newMatch('new_match'),
+  profileViewed('profile_viewed'),
+  profileVerified('profile_verified'),
+  photoApproved('photo_approved'),
+  verificationUpdate('verification_update'),
+  subscriptionPurchased('subscription_purchased'),
+  subscriptionExpired('subscription_expired'),
+  paymentSuccess('payment_success'),
+  paymentFailure('payment_failure'),
+  adminAnnouncement('admin_announcement'),
+  systemMaintenance('system_maintenance'),
+  marketing('marketing'),
+  securityAlert('security_alert'),
   callIncoming('call_incoming'),
   callMissed('call_missed'),
+  updateAvailable('update_available'),
+  event('event'),
   unknown('unknown');
 
   const DuoNotificationType(this.value);
@@ -15,29 +31,72 @@ enum DuoNotificationType {
 
   static DuoNotificationType fromValue(String? raw) {
     if (raw == null || raw.isEmpty) return DuoNotificationType.unknown;
+    final normalized = raw.trim().toLowerCase();
+    // Alias: backend may send profile_like with action SUPERLIKE.
     return DuoNotificationType.values.firstWhere(
-      (t) => t.value == raw,
+      (t) => t.value == normalized,
       orElse: () => DuoNotificationType.unknown,
     );
   }
 
   String get label => switch (this) {
         DuoNotificationType.chatMessage => 'Message',
+        DuoNotificationType.messageReaction => 'Reaction',
         DuoNotificationType.profileLike => 'Like',
+        DuoNotificationType.superLike => 'Super Like',
         DuoNotificationType.newMatch => 'Match',
+        DuoNotificationType.profileViewed => 'Profile view',
+        DuoNotificationType.profileVerified => 'Verified',
+        DuoNotificationType.photoApproved => 'Photo',
+        DuoNotificationType.verificationUpdate => 'Verification',
+        DuoNotificationType.subscriptionPurchased => 'Subscription',
+        DuoNotificationType.subscriptionExpired => 'Subscription',
+        DuoNotificationType.paymentSuccess => 'Payment',
+        DuoNotificationType.paymentFailure => 'Payment',
+        DuoNotificationType.adminAnnouncement => 'Announcement',
+        DuoNotificationType.systemMaintenance => 'System',
+        DuoNotificationType.marketing => 'News',
+        DuoNotificationType.securityAlert => 'Security',
         DuoNotificationType.callIncoming => 'Call',
         DuoNotificationType.callMissed => 'Missed call',
+        DuoNotificationType.updateAvailable => 'Update',
+        DuoNotificationType.event => 'Event',
         DuoNotificationType.unknown => 'Update',
       };
 
   String get emoji => switch (this) {
         DuoNotificationType.chatMessage => '💬',
+        DuoNotificationType.messageReaction => '✨',
         DuoNotificationType.profileLike => '❤️',
+        DuoNotificationType.superLike => '⭐',
         DuoNotificationType.newMatch => '💘',
+        DuoNotificationType.profileViewed => '👀',
+        DuoNotificationType.profileVerified ||
+        DuoNotificationType.photoApproved ||
+        DuoNotificationType.verificationUpdate =>
+          '✅',
+        DuoNotificationType.subscriptionPurchased ||
+        DuoNotificationType.subscriptionExpired ||
+        DuoNotificationType.paymentSuccess ||
+        DuoNotificationType.paymentFailure =>
+          '💳',
+        DuoNotificationType.adminAnnouncement ||
+        DuoNotificationType.systemMaintenance ||
+        DuoNotificationType.marketing =>
+          '📢',
+        DuoNotificationType.securityAlert => '🔐',
         DuoNotificationType.callIncoming => '📞',
         DuoNotificationType.callMissed => '📵',
+        DuoNotificationType.updateAvailable => '⬆️',
+        DuoNotificationType.event => '📅',
         DuoNotificationType.unknown => '🔔',
       };
+
+  bool get isChatFamily =>
+      this == DuoNotificationType.chatMessage || this == DuoNotificationType.messageReaction;
+
+  bool get isCallFamily =>
+      this == DuoNotificationType.callIncoming || this == DuoNotificationType.callMissed;
 }
 
 enum NotificationFilter {
@@ -138,9 +197,10 @@ class NotificationItem extends Equatable {
     if (filter == NotificationFilter.unread) return !isRead;
     return switch (filter) {
       NotificationFilter.all || NotificationFilter.unread => true,
-      NotificationFilter.messages => type == DuoNotificationType.chatMessage,
+      NotificationFilter.messages => type.isChatFamily,
       NotificationFilter.matches => type == DuoNotificationType.newMatch,
-      NotificationFilter.likes => type == DuoNotificationType.profileLike,
+      NotificationFilter.likes =>
+        type == DuoNotificationType.profileLike || type == DuoNotificationType.superLike,
     };
   }
 

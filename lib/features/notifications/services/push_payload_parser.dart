@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../domain/notification_item.dart';
 import '../data/notification_local_store.dart';
+import 'notification_router.dart';
 
 class ParsedPushPayload {
   const ParsedPushPayload({
@@ -14,6 +15,7 @@ class ParsedPushPayload {
     required this.tag,
     required this.data,
     required this.id,
+    this.conversationId = '',
   });
 
   final String title;
@@ -25,6 +27,14 @@ class ParsedPushPayload {
   final String tag;
   final Map<String, String> data;
   final String id;
+  final String conversationId;
+
+  /// Backend sends `sound: "1"|"0"` in the FCM data payload.
+  bool get playSound {
+    final raw = data['sound']?.trim().toLowerCase();
+    if (raw == null || raw.isEmpty) return true;
+    return raw != '0' && raw != 'false' && raw != 'off' && raw != 'no';
+  }
 
   NotificationItem toItem({bool isRead = false}) {
     return NotificationItem(
@@ -43,12 +53,17 @@ class ParsedPushPayload {
   }
 }
 
-/// Mirrors DuoFrontend/lib/push/fcm.ts notificationFromPayload + SW routing.
+/// Parse FCM remote messages into a stable [ParsedPushPayload].
 class PushPayloadParser {
   static ParsedPushPayload parse(RemoteMessage message) {
     final data = message.data.map((k, v) => MapEntry(k, '$v'));
     final n = message.notification;
-    final type = DuoNotificationType.fromValue(_pick(data['type']));
+
+    var type = DuoNotificationType.fromValue(_pick(data['type']));
+    if (type == DuoNotificationType.profileLike &&
+        data['action']?.toUpperCase() == 'SUPERLIKE') {
+      type = DuoNotificationType.superLike;
+    }
 
     var title = _pick(n?.title, data['title'], 'Duo');
     var body = _pick(n?.body, data['body'], 'You have a new update');
@@ -59,75 +74,57 @@ class PushPayloadParser {
       title = switch (type) {
         DuoNotificationType.newMatch => "It's a Match!",
         DuoNotificationType.profileLike => 'Someone liked you',
+        DuoNotificationType.superLike => 'Someone superliked you',
         DuoNotificationType.chatMessage => 'New message',
+        DuoNotificationType.messageReaction => 'New reaction',
         DuoNotificationType.callIncoming => 'Incoming call',
         DuoNotificationType.callMissed => 'Missed call',
-        DuoNotificationType.unknown => title,
+        DuoNotificationType.profileViewed => 'Someone viewed your profile',
+        DuoNotificationType.updateAvailable => 'Update Available',
+        DuoNotificationType.securityAlert => 'Security alert',
+        _ => title,
       };
     }
 
-    if (n?.body == null && data['body'] == null && type == DuoNotificationType.newMatch) {
-      body = score.isNotEmpty
-          ? 'You and $otherName have expressed interest in each other. $score% compatible — start chatting.'
-          : 'You and $otherName have expressed interest in each other. Start chatting on Duo.';
-    }
-
-    if (type == DuoNotificationType.profileLike) {
-      final action = data['action']?.toUpperCase();
-      if (action == 'SUPERLIKE') {
-        title = 'Someone superliked you';
+    if (n?.body == null && data['body'] == null) {
+      if (type == DuoNotificationType.newMatch) {
+        body = score.isNotEmpty
+            ? 'You and $otherName have expressed interest in each other. $score% compatible — start chatting.'
+            : 'You and $otherName have expressed interest in each other. Start chatting on Duo.';
+      } else if (type == DuoNotificationType.superLike) {
+        body = 'A special someone sent you a superlike. Open Duo to find out who.';
+      } else if (type == DuoNotificationType.updateAvailable) {
         body =
-            'A special someone sent you a superlike. Open Duo to find out who.';
+            'A new version of the app is available. Update now for the latest improvements and fixes.';
       }
     }
 
-    final deepLink = _resolveDeepLink(data, type);
-    final imageUrl = _pick(data['image']);
-    final iconUrl = _pick(data['icon']);
-    final tag = _pick(data['tag'], type.value);
+    final deepLink = NotificationRouter.resolveDefaultDeepLink(type: type, data: data);
+    final conversationId = _pick(
+      data['conversation_id'],
+      data['conversation'],
+      _conversationFromUrl(deepLink),
+    );
 
     return ParsedPushPayload(
       title: title,
       body: body,
       type: type,
       deepLink: deepLink,
-      imageUrl: imageUrl,
-      iconUrl: iconUrl,
-      tag: tag,
+      imageUrl: _pick(data['image']),
+      iconUrl: _pick(data['icon']),
+      tag: _pick(data['tag'], type.value),
       data: data,
       id: NotificationLocalStore.idFromPayload(data),
+      conversationId: conversationId,
     );
   }
 
-  static String _resolveDeepLink(Map<String, String> data, DuoNotificationType type) {
-    final url = _pick(data['url']);
-    if (url.isNotEmpty) return url;
-
-    final conversationId = _pick(data['conversation_id']);
-    if (conversationId.isNotEmpty) {
-      return '/chat?conversation=$conversationId';
-    }
-
-    return switch (type) {
-      DuoNotificationType.profileLike => '/discover?tab=likes-you',
-      DuoNotificationType.newMatch => '/chat',
-      DuoNotificationType.chatMessage => '/chat',
-      DuoNotificationType.callIncoming => _callDeepLink(data),
-      DuoNotificationType.callMissed => conversationId.isNotEmpty
-          ? '/chat?conversation=$conversationId'
-          : '/chat',
-      DuoNotificationType.unknown => '/chat',
-    };
-  }
-
-  static String _callDeepLink(Map<String, String> data) {
-    final conversationId = _pick(data['conversation_id']);
-    final callId = _pick(data['call_id']);
-    final callType = _pick(data['call_type'], 'voice');
-    if (conversationId.isNotEmpty && callId.isNotEmpty) {
-      return '/chat?conversation=$conversationId&call=$callId&call_type=$callType';
-    }
-    return '/chat';
+  static String _conversationFromUrl(String url) {
+    final uri = Uri.tryParse(url.startsWith('/') ? 'app://duo$url' : url);
+    return uri?.queryParameters['conversation'] ??
+        uri?.queryParameters['conversation_id'] ??
+        '';
   }
 
   static String _pick(String? a, [String? b, String? c]) {

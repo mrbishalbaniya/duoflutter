@@ -2,12 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../repositories/photo_repository.dart';
+import '../../match/services/match_location_service.dart';
+import '../about/about_quality.dart';
+import '../about/about_widgets.dart';
 import '../registration_constants.dart';
 import '../registration_controller.dart';
 import '../registration_models.dart';
@@ -175,57 +177,58 @@ class StepLocation extends ConsumerStatefulWidget {
 }
 
 class _StepLocationState extends ConsumerState<StepLocation> {
-  late final TextEditingController _country;
-  late final TextEditingController _district;
-  late final TextEditingController _municipality;
-  late final TextEditingController _currentLocation;
-  String _province = '';
+  final _locationService = MatchLocationService();
   bool _gpsLoading = false;
   String? _error;
   String? _gpsError;
+  DetectedLocation? _detected;
 
   @override
   void initState() {
     super.initState();
     final d = ref.read(registrationControllerProvider).data;
-    _country = TextEditingController(text: d.country);
-    _district = TextEditingController(text: d.district);
-    _municipality = TextEditingController(text: d.municipality);
-    _currentLocation = TextEditingController(text: d.currentLocation);
-    _province = d.province;
+    if (d.gpsEnabled &&
+        d.country.isNotEmpty &&
+        d.province.isNotEmpty &&
+        d.district.isNotEmpty &&
+        d.municipality.isNotEmpty) {
+      _detected = DetectedLocation(
+        label: d.currentLocation.isNotEmpty ? d.currentLocation : '${d.municipality}, ${d.country}',
+        city: d.municipality,
+        latitude: 0,
+        longitude: 0,
+        country: d.country,
+        province: d.province,
+        district: d.district,
+        municipality: d.municipality,
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _detect());
+    }
   }
 
-  @override
-  void dispose() {
-    _country.dispose();
-    _district.dispose();
-    _municipality.dispose();
-    _currentLocation.dispose();
-    super.dispose();
-  }
-
-  Future<void> _enableGps() async {
+  Future<void> _detect() async {
     setState(() {
       _gpsLoading = true;
       _gpsError = null;
+      _error = null;
     });
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        throw Exception('Location permission denied.');
-      }
-      final position = await Geolocator.getCurrentPosition();
-      setState(() {
-        _currentLocation.text =
-            '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
-      });
+      final detected = await _locationService.detectUserLocation();
+      if (!mounted) return;
+      setState(() => _detected = detected);
       ref.read(registrationControllerProvider.notifier).patchData(
-            (d) => d.copyWith(gpsEnabled: true, currentLocation: _currentLocation.text),
+            (d) => d.copyWith(
+              gpsEnabled: true,
+              currentLocation: detected.label,
+              country: detected.country,
+              province: detected.province,
+              district: detected.district,
+              municipality: detected.municipality,
+            ),
           );
     } catch (e) {
+      if (!mounted) return;
       setState(() => _gpsError = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _gpsLoading = false);
@@ -233,12 +236,18 @@ class _StepLocationState extends ConsumerState<StepLocation> {
   }
 
   Future<void> _submit() async {
+    final detected = _detected;
+    if (detected == null) {
+      setState(() => _error = 'We need your GPS location to continue. Tap detect and allow permission.');
+      return;
+    }
     final data = ref.read(registrationControllerProvider).data.copyWith(
-          country: _country.text.trim(),
-          province: _province,
-          district: _district.text.trim(),
-          municipality: _municipality.text.trim(),
-          currentLocation: _currentLocation.text.trim(),
+          country: detected.country,
+          province: detected.province,
+          district: detected.district,
+          municipality: detected.municipality,
+          currentLocation: detected.label,
+          gpsEnabled: true,
         );
     final error = validateLocation(data);
     if (error != null) {
@@ -251,50 +260,194 @@ class _StepLocationState extends ConsumerState<StepLocation> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final detected = _detected;
+    final statusLabel = _gpsLoading
+        ? 'Detecting…'
+        : detected != null
+            ? 'Detected location'
+            : 'Location needed';
+    final headline = _gpsLoading
+        ? 'Finding your precise position'
+        : detected?.label ?? 'Allow location access to continue';
+
     return RegistrationStepCard(
       title: 'Location',
-      subtitle: 'Help us connect you with people nearby across Nepal.',
+      subtitle:
+          'We’ll detect your place with GPS and save country, province, district, and city for matching.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextFormField(controller: _country, decoration: const InputDecoration(labelText: 'Country')),
-          const SizedBox(height: 12),
-          RegistrationSelectField(
-            label: 'Province',
-            value: _province,
-            options: nepalProvinces,
-            onChanged: (v) => setState(() => _province = v ?? ''),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(controller: _district, decoration: const InputDecoration(labelText: 'District', hintText: 'e.g. Kathmandu')),
-          const SizedBox(height: 12),
-          TextFormField(controller: _municipality, decoration: const InputDecoration(labelText: 'Municipality / City', hintText: 'e.g. Lalitpur')),
-          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextFormField(
-                  controller: _currentLocation,
-                  decoration: const InputDecoration(labelText: 'Current location', hintText: 'Detected or manual location'),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: scheme.primary.withValues(alpha: 0.15),
+                      ),
+                      child: Icon(Icons.my_location_rounded, color: scheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            statusLabel.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              color: scheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            headline,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.25,
+                                ),
+                          ),
+                          if (detected != null && detected.latitude != 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '${detected.latitude.toStringAsFixed(5)}, ${detected.longitude.toStringAsFixed(5)}'
+                              '${detected.accuracyMeters != null && detected.accuracyMeters! > 0 ? ' · ±${detected.accuracyMeters!.round()}m' : ''}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
+                if (detected != null) ...[
+                  const SizedBox(height: 14),
+                  Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _AdminCell(label: 'Country', value: detected.country)),
+                          const SizedBox(width: 10),
+                          Expanded(child: _AdminCell(label: 'Province', value: detected.province)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _AdminCell(label: 'District', value: detected.district)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _AdminCell(
+                              label: 'Municipality / City',
+                              value: detected.municipality,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 14),
                 OutlinedButton.icon(
-                  onPressed: _gpsLoading ? null : _enableGps,
+                  onPressed: _gpsLoading ? null : _detect,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const StadiumBorder(),
+                  ),
                   icon: _gpsLoading
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.my_location_outlined),
-                  label: Text(_gpsLoading ? 'Detecting...' : 'Use my location'),
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(detected != null ? Icons.refresh_rounded : Icons.my_location_rounded),
+                  label: Text(
+                    _gpsLoading
+                        ? 'Detecting precise location...'
+                        : detected != null
+                            ? 'Detect again'
+                            : 'Detect my location',
+                  ),
                 ),
-                RegistrationFieldError(message: _gpsError),
+                if (_gpsError != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_gpsError!, style: TextStyle(color: scheme.error, fontSize: 13)),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: TextStyle(color: scheme.error, fontSize: 13)),
+                ],
               ],
             ),
           ),
-          RegistrationFieldError(message: _error),
-          RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit),
+          RegistrationStepNavigation(
+            onBack: widget.onBack,
+            onNext: _submit,
+            loading: _gpsLoading,
+            disableNext: detected == null || _gpsLoading,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminCell extends StatelessWidget {
+  const _AdminCell({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.25)),
+        color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value.isEmpty ? '—' : value,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, height: 1.25),
+          ),
         ],
       ),
     );
@@ -364,6 +517,7 @@ class _StepEducationState extends ConsumerState<StepEducation> {
     return RegistrationStepCard(
       title: 'Education & career',
       subtitle: 'Share your education and what you do professionally.',
+      onSkip: () => widget.onContinue(),
       child: Column(
         children: [
           RegistrationChipSelect(label: 'Education level', value: _educationLevel.isEmpty ? null : _educationLevel, options: educationLevelOptions, onChanged: (v) => setState(() => _educationLevel = v)),
@@ -448,19 +602,48 @@ class _StepReligionState extends ConsumerState<StepReligion> {
     return RegistrationStepCard(
       title: 'Religion & culture',
       subtitle: 'Optional cultural details help with compatibility in Nepal.',
+      onSkip: () => widget.onContinue(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          RegistrationChipSelect(label: 'Religion', value: _religion.isEmpty ? null : _religion, options: religionOptions, onChanged: (v) => setState(() => _religion = v)),
-          const SizedBox(height: 16),
-          RegistrationSelectField(label: 'Caste', value: _caste, options: casteOptions, onChanged: (v) => setState(() => _caste = v ?? '')),
+          RegistrationChipSelect(
+            label: 'Religion',
+            value: _religion.isEmpty ? null : _religion,
+            options: religionOptions,
+            onChanged: (v) => setState(() => _religion = v),
+          ),
+          const SizedBox(height: 18),
+          RegistrationSelectField(
+            label: 'Caste',
+            value: _caste,
+            options: casteOptions,
+            onChanged: (v) => setState(() => _caste = v ?? ''),
+          ),
+          const SizedBox(height: 14),
+          RegistrationSelectField(
+            label: 'Gotra',
+            value: _gotra,
+            options: gotraOptions,
+            onChanged: (v) => setState(() => _gotra = v ?? ''),
+          ),
+          const SizedBox(height: 18),
+          RegistrationChipSelect(
+            label: 'Horoscope preference',
+            value: _horoscope.isEmpty ? null : _horoscope,
+            options: horoscopeOptions,
+            onChanged: (v) => setState(() => _horoscope = v),
+            columns: 2,
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _birthTime,
+            decoration: const InputDecoration(labelText: 'Birth time (optional)'),
+          ),
           const SizedBox(height: 12),
-          RegistrationSelectField(label: 'Gotra', value: _gotra, options: gotraOptions, onChanged: (v) => setState(() => _gotra = v ?? '')),
-          const SizedBox(height: 16),
-          RegistrationChipSelect(label: 'Horoscope preference', value: _horoscope.isEmpty ? null : _horoscope, options: horoscopeOptions, onChanged: (v) => setState(() => _horoscope = v)),
-          const SizedBox(height: 12),
-          TextFormField(controller: _birthTime, decoration: const InputDecoration(labelText: 'Birth time (optional)')),
-          const SizedBox(height: 12),
-          TextFormField(controller: _birthPlace, decoration: const InputDecoration(labelText: 'Birth place (optional)')),
+          TextFormField(
+            controller: _birthPlace,
+            decoration: const InputDecoration(labelText: 'Birth place (optional)'),
+          ),
           RegistrationFieldError(message: _error),
           RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit),
         ],
@@ -522,6 +705,7 @@ class _StepLifestyleState extends ConsumerState<StepLifestyle> {
     return RegistrationStepCard(
       title: 'Lifestyle',
       subtitle: 'Help matches understand your daily rhythm and habits.',
+      onSkip: () => widget.onContinue(),
       child: Column(
         children: [
           RegistrationChipSelect(label: 'Personality', value: _personality.isEmpty ? null : _personality, options: personalityOptions, onChanged: (v) => setState(() => _personality = v)),
@@ -578,6 +762,7 @@ class _StepInterestsState extends ConsumerState<StepInterests> {
     return RegistrationStepCard(
       title: 'Interests',
       subtitle: 'Pick at least 5 interests to improve your matches.',
+      onSkip: () => widget.onContinue(),
       child: Column(
         children: [
           RegistrationMultiChipSelect(
@@ -654,39 +839,56 @@ class _StepPreferencesState extends ConsumerState<StepPreferences> {
     return RegistrationStepCard(
       title: 'Match preferences',
       subtitle: 'Tell us who you would like to meet.',
+      onSkip: () => widget.onContinue(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          RegistrationChipSelect(label: 'Looking for', value: _lookingFor.isEmpty ? null : _lookingFor, options: lookingForOptions, onChanged: (v) => setState(() => _lookingFor = v)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownMenuFormField<int>(
-                  initialSelection: _prefAgeMin,
-                  label: const Text('Min age'),
-                  dropdownMenuEntries: List.generate(63, (i) => DropdownMenuEntry(value: i + 18, label: '${i + 18}')),
-                  onSelected: (v) => setState(() => _prefAgeMin = v ?? _prefAgeMin),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownMenuFormField<int>(
-                  initialSelection: _prefAgeMax,
-                  label: const Text('Max age'),
-                  dropdownMenuEntries: List.generate(63, (i) => DropdownMenuEntry(value: i + 18, label: '${i + 18}')),
-                  onSelected: (v) => setState(() => _prefAgeMax = v ?? _prefAgeMax),
-                ),
-              ),
-            ],
+          RegistrationChipSelect(
+            label: 'Looking for',
+            value: _lookingFor.isEmpty ? null : _lookingFor,
+            options: lookingForOptions,
+            onChanged: (v) => setState(() => _lookingFor = v),
+          ),
+          const SizedBox(height: 18),
+          RegistrationAgeRangeSlider(
+            minAge: _prefAgeMin,
+            maxAge: _prefAgeMax,
+            onChanged: (range) {
+              setState(() {
+                _prefAgeMin = range.start.round();
+                _prefAgeMax = range.end.round();
+              });
+            },
+          ),
+          const SizedBox(height: 18),
+          RegistrationChipSelect(
+            label: 'Distance',
+            value: _distancePreference.isEmpty ? null : _distancePreference,
+            options: distanceOptions,
+            onChanged: (v) => setState(() => _distancePreference = v),
+            columns: 1,
           ),
           const SizedBox(height: 16),
-          RegistrationChipSelect(label: 'Distance', value: _distancePreference.isEmpty ? null : _distancePreference, options: distanceOptions, onChanged: (v) => setState(() => _distancePreference = v), columns: 1),
+          RegistrationChipSelect(
+            label: 'Preferred religion',
+            value: _preferredReligion.isEmpty ? null : _preferredReligion,
+            options: religionOptions,
+            onChanged: (v) => setState(() => _preferredReligion = v),
+          ),
           const SizedBox(height: 16),
-          RegistrationChipSelect(label: 'Preferred religion', value: _preferredReligion.isEmpty ? null : _preferredReligion, options: religionOptions, onChanged: (v) => setState(() => _preferredReligion = v)),
+          RegistrationChipSelect(
+            label: 'Open to inter-caste?',
+            value: _interCaste.isEmpty ? null : _interCaste,
+            options: marriagePrefOptions,
+            onChanged: (v) => setState(() => _interCaste = v),
+          ),
           const SizedBox(height: 16),
-          RegistrationChipSelect(label: 'Open to inter-caste?', value: _interCaste.isEmpty ? null : _interCaste, options: marriagePrefOptions, onChanged: (v) => setState(() => _interCaste = v)),
-          const SizedBox(height: 16),
-          RegistrationChipSelect(label: 'Open to inter-religion?', value: _interReligion.isEmpty ? null : _interReligion, options: marriagePrefOptions, onChanged: (v) => setState(() => _interReligion = v)),
+          RegistrationChipSelect(
+            label: 'Open to inter-religion?',
+            value: _interReligion.isEmpty ? null : _interReligion,
+            options: marriagePrefOptions,
+            onChanged: (v) => setState(() => _interReligion = v),
+          ),
           RegistrationFieldError(message: _error),
           RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit),
         ],
@@ -712,6 +914,8 @@ class _StepAboutState extends ConsumerState<StepAbout> {
   late final TextEditingController _lookingForText;
   late final TextEditingController _futureGoals;
   String? _error;
+  String? _toast;
+  bool _generating = false;
 
   @override
   void initState() {
@@ -720,14 +924,80 @@ class _StepAboutState extends ConsumerState<StepAbout> {
     _bio = TextEditingController(text: d.bio);
     _lookingForText = TextEditingController(text: d.lookingForText);
     _futureGoals = TextEditingController(text: d.futureGoals);
+    _bio.addListener(_onChanged);
+    _lookingForText.addListener(_onChanged);
+    _futureGoals.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _bio.removeListener(_onChanged);
+    _lookingForText.removeListener(_onChanged);
+    _futureGoals.removeListener(_onChanged);
     _bio.dispose();
     _lookingForText.dispose();
     _futureGoals.dispose();
     super.dispose();
+  }
+
+  void _persistDraft({bool aboutStepSkipped = false}) {
+    ref.read(registrationControllerProvider.notifier).patchData(
+          (d) => d.copyWith(
+            bio: _bio.text,
+            lookingForText: _lookingForText.text,
+            futureGoals: _futureGoals.text,
+            aboutStepSkipped: aboutStepSkipped,
+          ),
+        );
+  }
+
+  Future<void> _generate() async {
+    final hasExisting = _bio.text.trim().isNotEmpty ||
+        _lookingForText.text.trim().isNotEmpty ||
+        _futureGoals.text.trim().isNotEmpty;
+    if (hasExisting) {
+      final ok = await confirmReplaceAboutCopy(context);
+      if (!ok || !mounted) return;
+    }
+
+    setState(() {
+      _generating = true;
+      _error = null;
+      _toast = null;
+    });
+    try {
+      final copy = await ref.read(profileRepositoryProvider).generateProfileCopy(
+            style: 'friendly',
+            language: 'en',
+            force: true,
+            apply: false,
+          );
+      if (!mounted) return;
+      final bio = truncateAtSentence(copy.bio, AboutLimits.bio.max);
+      final looking = truncateAtSentence(copy.lookingFor, AboutLimits.lookingFor.max);
+      final goals = truncateAtSentence(copy.futureGoals, AboutLimits.futureGoals.max);
+      setState(() {
+        _bio.text = bio;
+        _lookingForText.text = looking;
+        _futureGoals.text = goals;
+        _toast = 'Generated from your profile';
+      });
+      _persistDraft(aboutStepSkipped: false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _toast = 'Unable to generate profile. Please try again.');
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  Future<void> _skip() async {
+    _persistDraft(aboutStepSkipped: true);
+    await widget.onContinue();
   }
 
   Future<void> _submit() async {
@@ -735,6 +1005,7 @@ class _StepAboutState extends ConsumerState<StepAbout> {
           bio: _bio.text.trim(),
           lookingForText: _lookingForText.text.trim(),
           futureGoals: _futureGoals.text.trim(),
+          aboutStepSkipped: false,
         );
     final error = validateAbout(data);
     if (error != null) {
@@ -745,20 +1016,125 @@ class _StepAboutState extends ConsumerState<StepAbout> {
     await widget.onContinue();
   }
 
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    required AboutFieldLimits limits,
+    required String placeholder,
+    required int maxLines,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = controller.text;
+    final quality = assessWritingQuality(text, limits);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          maxLength: limits.max + 40,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+              const SizedBox.shrink(),
+          decoration: InputDecoration(
+            alignLabelWithHint: true,
+            hintText: placeholder,
+            hintMaxLines: 3,
+            hintStyle: TextStyle(
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: AboutQualityMeter(quality: quality)),
+            const SizedBox(width: 12),
+            AboutCharCounter(length: text.trim().length, min: limits.min, max: limits.max),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return RegistrationStepCard(
       title: 'About you',
-      subtitle: 'Write a compelling bio so great matches can find you.',
+      subtitle: 'Write in your voice. Authentic profiles get better matches.',
+      onSkip: _skip,
+      skipDisabled: _generating,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextFormField(controller: _bio, maxLines: 4, decoration: const InputDecoration(labelText: 'Bio', alignLabelWithHint: true)),
-          const SizedBox(height: 12),
-          TextFormField(controller: _lookingForText, maxLines: 3, decoration: const InputDecoration(labelText: 'What are you looking for?', alignLabelWithHint: true)),
-          const SizedBox(height: 12),
-          TextFormField(controller: _futureGoals, maxLines: 3, decoration: const InputDecoration(labelText: 'Future goals', alignLabelWithHint: true)),
+          OutlinedButton.icon(
+            onPressed: _generating ? null : _generate,
+            icon: _generating
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
+                    ),
+                  )
+                : Icon(Icons.auto_awesome_rounded, color: scheme.primary, size: 18),
+            label: Text(_generating ? 'Generating...' : 'Generate from My Profile'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: scheme.primary,
+              side: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
+              backgroundColor: scheme.primary.withValues(alpha: 0.1),
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          if (_toast != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _toast!,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _toast!.startsWith('Unable') ? scheme.error : scheme.primary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          _field(
+            label: 'Bio',
+            controller: _bio,
+            limits: AboutLimits.bio,
+            placeholder: AboutPlaceholders.bio,
+            maxLines: 5,
+          ),
+          const SizedBox(height: 18),
+          _field(
+            label: 'What are you looking for?',
+            controller: _lookingForText,
+            limits: AboutLimits.lookingFor,
+            placeholder: AboutPlaceholders.lookingFor,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 18),
+          _field(
+            label: 'Future goals',
+            controller: _futureGoals,
+            limits: AboutLimits.futureGoals,
+            placeholder: AboutPlaceholders.futureGoals,
+            maxLines: 4,
+          ),
           RegistrationFieldError(message: _error),
-          RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit),
+          RegistrationStepNavigation(
+            onBack: widget.onBack,
+            onNext: _submit,
+            loading: _generating,
+            disableNext: _generating,
+          ),
         ],
       ),
     );

@@ -68,18 +68,18 @@ class PermissionWelcomeScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 18),
                             _WelcomePoint(
-                              icon: Icons.tune_rounded,
-                              text: 'We\'ll ask for one permission at a time.',
+                              icon: Icons.toggle_on_rounded,
+                              text: 'Enable or disable each permission on one screen.',
                             ),
                             const SizedBox(height: 10),
                             _WelcomePoint(
                               icon: Icons.skip_next_rounded,
-                              text: 'Optional permissions can be skipped.',
+                              text: 'Optional items can stay off — continue anytime.',
                             ),
                             const SizedBox(height: 10),
                             _WelcomePoint(
                               icon: Icons.settings_suggest_rounded,
-                              text: 'You can manage everything later in Settings.',
+                              text: 'You can change everything later in Settings.',
                             ),
                           ],
                         ),

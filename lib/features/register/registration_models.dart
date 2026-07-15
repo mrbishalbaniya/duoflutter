@@ -137,6 +137,7 @@ class RegistrationData extends Equatable {
     this.bio = '',
     this.lookingForText = '',
     this.futureGoals = '',
+    this.aboutStepSkipped = false,
     this.photos = const [],
   });
 
@@ -188,6 +189,7 @@ class RegistrationData extends Equatable {
   final String bio;
   final String lookingForText;
   final String futureGoals;
+  final bool aboutStepSkipped;
   final List<RegistrationPhoto> photos;
 
   RegistrationData copyWith({
@@ -239,6 +241,7 @@ class RegistrationData extends Equatable {
     String? bio,
     String? lookingForText,
     String? futureGoals,
+    bool? aboutStepSkipped,
     List<RegistrationPhoto>? photos,
   }) {
     return RegistrationData(
@@ -290,6 +293,7 @@ class RegistrationData extends Equatable {
       bio: bio ?? this.bio,
       lookingForText: lookingForText ?? this.lookingForText,
       futureGoals: futureGoals ?? this.futureGoals,
+      aboutStepSkipped: aboutStepSkipped ?? this.aboutStepSkipped,
       photos: photos ?? this.photos,
     );
   }
@@ -342,6 +346,7 @@ class RegistrationData extends Equatable {
       'bio': bio,
       'lookingForText': lookingForText,
       'futureGoals': futureGoals,
+      'aboutStepSkipped': aboutStepSkipped,
     };
   }
 
@@ -393,6 +398,7 @@ class RegistrationData extends Equatable {
       bio: json['bio'] as String? ?? '',
       lookingForText: json['lookingForText'] as String? ?? '',
       futureGoals: json['futureGoals'] as String? ?? '',
+      aboutStepSkipped: json['aboutStepSkipped'] as bool? ?? false,
     );
   }
 
@@ -446,6 +452,7 @@ class RegistrationData extends Equatable {
         bio,
         lookingForText,
         futureGoals,
+        aboutStepSkipped,
         photos,
       ];
 }

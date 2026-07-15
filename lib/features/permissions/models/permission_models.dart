@@ -126,12 +126,14 @@ class PermissionSetupState {
     this.statuses = const {},
     this.isRequesting = false,
     this.showSuccess = false,
+    this.requestingType,
   });
 
   final int currentStep;
   final Map<DuoPermissionType, DuoPermissionStatus> statuses;
   final bool isRequesting;
   final bool showSuccess;
+  final DuoPermissionType? requestingType;
 
   int get totalSteps => permissionSetupOrder.length;
 
@@ -139,17 +141,23 @@ class PermissionSetupState {
 
   bool get isLastStep => currentStep >= totalSteps - 1;
 
+  int get enabledCount =>
+      statuses.values.where((s) => s.isGranted).length;
+
   PermissionSetupState copyWith({
     int? currentStep,
     Map<DuoPermissionType, DuoPermissionStatus>? statuses,
     bool? isRequesting,
     bool? showSuccess,
+    DuoPermissionType? requestingType,
+    bool clearRequestingType = false,
   }) {
     return PermissionSetupState(
       currentStep: currentStep ?? this.currentStep,
       statuses: statuses ?? this.statuses,
       isRequesting: isRequesting ?? this.isRequesting,
       showSuccess: showSuccess ?? this.showSuccess,
+      requestingType: clearRequestingType ? null : (requestingType ?? this.requestingType),
     );
   }
 }

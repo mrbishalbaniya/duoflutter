@@ -182,12 +182,25 @@ class NotificationCard extends StatelessWidget {
 
   Color _accentFor(DuoNotificationType type) {
     return switch (type) {
-      DuoNotificationType.chatMessage => const Color(0xFF5C8DFF),
-      DuoNotificationType.profileLike => DuoColors.primary,
+      DuoNotificationType.chatMessage || DuoNotificationType.messageReaction =>
+        const Color(0xFF5C8DFF),
+      DuoNotificationType.profileLike || DuoNotificationType.superLike => DuoColors.primary,
       DuoNotificationType.newMatch => const Color(0xFFE91E8C),
       DuoNotificationType.callIncoming => const Color(0xFF4CAF50),
       DuoNotificationType.callMissed => const Color(0xFFFF9800),
-      DuoNotificationType.unknown => DuoColors.primaryContainer,
+      DuoNotificationType.updateAvailable => const Color(0xFFD4A574),
+      DuoNotificationType.securityAlert => const Color(0xFFEF4444),
+      DuoNotificationType.profileViewed => const Color(0xFF8B5CF6),
+      DuoNotificationType.verificationUpdate ||
+      DuoNotificationType.profileVerified ||
+      DuoNotificationType.photoApproved =>
+        const Color(0xFF22C55E),
+      DuoNotificationType.paymentSuccess ||
+      DuoNotificationType.paymentFailure ||
+      DuoNotificationType.subscriptionPurchased ||
+      DuoNotificationType.subscriptionExpired =>
+        const Color(0xFFD4A574),
+      _ => DuoColors.primaryContainer,
     };
   }
 }

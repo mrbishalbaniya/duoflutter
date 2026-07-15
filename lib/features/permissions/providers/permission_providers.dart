@@ -74,34 +74,70 @@ final permissionStatusesSnapshotProvider =
 
 class PermissionSetupController extends StateNotifier<PermissionSetupState> {
   PermissionSetupController(this._ref) : super(const PermissionSetupState()) {
-    _refreshStatuses();
+    refreshStatuses();
   }
 
   final Ref _ref;
 
   PermissionService get _service => _ref.read(permissionServiceProvider);
 
-  Future<void> _refreshStatuses() async {
+  Future<void> refreshStatuses() async {
     final statuses = await _service.checkAll();
-    state = state.copyWith(statuses: statuses);
+    state = state.copyWith(statuses: statuses, clearRequestingType: true, isRequesting: false);
   }
 
   Future<DuoPermissionStatus> allowCurrent() async {
     final definition = state.currentDefinition;
-    state = state.copyWith(isRequesting: true, showSuccess: false);
+    return togglePermission(definition.type, enable: true);
+  }
 
-    final status = definition.type == DuoPermissionType.notifications
+  /// Enable requests OS permission; disable opens system settings (cannot revoke in-app).
+  Future<DuoPermissionStatus> togglePermission(
+    DuoPermissionType type, {
+    required bool enable,
+  }) async {
+    final current = state.statuses[type] ?? DuoPermissionStatus.notDetermined;
+
+    if (!enable) {
+      if (current.isGranted) {
+        await _service.openSystemSettings();
+        await refreshStatuses();
+        return state.statuses[type] ?? current;
+      }
+      final next = Map<DuoPermissionType, DuoPermissionStatus>.from(state.statuses)
+        ..[type] = DuoPermissionStatus.denied;
+      state = state.copyWith(statuses: next);
+      return DuoPermissionStatus.denied;
+    }
+
+    state = state.copyWith(
+      isRequesting: true,
+      requestingType: type,
+      showSuccess: false,
+    );
+
+    final status = type == DuoPermissionType.notifications
         ? await requestAppNotificationsAccess(_ref)
-        : await _service.request(definition.type);
+        : await _service.request(type);
     final nextStatuses = Map<DuoPermissionType, DuoPermissionStatus>.from(state.statuses)
-      ..[definition.type] = status;
+      ..[type] = status;
 
     state = state.copyWith(
       statuses: nextStatuses,
       isRequesting: false,
-      showSuccess: status.isGranted && state.isLastStep,
+      clearRequestingType: true,
+      showSuccess: nextStatuses.values.where((s) => s.isGranted).length == permissionSetupOrder.length,
     );
     return status;
+  }
+
+  Future<void> enableAllRecommended() async {
+    for (final definition in permissionSetupOrder) {
+      if (definition.optional) continue;
+      final status = state.statuses[definition.type];
+      if (status != null && status.isGranted) continue;
+      await togglePermission(definition.type, enable: true);
+    }
   }
 
   void skipCurrent() {

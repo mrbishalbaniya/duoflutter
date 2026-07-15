@@ -1,48 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/router/app_router.dart';
-import '../../discover/domain/discover_models.dart';
-import '../../discover/providers/discover_providers.dart';
+import '../domain/notification_item.dart';
+import '../domain/notification_tap_payload.dart';
+import 'notification_router.dart';
 
-/// Mirrors DuoFrontend firebase-messaging-sw.js targetPathFromNotification.
+/// Deprecated shim — use [NotificationRouter] for new code.
 class PushNavigationService {
   static void navigateFromDeepLink({
     required GoRouter router,
     required WidgetRef ref,
     required String deepLink,
+    DuoNotificationType type = DuoNotificationType.unknown,
   }) {
-    final uri = Uri.tryParse(deepLink.startsWith('/') ? 'app://host$deepLink' : deepLink);
-    if (uri == null) {
-      router.go(AppRoutes.chat);
-      return;
-    }
-
-    final path = uri.path;
-    final conversationId = uri.queryParameters['conversation'] ??
-        uri.queryParameters['conversation_id'];
-
-    if (conversationId != null && conversationId.isNotEmpty) {
-      router.push('/chat/$conversationId');
-      return;
-    }
-
-    if (path.contains('/chat')) {
-      router.go(AppRoutes.chat);
-      return;
-    }
-
-    final tab = uri.queryParameters['tab'];
-    if (path.contains('/discover') || tab != null) {
-      if (tab == 'likes-you') {
-        ref.read(discoverTabProvider.notifier).state = DiscoverTab.received;
-      } else if (tab == 'visited-you') {
-        ref.read(discoverTabProvider.notifier).state = DiscoverTab.visitors;
-      }
-      router.go(AppRoutes.discover);
-      return;
-    }
-
-    router.go(AppRoutes.chat);
+    NotificationRouter.navigate(
+      router: router,
+      ref: ref,
+      payload: NotificationTapPayload(
+        deepLink: deepLink,
+        type: type,
+      ),
+    );
   }
 }

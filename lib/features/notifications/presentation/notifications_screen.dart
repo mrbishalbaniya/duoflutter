@@ -7,8 +7,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/duo_theme.dart';
 import '../../../widgets/duo_ui.dart';
 import '../domain/notification_item.dart';
+import '../domain/notification_tap_payload.dart';
 import '../providers/notifications_providers.dart';
-import '../services/push_navigation_service.dart';
+import '../services/notification_router.dart';
 import 'widgets/notification_card.dart';
 import 'widgets/notification_filter_bar.dart';
 
@@ -184,10 +185,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void _openNotification(NotificationItem item) {
     HapticFeedback.lightImpact();
     ref.read(notificationsControllerProvider.notifier).markRead(item.id);
-    PushNavigationService.navigateFromDeepLink(
+    final data = item.data.map((k, v) => MapEntry(k, '$v'));
+    final conversationId = data['conversation_id'] ?? data['conversation'] ?? '';
+    NotificationRouter.navigate(
       router: GoRouter.of(context),
       ref: ref,
-      deepLink: item.deepLink,
+      payload: NotificationTapPayload(
+        deepLink: item.deepLink.isNotEmpty ? item.deepLink : AppRoutes.notifications,
+        type: item.type,
+        conversationId: conversationId,
+        notificationId: item.id,
+      ),
     );
   }
 }

@@ -94,26 +94,60 @@ class RegistrationStepCard extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.onSkip,
+    this.skipLabel = 'Skip for now',
+    this.skipDisabled = false,
     required this.child,
   });
 
   final String title;
   final String? subtitle;
+  final VoidCallback? onSkip;
+  final String skipLabel;
+  final bool skipDisabled;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return DuoGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+              if (onSkip != null)
+                TextButton(
+                  onPressed: skipDisabled
+                      ? null
+                      : () {
+                          HapticFeedback.lightImpact();
+                          onSkip!();
+                        },
+                  style: TextButton.styleFrom(
+                    foregroundColor: scheme.onSurfaceVariant,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    skipLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+            ],
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 8),
@@ -230,7 +264,7 @@ class RegistrationChipSelect<T extends String> extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (label != null)
           Padding(
@@ -239,10 +273,11 @@ class RegistrationChipSelect<T extends String> extends StatelessWidget {
           ),
         LayoutBuilder(
           builder: (context, constraints) {
-            final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+            final gap = 8.0;
+            final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
             return Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: gap,
+              runSpacing: gap,
               children: options.map((option) {
                 final active = value == option.value;
                 return SizedBox(
@@ -262,11 +297,18 @@ class RegistrationChipSelect<T extends String> extends StatelessWidget {
                                 gradient: DuoGradients.brand,
                                 borderRadius: BorderRadius.circular(18),
                               )
-                            : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            : BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: scheme.outlineVariant.withValues(alpha: 0.35),
+                                ),
+                              ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                         child: Text(
                           option.label,
                           textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: active ? Colors.white : scheme.onSurfaceVariant,
@@ -376,15 +418,21 @@ class RegistrationSelectField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownMenuFormField<String>(
-          initialSelection: value.isEmpty ? null : value,
-          label: Text(label),
-          dropdownMenuEntries: options
-              .map((o) => DropdownMenuEntry<String>(value: o, label: o))
-              .toList(),
-          onSelected: onChanged,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return DropdownMenuFormField<String>(
+              initialSelection: value.isEmpty ? null : value,
+              label: Text(label),
+              width: constraints.maxWidth,
+              expandedInsets: EdgeInsets.zero,
+              dropdownMenuEntries: options
+                  .map((o) => DropdownMenuEntry<String>(value: o, label: o))
+                  .toList(),
+              onSelected: onChanged,
+            );
+          },
         ),
         RegistrationFieldError(message: error),
       ],
@@ -411,17 +459,115 @@ class RegistrationOptionSelectField<T extends String> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownMenuFormField<T>(
-          initialSelection: value.isEmpty ? null : value as T,
-          label: Text(label),
-          dropdownMenuEntries: options
-              .map((o) => DropdownMenuEntry<T>(value: o.value, label: o.label))
-              .toList(),
-          onSelected: onChanged,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return DropdownMenuFormField<T>(
+              initialSelection: value.isEmpty ? null : value as T,
+              label: Text(label),
+              width: constraints.maxWidth,
+              expandedInsets: EdgeInsets.zero,
+              dropdownMenuEntries: options
+                  .map((o) => DropdownMenuEntry<T>(value: o.value, label: o.label))
+                  .toList(),
+              onSelected: onChanged,
+            );
+          },
         ),
         RegistrationFieldError(message: error),
+      ],
+    );
+  }
+}
+
+class RegistrationAgeRangeSlider extends StatelessWidget {
+  const RegistrationAgeRangeSlider({
+    super.key,
+    required this.minAge,
+    required this.maxAge,
+    required this.onChanged,
+    this.min = 18,
+    this.max = 80,
+    this.label = 'Preferred age range',
+  });
+
+  final int minAge;
+  final int maxAge;
+  final ValueChanged<RangeValues> onChanged;
+  final int min;
+  final int max;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final lo = minAge.clamp(min, max).toDouble();
+    final hi = maxAge.clamp(min, max).toDouble();
+    final values = RangeValues(lo <= hi ? lo : hi, lo <= hi ? hi : lo);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: scheme.primary.withValues(alpha: 0.14),
+                ),
+                child: Text(
+                  '${values.start.round()} – ${values.end.round()}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            activeTrackColor: scheme.primary,
+            inactiveTrackColor: scheme.surfaceContainerHighest,
+            thumbColor: scheme.primary,
+            overlayColor: scheme.primary.withValues(alpha: 0.16),
+            rangeValueIndicatorShape: const PaddleRangeSliderValueIndicatorShape(),
+            showValueIndicator: ShowValueIndicator.onDrag,
+          ),
+          child: RangeSlider(
+            values: values,
+            min: min.toDouble(),
+            max: max.toDouble(),
+            divisions: max - min,
+            labels: RangeLabels('${values.start.round()}', '${values.end.round()}'),
+            onChanged: (next) {
+              HapticFeedback.selectionClick();
+              onChanged(next);
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('$min', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+              Text('$max', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
       ],
     );
   }

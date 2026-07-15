@@ -80,6 +80,11 @@
 	<string>Duo saves images and videos you download from chat to your photo library.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Duo can optionally access contacts to help you find friends and invite people you know.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

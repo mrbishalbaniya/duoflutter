@@ -27,6 +27,7 @@ import '../../features/permissions/providers/permission_providers.dart';
 import '../../features/permissions/presentation/screens/permission_welcome_screen.dart';
 import '../../features/permissions/presentation/screens/permission_setup_screen.dart';
 import '../../features/permissions/presentation/screens/permission_personalization_screen.dart';
+import '../../features/update/presentation/screens/update_screen.dart';
 import '../../features/security/presentation/screens/active_devices_screen.dart';
 import '../../features/security/presentation/screens/biometric_login_screen.dart';
 import '../../features/security/presentation/screens/change_password_screen.dart';
@@ -58,6 +59,7 @@ abstract final class AppRoutes {
   static const securityAlerts = '/security/alerts';
   static const securityChangePassword = '/security/change-password';
   static const notifications = '/notifications';
+  static const update = '/update';
   static const verify = '/verify';
   static const verifyDevice = '/verify/device';
   static const permissionWelcome = '/setup/welcome';
@@ -234,6 +236,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (_, __) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.update,
+        builder: (_, __) => const UpdateScreen(),
       ),
       GoRoute(
         path: AppRoutes.security,
