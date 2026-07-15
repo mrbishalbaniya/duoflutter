@@ -27,6 +27,9 @@ class DuoProfile extends Equatable {
     this.locationGhostMode = false,
     this.locationVisibility = 'friends',
     this.locationVisibilityFriends = const [],
+    this.mapLatitude,
+    this.mapLongitude,
+    this.locationIsLive = false,
     this.education,
     this.occupation,
     this.religion,
@@ -78,6 +81,9 @@ class DuoProfile extends Equatable {
               ?.map((e) => (e as num).toInt())
               .toList() ??
           const [],
+      mapLatitude: (json['map_latitude'] as num?)?.toDouble(),
+      mapLongitude: (json['map_longitude'] as num?)?.toDouble(),
+      locationIsLive: json['location_is_live'] as bool? ?? false,
       education: json['education'] as String?,
       occupation: json['occupation'] as String?,
       religion: json['religion'] as String?,
@@ -133,6 +139,9 @@ class DuoProfile extends Equatable {
   final bool locationGhostMode;
   final String locationVisibility;
   final List<int> locationVisibilityFriends;
+  final double? mapLatitude;
+  final double? mapLongitude;
+  final bool locationIsLive;
   final String? education;
   final String? occupation;
   final String? religion;

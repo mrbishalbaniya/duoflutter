@@ -20,6 +20,8 @@ class MapScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(liveLocationSyncProvider);
+    ref.watch(mapMatchRefreshProvider);
     final screenState = ref.watch(mapScreenControllerProvider);
     final notifier = ref.read(mapScreenControllerProvider.notifier);
     final userLocation = ref.watch(userLocationProvider);

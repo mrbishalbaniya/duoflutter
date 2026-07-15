@@ -372,6 +372,37 @@ final liveUserPositionProvider = StreamProvider.autoDispose<LatLng>((ref) {
   return ref.read(locationServiceProvider).watchPosition();
 });
 
+/// Uploads device GPS to backend for real-time friend map sharing.
+final liveLocationSyncProvider = Provider.autoDispose<void>((ref) {
+  final user = ref.watch(authControllerProvider).user;
+  if (user == null || user.profile.locationGhostMode) return;
+
+  final repo = ref.read(mapRepositoryProvider);
+  LatLng? lastUploaded;
+  DateTime? lastUploadAt;
+
+  ref.listen<AsyncValue<LatLng>>(liveUserPositionProvider, (_, next) {
+    final coords = next.valueOrNull;
+    if (coords == null) return;
+    final now = DateTime.now();
+    final moved = lastUploaded == null ||
+        (coords.latitude - lastUploaded!.latitude).abs() > 0.00015 ||
+        (coords.longitude - lastUploaded!.longitude).abs() > 0.00015;
+    final due = lastUploadAt == null || now.difference(lastUploadAt!) > const Duration(seconds: 30);
+    if (!moved && !due) return;
+    lastUploaded = coords;
+    lastUploadAt = now;
+    repo.updateLiveLocation(coords.latitude, coords.longitude).catchError((_) {});
+  });
+});
+
+final mapMatchRefreshProvider = Provider.autoDispose<void>((ref) {
+  final timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    ref.invalidate(mapMatchesProvider);
+  });
+  ref.onDispose(timer.cancel);
+});
+
 final mapGeocodeSuggestionsProvider =
     FutureProvider.autoDispose.family<List<GeocodeSuggestion>, String>((ref, query) async {
   if (query.trim().length < 2) return const [];

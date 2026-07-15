@@ -39,6 +39,13 @@ class MapRepository {
     return DuoProfile.fromJson(response.data!);
   }
 
+  Future<void> updateLiveLocation(double latitude, double longitude) async {
+    await _client.post<Map<String, dynamic>>(
+      '/profiles/me/location/',
+      data: {'latitude': latitude, 'longitude': longitude},
+    );
+  }
+
   Future<LatLng?> geocodePlace(String query) async {
     final results = await searchPlaces(query, limit: 1);
     return results.isEmpty ? null : results.first.coordinates;

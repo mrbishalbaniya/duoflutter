@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:latlong2/latlong.dart';
@@ -37,10 +38,39 @@ LatLng findCityCenter(String location) {
   return nepalMapDefaultCenter;
 }
 
+LatLng? parseGpsFromPrefValues(String? prefValues) {
+  if (prefValues == null || prefValues.trim().isEmpty) return null;
+  try {
+    final parsed = jsonDecode(prefValues) as Map<String, dynamic>;
+    final gps = parsed['gps'];
+    if (gps is! Map) return null;
+    final lat = double.tryParse('${gps['lat'] ?? gps['latitude']}');
+    final lng = double.tryParse('${gps['lng'] ?? gps['longitude']}');
+    if (lat == null || lng == null) return null;
+    if (lat.abs() > 90 || lng.abs() > 180) return null;
+    return LatLng(lat, lng);
+  } catch (_) {
+    return null;
+  }
+}
+
 LatLng resolveProfileCoordinates({
   required String? location,
   required int? userId,
+  double? mapLatitude,
+  double? mapLongitude,
+  String? prefValues,
 }) {
+  if (mapLatitude != null &&
+      mapLongitude != null &&
+      mapLatitude.abs() <= 90 &&
+      mapLongitude.abs() <= 180) {
+    return LatLng(mapLatitude, mapLongitude);
+  }
+
+  final gps = parseGpsFromPrefValues(prefValues);
+  if (gps != null) return gps;
+
   final base = findCityCenter(location?.trim().isNotEmpty == true ? location! : 'Kathmandu, Nepal');
   final seed = _hashSeed('${userId ?? location ?? '0'}');
   final angle = (seed % 360) * (math.pi / 180);
@@ -93,6 +123,9 @@ List<MapProfile> matchesToMapProfiles(
         ? resolveProfileCoordinates(
             location: profile.location,
             userId: profile.userId ?? profile.id,
+            mapLatitude: profile.mapLatitude,
+            mapLongitude: profile.mapLongitude,
+            prefValues: profile.prefValues,
           )
         : null;
     final distanceMeters = coordinates != null

@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/storage/token_storage.dart';
 import '../map_models.dart';
 
 class ActivityWsEvent {
@@ -45,7 +46,11 @@ class ActivityWebSocketService {
       await _subscription?.cancel();
       await _channel?.sink.close();
 
-      final uri = AppConfig.webSocketUri('/ws/activity/');
+      final token = await TokenStorage().getAccessToken();
+      final uri = AppConfig.webSocketUri(
+        '/ws/activity/',
+        queryParameters: token != null && token.isNotEmpty ? {'token': token} : null,
+      );
       final channel = WebSocketChannel.connect(uri);
       await channel.ready.timeout(_connectTimeout);
       if (_disposed) {
