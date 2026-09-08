@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -33,7 +33,9 @@ class DeviceFingerprintService {
     String platform = 'unknown';
     String osVersion = '';
 
-    if (Platform.isAndroid) {
+    if (kIsWeb) {
+      platform = 'web';
+    } else if (Platform.isAndroid) {
       final android = await info.androidInfo;
       platform = 'android';
       model = android.model;
@@ -61,6 +63,9 @@ class DeviceFingerprintService {
   }
 
   Future<String> _generateDeviceId() async {
+    if (kIsWeb) {
+      return 'web-${DateTime.now().millisecondsSinceEpoch}';
+    }
     final info = DeviceInfoPlugin();
     if (Platform.isAndroid) {
       final android = await info.androidInfo;

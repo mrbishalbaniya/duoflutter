@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,7 +32,7 @@ class _UpdateBridgeState extends ConsumerState<UpdateBridge> {
   }
 
   Future<void> _checkOnStartup() async {
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
     final latest = await ref.read(updateControllerProvider.notifier).checkForUpdates();
     if (!mounted || latest == null) return;
 

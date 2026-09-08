@@ -30,6 +30,7 @@ class DuoProfile extends Equatable {
     this.mapLatitude,
     this.mapLongitude,
     this.locationIsLive = false,
+    this.liveLocationUpdatedAt,
     this.education,
     this.occupation,
     this.religion,
@@ -81,9 +82,17 @@ class DuoProfile extends Equatable {
               ?.map((e) => (e as num).toInt())
               .toList() ??
           const [],
-      mapLatitude: (json['map_latitude'] as num?)?.toDouble(),
-      mapLongitude: (json['map_longitude'] as num?)?.toDouble(),
-      locationIsLive: json['location_is_live'] as bool? ?? false,
+      // ProfileSerializer (profile fetch/update responses) exposes these as
+      // live_latitude/live_longitude/live_location_updated_at, while
+      // LiveLocationView's POST response uses map_latitude/map_longitude/
+      // location_is_live instead. Accept both so either response shape parses.
+      mapLatitude: (json['live_latitude'] as num?)?.toDouble() ??
+          (json['map_latitude'] as num?)?.toDouble(),
+      mapLongitude: (json['live_longitude'] as num?)?.toDouble() ??
+          (json['map_longitude'] as num?)?.toDouble(),
+      locationIsLive: json['location_is_live'] as bool? ??
+          json['live_latitude'] != null,
+      liveLocationUpdatedAt: json['live_location_updated_at'] as String?,
       education: json['education'] as String?,
       occupation: json['occupation'] as String?,
       religion: json['religion'] as String?,
@@ -142,6 +151,7 @@ class DuoProfile extends Equatable {
   final double? mapLatitude;
   final double? mapLongitude;
   final bool locationIsLive;
+  final String? liveLocationUpdatedAt;
   final String? education;
   final String? occupation;
   final String? religion;
