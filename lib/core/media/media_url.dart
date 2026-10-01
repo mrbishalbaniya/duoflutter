@@ -39,6 +39,24 @@ String? _backendOrigin() {
   ).toString();
 }
 
+const _loopbackHosts = {'localhost', '127.0.0.1', '10.0.2.2', '0.0.0.0'};
+
+/// Local dev data stores photos as `http://localhost:8000/media/...`, which a
+/// physical phone cannot reach. When the app talks to a plain-HTTP (LAN dev)
+/// backend, point those URLs and bare `/media/` paths at that backend instead.
+/// Production (HTTPS API) URLs are returned unchanged.
+String localizeMediaUrl(String url) {
+  final origin = _backendOrigin();
+  if (origin == null || !origin.startsWith('http://')) return url;
+  if (url.startsWith('/media/')) return '$origin$url';
+  final uri = Uri.tryParse(url);
+  if (uri == null || !_loopbackHosts.contains(uri.host) || !uri.path.startsWith('/media/')) {
+    return url;
+  }
+  final base = Uri.parse(origin);
+  return uri.replace(scheme: base.scheme, host: base.host, port: base.hasPort ? base.port : null).toString();
+}
+
 bool _isDeadLocalMediaUrl(String url) {
   return url.startsWith('/media/') ||
       (url.contains('://localhost') && url.contains('/media/'));
@@ -57,7 +75,7 @@ String? _remapPicsumUrl(String url) {
 
 /// Resolve stored media URLs (Cloudinary HTTPS, legacy /media/, or broken picsum seeds).
 String? resolveMediaUrl(String? url, {CloudinaryPreset preset = CloudinaryPreset.medium}) {
-  final trimmed = url?.trim() ?? '';
+  final trimmed = localizeMediaUrl(url?.trim() ?? '');
   if (trimmed.isEmpty) return null;
   if (trimmed.contains('picsum.photos')) return _remapPicsumUrl(trimmed);
   if (_isDeadLocalMediaUrl(trimmed)) return null;
@@ -88,4 +106,32 @@ String resolveProfilePhotoUrl(DuoProfile profile, {CloudinaryPreset preset = Clo
   }
 
   return placeholderPhotoUrl(seed);
+}
+
+/// Up to [count] card photos, padded with placeholders (mirrors web
+/// `resolveProfilePhotoUrls`).
+List<String> resolveProfilePhotoUrls(
+  DuoProfile profile, {
+  int count = 3,
+  CloudinaryPreset preset = CloudinaryPreset.matchCard,
+}) {
+  final seed = '${profile.resolvedUserId ?? profile.fullName}';
+  final fallbacks = [for (var i = 0; i < count; i++) placeholderPhotoUrl(seed, index: i)];
+
+  if (profile.photoUrls.isNotEmpty) {
+    final urls = profile.photoUrls
+        .map((u) => resolveMediaUrl(u, preset: preset))
+        .whereType<String>()
+        .where((u) => u.isNotEmpty)
+        .take(count)
+        .toList();
+    for (var i = urls.length; i < count; i++) {
+      urls.add(fallbacks[i]);
+    }
+    return urls;
+  }
+
+  final primary = resolveMediaUrl(profile.photoUrl, preset: preset);
+  if (primary != null && primary.isNotEmpty) return [primary, ...fallbacks.skip(1)];
+  return fallbacks;
 }

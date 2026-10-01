@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/otp_cooldown_exception.dart';
+import '../../../core/providers/core_providers.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/otp_code_input.dart';
 import '../../../widgets/google_sign_in_button.dart';
 import '../../auth/auth_controller.dart';
 import '../registration_controller.dart';
@@ -37,6 +40,16 @@ class _StepAccountState extends ConsumerState<StepAccount> {
   String? _googleError;
   String? _phoneFieldError;
 
+  // Email verification (web "Verify your email" sub-step).
+  final _otpKey = GlobalKey<OtpCodeInputState>();
+  bool _otpSending = false;
+  bool _otpVerifying = false;
+  OtpStatus _otpStatus = OtpStatus.idle;
+  String _otpError = '';
+  late final _cooldown = ResendCountdown(() {
+    if (mounted) setState(() {});
+  });
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +62,7 @@ class _StepAccountState extends ConsumerState<StepAccount> {
 
   @override
   void dispose() {
+    _cooldown.stop();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
@@ -84,12 +98,192 @@ class _StepAccountState extends ConsumerState<StepAccount> {
       return;
     }
     _patchFromForm();
-    ref.read(registrationControllerProvider.notifier).patchData(
-          (d) => d.copyWith(otpVerified: true, signedUpWithGoogle: false),
-        );
-    HapticFeedback.mediumImpact();
-    await widget.onContinue();
+    final email = _emailController.text.trim().toLowerCase();
+    final current = ref.read(registrationControllerProvider).data;
+    final alreadyVerified = current.otpVerified && current.verifiedEmail == email;
+    final controller = ref.read(registrationControllerProvider.notifier);
+    controller.patchData(
+      (d) => d.copyWith(
+        signedUpWithGoogle: false,
+        otpVerified: alreadyVerified,
+        verifiedEmail: alreadyVerified ? email : '',
+      ),
+    );
     setState(() => _formError = null);
+    if (alreadyVerified) {
+      HapticFeedback.mediumImpact();
+      await widget.onContinue();
+      return;
+    }
+    setState(() {
+      _otpStatus = OtpStatus.idle;
+      _otpError = '';
+    });
+    if (await _sendCode(email)) controller.setAccountSubStep(AccountSubStep.otp);
+  }
+
+  /// Sends the email code; true when the user can now enter one.
+  Future<bool> _sendCode(String email) async {
+    setState(() => _otpSending = true);
+    try {
+      final retry = await ref.read(authRepositoryProvider).sendEmailOtp(email);
+      _cooldown.start(retry);
+      _toast('We sent a 6-digit code to $email.');
+      return true;
+    } on OtpCooldownException catch (e) {
+      // A code is already on its way; let the user enter it.
+      _cooldown.start(e.retryAfter);
+      return true;
+    } on ApiException catch (e) {
+      _toast(e.message.isNotEmpty ? e.message : 'Could not send verification code.');
+      return false;
+    } finally {
+      if (mounted) setState(() => _otpSending = false);
+    }
+  }
+
+  void _toast(String message) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _verifyCode(String code) async {
+    final email = ref.read(registrationControllerProvider).data.email.trim().toLowerCase();
+    setState(() {
+      _otpVerifying = true;
+      _otpStatus = OtpStatus.idle;
+      _otpError = '';
+    });
+    try {
+      await ref.read(authRepositoryProvider).verifyEmailOtp(email: email, otp: code);
+      if (!mounted) return;
+      setState(() => _otpStatus = OtpStatus.success);
+      final controller = ref.read(registrationControllerProvider.notifier);
+      controller.patchData((d) => d.copyWith(otpVerified: true, verifiedEmail: email));
+      _toast("Email verified. Let's build your profile.");
+      controller.setAccountSubStep(AccountSubStep.form);
+      HapticFeedback.mediumImpact();
+      await widget.onContinue();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otpStatus = OtpStatus.error;
+        _otpError = e.message.isNotEmpty ? e.message : 'Invalid or expired verification code.';
+      });
+      _otpKey.currentState?.clear();
+    } finally {
+      if (mounted) setState(() => _otpVerifying = false);
+    }
+  }
+
+  Widget _otpStep(BuildContext context, RegistrationState reg) {
+    final scheme = Theme.of(context).colorScheme;
+    final email = reg.data.email;
+    return RegistrationStepCard(
+      title: 'Verify your email',
+      subtitle: 'Enter the 6-digit code we sent to $email. You can continue once your email is verified.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.mark_email_unread_outlined, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Code sent to', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                      Text(email, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          OtpCodeInput(
+            key: _otpKey,
+            status: _otpStatus,
+            errorMessage: _otpError,
+            disabled: _otpVerifying,
+            onComplete: _verifyCode,
+          ),
+          const SizedBox(height: 12),
+          if (_otpVerifying)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Verifying...', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('Checking your code', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              "The code expires in 10 minutes. Check your spam folder if you don't see it.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () {
+                  ref.read(registrationControllerProvider.notifier).setAccountSubStep(AccountSubStep.form);
+                  setState(() {
+                    _otpStatus = OtpStatus.idle;
+                    _otpError = '';
+                  });
+                },
+                child: Text('Change email',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _otpSending || _cooldown.seconds > 0
+                    ? null
+                    : () async {
+                        setState(() {
+                          _otpStatus = OtpStatus.idle;
+                          _otpError = '';
+                        });
+                        _otpKey.currentState?.clear();
+                        await _sendCode(email);
+                      },
+                child: Text(
+                  _otpSending
+                      ? 'Sending…'
+                      : _cooldown.seconds > 0
+                          ? 'Resend code in ${_cooldown.seconds}s'
+                          : 'Resend code',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submitGooglePhone() async {
@@ -128,6 +322,7 @@ class _StepAccountState extends ConsumerState<StepAccount> {
             email: email,
             signedUpWithGoogle: true,
             otpVerified: true,
+            verifiedEmail: email,
             password: '',
             confirmPassword: '',
             firstName: d.firstName.isNotEmpty ? d.firstName : firstName,
@@ -151,6 +346,10 @@ class _StepAccountState extends ConsumerState<StepAccount> {
     final reg = ref.watch(registrationControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final strength = getPasswordStrength(_passwordController.text);
+
+    if (reg.accountSubStep == AccountSubStep.otp && !reg.data.signedUpWithGoogle) {
+      return _otpStep(context, reg);
+    }
 
     if (reg.accountSubStep == AccountSubStep.phone) {
       return RegistrationStepCard(
@@ -200,7 +399,7 @@ class _StepAccountState extends ConsumerState<StepAccount> {
 
     return RegistrationStepCard(
       title: 'Create your account',
-      subtitle: 'Sign up with Google or register with your email and password.',
+      subtitle: 'Register with your email and password, or sign up with Google.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -213,28 +412,6 @@ class _StepAccountState extends ConsumerState<StepAccount> {
               ),
               child: Text(_googleError!, style: TextStyle(color: scheme.onErrorContainer)),
             ),
-          if (AppConfig.isGoogleAuthConfigured) ...[
-            GoogleSignInButton(
-              loading: _googleLoading,
-              enabled: true,
-              onPressed: _signInWithGoogle,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.3))),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'or register with email',
-                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-                  ),
-                ),
-                Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.3))),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
           DuoPhoneField(
             value: _phone,
             onChanged: (value) => setState(() {
@@ -301,7 +478,39 @@ class _StepAccountState extends ConsumerState<StepAccount> {
             showBack: widget.onBack != null,
             onBack: widget.onBack,
             onNext: _submitAccountForm,
+            loading: _otpSending,
+            nextLabel: reg.data.otpVerified &&
+                    reg.data.verifiedEmail == _emailController.text.trim().toLowerCase()
+                ? 'Continue'
+                : 'Send code',
           ),
+          if (AppConfig.isGoogleAuthConfigured) ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.3))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'OR',
+                    style: TextStyle(
+                      color: scheme.outline,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.3))),
+              ],
+            ),
+            const SizedBox(height: 20),
+            GoogleSignInButton(
+              loading: _googleLoading,
+              enabled: !_googleLoading,
+              onPressed: _signInWithGoogle,
+            ),
+          ],
           const SizedBox(height: 16),
           Center(
             child: Text.rich(

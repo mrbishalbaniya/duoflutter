@@ -1,52 +1,70 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
-import '../../../core/theme/duo_gradients.dart';
+import '../../../core/theme/theme_extensions.dart';
+import '../domain/verification_domain.dart';
 
+/// Four clear stages (web VerificationFlow): Start · Face check · Selfie · Result.
 class VerificationProgressBar extends StatelessWidget {
-  const VerificationProgressBar({
-    super.key,
-    required this.progress,
-    this.label = 'Profile verification',
-  });
+  const VerificationProgressBar({super.key, required this.step});
 
-  final int progress;
-  final String label;
+  final VerificationFlowStep step;
+
+  static const _stages = ['Start', 'Face check', 'Selfie', 'Result'];
+
+  int get _stageIndex => switch (step) {
+        VerificationFlowStep.liveness || VerificationFlowStep.crossDevice => 1,
+        VerificationFlowStep.selfie => 2,
+        VerificationFlowStep.processing || VerificationFlowStep.result => 3,
+        VerificationFlowStep.instructions => 0,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final scheme = Theme.of(context).colorScheme;
+    final duo = context.duo;
+    final current = _stageIndex;
+
+    return Row(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            Text('$progress%', style: theme.textTheme.labelLarge),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 8,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: theme.colorScheme.secondary),
-                AnimatedFractionallySizedBox(
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.centerLeft,
-                  widthFactor: (progress.clamp(0, 100)) / 100,
-                  child: const DecoratedBox(decoration: BoxDecoration(gradient: DuoGradients.brand)),
-                ),
-              ],
-            ),
+        for (var i = 0; i < _stages.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: Builder(builder: (context) {
+              final done = i < current || (i == 3 && step == VerificationFlowStep.result);
+              final active = i == current && !done;
+              return Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    height: 6,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(99),
+                      gradient: done ? duo.brandGradient : null,
+                      color: done
+                          ? null
+                          : active
+                              ? scheme.primary.withValues(alpha: 0.5)
+                              : scheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _stages[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: active || done
+                          ? scheme.onSurface
+                          : scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              );
+            }),
           ),
-        ),
+        ],
       ],
-    ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.05, end: 0);
+    );
   }
 }

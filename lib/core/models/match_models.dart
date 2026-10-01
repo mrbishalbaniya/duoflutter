@@ -18,6 +18,22 @@ class MatchSession extends Equatable {
     required this.otherUserProfile,
     this.matchedAt,
     this.compatibilityScore,
+    this.valuesScore,
+    this.lifestyleScore,
+    this.careerScore,
+    this.hobbiesScore,
+    this.sparkFactors = const [],
+    this.sharedInterests = const [],
+    this.visionInsight,
+    this.communicationInsight,
+    this.insightSummary,
+    this.pillarNotes = const {},
+    this.conversationStarters = const [],
+    this.thingsToTalkAbout = const [],
+    this.aiGenerated = false,
+    this.aiProvider,
+    this.modelSamples,
+    this.conversationId,
   });
 
   factory MatchSession.fromJson(Map<String, dynamic> json) {
@@ -29,6 +45,24 @@ class MatchSession extends Equatable {
           : const DuoProfile(),
       matchedAt: json['matched_at'] as String?,
       compatibilityScore: (json['compatibility_score'] as num?)?.toDouble(),
+      valuesScore: (json['values_score'] as num?)?.toDouble(),
+      lifestyleScore: (json['lifestyle_score'] as num?)?.toDouble(),
+      careerScore: (json['career_score'] as num?)?.toDouble(),
+      hobbiesScore: (json['hobbies_score'] as num?)?.toDouble(),
+      sparkFactors: _stringList(json['spark_factors']),
+      sharedInterests: _stringList(json['shared_interests']),
+      visionInsight: json['vision_insight'] as String?,
+      communicationInsight: json['communication_insight'] as String?,
+      insightSummary: json['insight_summary'] as String?,
+      pillarNotes: json['pillar_notes'] is Map
+          ? (json['pillar_notes'] as Map).map((k, v) => MapEntry('$k', '${v ?? ''}'))
+          : const {},
+      conversationStarters: _stringList(json['conversation_starters']),
+      thingsToTalkAbout: _stringList(json['things_to_talk_about']),
+      aiGenerated: json['ai_generated'] as bool? ?? false,
+      aiProvider: json['ai_provider'] as String?,
+      modelSamples: (json['model_info'] is Map) ? ((json['model_info'] as Map)['samples'] as num?)?.toInt() : null,
+      conversationId: json['conversation_id']?.toString(),
     );
   }
 
@@ -36,6 +70,28 @@ class MatchSession extends Equatable {
   final DuoProfile otherUserProfile;
   final String? matchedAt;
   final double? compatibilityScore;
+
+  // Compatibility breakdown shown on the Insights screen (web /insights).
+  final double? valuesScore;
+  final double? lifestyleScore;
+  final double? careerScore;
+  final double? hobbiesScore;
+  final List<String> sparkFactors;
+  final List<String> sharedInterests;
+  final String? visionInsight;
+  final String? communicationInsight;
+
+  // From GET /matching/insights/<id>/ (web MatchInsightsPanel).
+  final String? insightSummary;
+  final Map<String, String> pillarNotes;
+  final List<String> conversationStarters;
+  final List<String> thingsToTalkAbout;
+  final bool aiGenerated;
+
+  /// 'duo' (own model) | 'claude' | null
+  final String? aiProvider;
+  final int? modelSamples;
+  final String? conversationId;
 
   @override
   List<Object?> get props => [id];
@@ -157,3 +213,6 @@ class PaywalledList<T> extends Equatable {
   @override
   List<Object?> get props => [count, results.length];
 }
+
+List<String> _stringList(Object? value) =>
+    value is List ? value.whereType<Object>().map((e) => e.toString()).toList() : const [];

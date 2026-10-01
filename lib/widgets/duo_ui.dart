@@ -1,11 +1,36 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/theme/duo_gradients.dart';
+import '../core/network/api_exception.dart';
 import '../core/theme/duo_theme.dart';
 import '../core/theme/theme_extensions.dart';
+
+/// The Duo app logo (assets/brand/duo_logo.png) as a rounded square.
+class DuoLogoMark extends StatelessWidget {
+  const DuoLogoMark({super.key, this.size = 40});
+
+  static const asset = 'assets/brand/duo_logo.png';
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.22),
+      child: Image.asset(
+        asset,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+        semanticLabel: 'Duo',
+      ),
+    );
+  }
+}
 
 class DuoBrandLogo extends StatelessWidget {
   const DuoBrandLogo({super.key, this.size = 32, this.showTagline = false});
@@ -18,18 +43,7 @@ class DuoBrandLogo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ShaderMask(
-          shaderCallback: (bounds) => DuoGradients.brand.createShader(bounds),
-          child: Text(
-            'Duo',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: size,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: -0.5,
-            ),
-          ),
-        ),
+        DuoLogoMark(size: size * 2),
         if (showTagline) ...[
           const SizedBox(height: 6),
           Text(
@@ -262,19 +276,24 @@ class DuoPageHeader extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.trailing,
+    this.leading,
   });
 
   final String title;
   final String? subtitle;
   final Widget? trailing;
 
+  /// Shown before the title (e.g. the profile avatar).
+  final Widget? leading;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 12)],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,5 +551,114 @@ class DuoInfoCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// User-facing text for any error thrown by the API layer or app code.
+/// [ApiException] messages are already readable; anything else (parse errors,
+/// state errors) gets a generic message instead of a raw stack-like string.
+String friendlyErrorMessage(Object error, {String fallback = 'Something went wrong. Please try again.'}) {
+  if (error is ApiException || error is TimeoutException) {
+    final text = error.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+  return fallback;
+}
+
+/// Centered error / empty state with an optional Retry action — shared so every
+/// list/detail screen shows the same pattern instead of a bare `Text('$e')`.
+class DuoStateView extends StatelessWidget {
+  const DuoStateView({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message,
+    this.actionLabel,
+    this.onAction,
+    this.scrollable = true,
+  });
+
+  /// Error variant: readable message + Retry.
+  factory DuoStateView.error(Object error, {VoidCallback? onRetry, String title = 'Could not load'}) =>
+      DuoStateView(
+        icon: Icons.cloud_off_rounded,
+        title: title,
+        message: friendlyErrorMessage(error),
+        actionLabel: onRetry == null ? null : 'Retry',
+        onAction: onRetry,
+      );
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  /// Wrap in a scroll view so it also works inside RefreshIndicator.
+  final bool scrollable;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 56, color: scheme.primary.withValues(alpha: 0.35)),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          if (message != null && message!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.4),
+            ),
+          ],
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 20),
+            FilledButton.tonalIcon(
+              onPressed: onAction,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!scrollable) return Center(child: body);
+    return LayoutBuilder(
+      builder: (context, c) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: c.maxHeight),
+          child: Center(child: body),
+        ),
+      ),
+    );
+  }
+}
+
+/// Runs a user-triggered async action and reports failure in a SnackBar instead
+/// of letting the exception escape unhandled. Returns true on success.
+Future<bool> runWithFeedback(
+  BuildContext context,
+  Future<void> Function() action, {
+  String? success,
+  String failurePrefix = '',
+}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await action();
+    if (success != null) messenger?.showSnackBar(SnackBar(content: Text(success)));
+    return true;
+  } catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text('$failurePrefix${friendlyErrorMessage(e)}')));
+    return false;
   }
 }

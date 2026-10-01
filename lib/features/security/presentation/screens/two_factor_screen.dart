@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../providers/security_providers.dart';
 import '../widgets/security_widgets.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class TwoFactorScreen extends ConsumerStatefulWidget {
   const TwoFactorScreen({super.key});
@@ -34,7 +35,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
       appBar: AppBar(title: const Text('Two-Factor Authentication')),
       body: overview.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => DuoStateView.error(e, onRetry: () => ref.invalidate(securityOverviewProvider)),
         data: (ov) {
           if (ov.twoFactorEnabled && state.step == TwoFactorStep.intro) {
             return _buildManageView(context, ov.twoFactorMethod);
@@ -124,7 +125,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     }
   }

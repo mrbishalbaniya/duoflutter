@@ -48,6 +48,49 @@ const _fallbackPlans = [
   ),
 ];
 
+const _fallbackVisitedYouPlans = [
+  SubscriptionPlan(
+    planId: 'visited_you_7d',
+    name: '7-Day Visitors Pass',
+    description: 'See who visited your profile for one week.',
+    currency: 'COIN',
+    amount: 149,
+    durationDays: 7,
+    feature: SubscriptionFeature.visitedYou,
+  ),
+  SubscriptionPlan(
+    planId: 'visited_you_30d',
+    name: '30-Day Visitors Pass',
+    description: 'See who visited your profile for one month.',
+    currency: 'COIN',
+    amount: 499,
+    durationDays: 30,
+    badge: 'Popular',
+    feature: SubscriptionFeature.visitedYou,
+  ),
+  SubscriptionPlan(
+    planId: 'visited_you_90d',
+    name: '90-Day Visitors Pass',
+    description: 'Best value: three months of profile visitors.',
+    currency: 'COIN',
+    amount: 999,
+    durationDays: 90,
+    badge: 'Best value',
+    feature: SubscriptionFeature.visitedYou,
+  ),
+];
+
+/// Plans for one premium list ([SubscriptionFeature]), for the upgrade sheet.
+final featurePlansProvider =
+    FutureProvider.autoDispose.family<List<SubscriptionPlan>, String>((ref, feature) async {
+  final plans = await ref
+      .read(walletRepositoryProvider)
+      .getPlans(feature: feature)
+      .catchError((_) => <SubscriptionPlan>[]);
+  if (plans.isNotEmpty) return plans;
+  return feature == SubscriptionFeature.visitedYou ? _fallbackVisitedYouPlans : _fallbackPlans;
+});
+
 WalletSummary _fallbackWalletSummary(int balance) {
   return WalletSummary(
     balance: balance,

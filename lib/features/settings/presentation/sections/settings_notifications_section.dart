@@ -7,6 +7,7 @@ import '../../../../core/models/notification_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../widgets/duo_ui.dart';
 import '../../providers/settings_providers.dart';
+import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
 
 class SettingsNotificationsSection extends ConsumerWidget {
@@ -14,10 +15,14 @@ class SettingsNotificationsSection extends ConsumerWidget {
     super.key,
     required this.animationIndex,
     this.visible = true,
+    this.title = 'Notifications',
+    this.showHistoryLink = true,
   });
 
   final int animationIndex;
   final bool visible;
+  final String title;
+  final bool showHistoryLink;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,7 +31,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
     final status = ui.pushStatus;
 
     return SettingsSection(
-      title: 'Notifications',
+      title: title,
       animationIndex: animationIndex,
       visible: visible,
       child: Padding(
@@ -82,6 +87,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
                           ),
                     ),
                   ],
+                  if (showHistoryLink) ...[
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -90,6 +96,7 @@ class SettingsNotificationsSection extends ConsumerWidget {
                       child: const Text('View notification history'),
                     ),
                   ),
+                  ],
                 ],
               ),
             ),
@@ -166,6 +173,44 @@ class SettingsNotificationsSection extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+/// Settings list entry matching web: notification and email preferences.
+class SettingsNotificationLinksSection extends StatelessWidget {
+  const SettingsNotificationLinksSection({
+    super.key,
+    required this.animationIndex,
+    this.visible = true,
+  });
+
+  final int animationIndex;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsSection(
+      title: 'Notifications',
+      animationIndex: animationIndex,
+      visible: visible,
+      child: Column(
+        children: [
+          SettingsRow(
+            icon: Icons.notifications_outlined,
+            title: 'Notification preferences',
+            description: 'Manage push notifications and categories',
+            onTap: () => context.push(AppRoutes.settingsNotifications),
+          ),
+          const SettingsDivider(),
+          SettingsRow(
+            icon: Icons.mail_outline,
+            title: 'Email notifications',
+            description: 'Choose which emails Duo sends you',
+            onTap: () => context.push(AppRoutes.settingsMails),
+          ),
+        ],
+      ),
     );
   }
 }

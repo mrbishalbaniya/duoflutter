@@ -37,7 +37,6 @@ class ProfilePhotoGallery extends StatelessWidget {
             height: 200,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              cacheExtent: 400,
               itemCount: photos.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) {

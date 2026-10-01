@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../match/domain/match_domain.dart';
 import '../../core/models/match_models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/core_providers.dart';
@@ -13,11 +14,11 @@ import 'domain/discover_models.dart';
 import 'providers/discover_providers.dart';
 import 'widgets/discover_empty_state.dart';
 import 'widgets/discover_profile_card.dart';
-import 'widgets/discover_search_bar.dart';
 import 'widgets/discover_skeleton.dart';
 import 'widgets/discover_tab_bar.dart';
 import 'widgets/premium_upgrade_sheet.dart';
 import 'widgets/profile_detail_sheet.dart';
+import '../../widgets/duo_profile_avatar_button.dart';
 
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
@@ -39,35 +40,27 @@ class DiscoverScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DuoPageHeader(
+              leading: const DuoProfileAvatarButton(),
               title: 'Discover',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _NotificationBell(),
-                  const SizedBox(width: 8),
                   DuoIconCircleButton(
                     icon: Icons.account_balance_wallet_outlined,
                     onTap: () => context.push(AppRoutes.wallet),
                   ),
                   const SizedBox(width: 8),
-                  DuoIconCircleButton(
-                    icon: Icons.refresh,
-                    onTap: () {
-                      ref.invalidate(discoverDataProvider);
-                      ref.read(discoverRemovedLikesProvider.notifier).state = {};
-                    },
-                  ),
+                  _NotificationBell(),
                 ],
               ),
             ),
-            const DiscoverSearchBar(),
-            const SizedBox(height: 8),
             data.maybeWhen(
               data: (d) => DiscoverTabBar(
                 counts: {
                   DiscoverTab.visitors: d.countFor(DiscoverTab.visitors),
                   DiscoverTab.sent: d.countFor(DiscoverTab.sent),
                   DiscoverTab.received: d.countFor(DiscoverTab.received),
+                  DiscoverTab.matched: d.countFor(DiscoverTab.matched),
                 },
               ),
               orElse: () => const SizedBox(height: 48),
@@ -146,7 +139,56 @@ class _DiscoverFeed extends ConsumerWidget {
         likingBack: likingBack,
         removed: removed,
       ),
+      DiscoverTab.matched => _MatchedGrid(matches: data.matches),
     };
+  }
+}
+
+class _MatchedGrid extends ConsumerWidget {
+  const _MatchedGrid({required this.matches});
+
+  final List<MatchSession> matches;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (matches.isEmpty) return DiscoverEmptyState(tab: DiscoverTab.matched);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+      children: [
+        _AdaptiveGrid(
+          itemCount: matches.length,
+          builder: (context, index) {
+            final match = matches[index];
+            final profile = match.otherUserProfile;
+            final label = interactionTimeLabel(kind: 'matched', time: match.matchedAt);
+            return DiscoverProfileCard(
+              profile: profile,
+              timeLabel: label,
+              heroTag: 'discover-match-${match.id}',
+              animationIndex: index,
+              onTap: () => showProfileDetailSheet(context, profile: profile, timeLabel: label),
+              primaryAction: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onPressed: () {
+                  final conversationId = match.conversationId;
+                  if (conversationId != null && conversationId.isNotEmpty) {
+                    context.push('/chat/$conversationId');
+                  } else {
+                    context.go(AppRoutes.chat);
+                  }
+                },
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
+                label: const Text('Chat', style: TextStyle(fontSize: 11)),
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 }
 
@@ -186,7 +228,9 @@ class _VisitorsGrid extends ConsumerWidget {
               profile: entry.profile,
               timeLabel: interactionTimeLabel(kind: 'visited', time: entry.visitedAt),
               locked: entry.locked,
-              heroTag: tag,
+              // Locked entries have no id and share the name 'Someone', so a
+              // Hero tag would collide; they can't open the detail view anyway.
+              heroTag: entry.locked ? null : tag,
               animationIndex: index,
               onLockedTap: () => showPremiumUpgradeSheet(
                 context,
@@ -239,6 +283,7 @@ class _SentGrid extends ConsumerWidget {
 
     try {
       await ref.read(matchingRepositoryProvider).unlike(toUserId: userId);
+      if (!context.mounted) return;
       ref.read(discoverRemovedSentProvider.notifier).state = {
         ...ref.read(discoverRemovedSentProvider),
         userId,
@@ -256,9 +301,12 @@ class _SentGrid extends ConsumerWidget {
         );
       }
     } finally {
-      ref.read(discoverUnlikingProvider.notifier).state = {
-        ...ref.read(discoverUnlikingProvider),
-      }..remove(userId);
+      // The grid may have been disposed (tab switch) while the request ran.
+      if (context.mounted) {
+        ref.read(discoverUnlikingProvider.notifier).state = {
+          ...ref.read(discoverUnlikingProvider),
+        }..remove(userId);
+      }
     }
   }
 
@@ -283,7 +331,9 @@ class _SentGrid extends ConsumerWidget {
                 kind: 'sent',
                 time: entry.likedAt,
               ),
-              heroTag: tag,
+              // Locked entries have no id and share the name 'Someone', so a
+              // Hero tag would collide; they can't open the detail view anyway.
+              heroTag: entry.locked ? null : tag,
               animationIndex: index,
               onTap: () => showProfileDetailSheet(
                 context,
@@ -335,10 +385,11 @@ class _ReceivedGrid extends ConsumerWidget {
     ref.read(discoverLikingBackProvider.notifier).state = {...likingBack, userId};
 
     try {
-      final result = await ref.read(matchingRepositoryProvider).swipe(
+      final (result, _) = await ref.read(matchingRepositoryProvider).swipe(
             toUserId: userId,
             action: SwipeAction.like,
           );
+      if (!context.mounted) return;
 
       ref.read(discoverRemovedLikesProvider.notifier).state = {...removed, userId};
       ref.invalidate(discoverDataProvider);
@@ -352,13 +403,19 @@ class _ReceivedGrid extends ConsumerWidget {
           );
         }
       }
+    } on LikeLimitException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } on ApiException catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
-      ref.read(discoverLikingBackProvider.notifier).state =
-          {...ref.read(discoverLikingBackProvider)}..remove(userId);
+      if (context.mounted) {
+        ref.read(discoverLikingBackProvider.notifier).state =
+            {...ref.read(discoverLikingBackProvider)}..remove(userId);
+      }
     }
   }
 
@@ -402,7 +459,9 @@ class _ReceivedGrid extends ConsumerWidget {
                 time: entry.likedAt,
               ),
               locked: entry.locked,
-              heroTag: tag,
+              // Locked entries have no id and share the name 'Someone', so a
+              // Hero tag would collide; they can't open the detail view anyway.
+              heroTag: entry.locked ? null : tag,
               animationIndex: index,
               onLockedTap: () => showPremiumUpgradeSheet(
                 context,

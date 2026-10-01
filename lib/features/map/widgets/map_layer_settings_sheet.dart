@@ -132,6 +132,16 @@ class _MapLayerSettingsSheetState extends ConsumerState<MapLayerSettingsSheet> {
                   const SizedBox(height: 16),
                 ],
               ],
+              const SizedBox(height: 24),
+              // Map data/imagery credit (required by the tile licences).
+              Center(
+                child: Text(
+                  '© OpenStreetMap contributors · CARTO · Esri',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
             ],
           ),
         );

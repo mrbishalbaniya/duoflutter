@@ -205,38 +205,57 @@ class RegistrationStepNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Row(
-        children: [
-          if (showBack && onBack != null) ...[
-            Expanded(
-              child: OutlinedButton(
-                onPressed: loading ? null : () {
-                  HapticFeedback.lightImpact();
-                  onBack!();
-                },
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text('Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            flex: showBack && onBack != null ? 2 : 1,
-            child: DuoGradientButton(
-              onPressed: loading || disableNext ? null : () {
+    final scheme = Theme.of(context).colorScheme;
+    final hasBack = showBack && onBack != null;
+    final next = SizedBox(
+      height: 56,
+      child: DuoGradientButton(
+        onPressed: loading || disableNext
+            ? null
+            : () {
                 HapticFeedback.mediumImpact();
                 onNext();
               },
-              loading: loading,
-              label: loading ? 'Please wait...' : nextLabel,
-            ),
-          ),
-        ],
+        loading: loading,
+        label: loading ? 'Please wait...' : nextLabel,
+      ),
+    );
+    final back = FilledButton(
+      onPressed: loading
+          ? null
+          : () {
+              HapticFeedback.lightImpact();
+              onBack!();
+            },
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(56),
+        shape: const StadiumBorder(),
+        backgroundColor: scheme.surfaceContainerHighest,
+        foregroundColor: scheme.onSurfaceVariant,
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+      child: const Text('Back'),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 32),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (!hasBack) return next;
+          if (constraints.maxWidth < 560) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [next, const SizedBox(height: 12), back],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: back),
+              const SizedBox(width: 16),
+              Expanded(flex: 2, child: next),
+            ],
+          );
+        },
       ),
     );
   }

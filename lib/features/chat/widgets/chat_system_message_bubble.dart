@@ -15,7 +15,8 @@ class ChatSystemMessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final icon = _iconForEvent(message.eventCode);
+    final text = systemEventText(message);
+    if (text == null) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -35,11 +36,9 @@ class ChatSystemMessageBubble extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 16, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      message.content,
+                      text,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
@@ -62,16 +61,43 @@ class ChatSystemMessageBubble extends StatelessWidget {
       ),
     );
   }
+}
 
-  IconData _iconForEvent(String? code) {
-    switch (code) {
-      case 'SCREENSHOT_TAKEN':
-        return Icons.photo_camera_outlined;
-      case 'SCREEN_RECORDING_STARTED':
-      case 'SCREEN_RECORDING_STOPPED':
-        return Icons.videocam_outlined;
-      default:
-        return Icons.shield_outlined;
-    }
+/// Screen-capture notices: "You …" for your own, the sender's first name for
+/// theirs, no icon. Returns null for events that aren't shown (recording stopped).
+String? systemEventText(ChatMessage message) {
+  final code = message.eventCode ?? _inferCode(message.content);
+  final who = message.isMine ? 'You' : _firstName(message);
+  switch (code) {
+    case 'SCREENSHOT_TAKEN':
+      return '$who took a screenshot';
+    case 'SCREEN_RECORDING_STARTED':
+      return '$who screen recorded the chat';
+    case 'SCREEN_RECORDING_STOPPED':
+      return null;
+    default:
+      return message.content;
   }
+}
+
+String? _inferCode(String content) {
+  final text = content.toLowerCase();
+  if (text.contains('screenshot')) return 'SCREENSHOT_TAKEN';
+  if (text.contains('started screen recording') || text.contains('screen recorded')) {
+    return 'SCREEN_RECORDING_STARTED';
+  }
+  if (text.contains('stopped screen recording')) return 'SCREEN_RECORDING_STOPPED';
+  return null;
+}
+
+String _firstName(ChatMessage message) {
+  final name = (message.senderName ?? '').trim();
+  if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
+  // Older events only carry "<Full Name> took a screenshot."
+  final content = message.content.trim();
+  for (final marker in const [' took a screenshot', ' started screen recording', ' stopped screen recording', ' screen recorded']) {
+    final i = content.indexOf(marker);
+    if (i > 0) return content.substring(0, i).trim().split(RegExp(r'\s+')).first;
+  }
+  return 'Someone';
 }

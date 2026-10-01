@@ -89,6 +89,10 @@ class ProfileEditPhoto {
   }
 }
 
+/// Same limits as web ProfileEditForm.
+const profileMinPhotos = 1;
+const profileMaxPhotos = 3;
+
 class ProfileEditFormData {
   ProfileEditFormData({
     this.fullName = '',
@@ -128,8 +132,59 @@ class ProfileEditFormData {
     this.preferredReligion = '',
     this.interCaste = '',
     this.interReligion = '',
+    this.subCaste = '',
+    this.dateOfBirth = '',
+    List<String>? languages,
+    this.preferredCaste = '',
+    this.preferredRashi = '',
+    this.preferredMaxHeight = '',
+    this.preferredSmoking = '',
+    this.preferredDrinking = '',
+    List<String>? preferredLanguages,
+    List<String>? preferredOccupations,
+    List<String>? preferredEducationLevels,
+    List<String>? preferredFieldsOfStudy,
+    List<String>? preferredWorkPreferences,
+    List<String>? preferredIncomes,
+    List<String>? preferredPersonalities,
+    List<String>? preferredLifestyles,
+    List<String>? preferredExercise,
+    List<String>? preferredInterests,
     List<ProfileEditPhoto>? photos,
-  }) : photos = photos ?? [];
+  })  : photos = photos ?? [],
+        languages = languages ?? [],
+        preferredLanguages = preferredLanguages ?? [],
+        preferredOccupations = preferredOccupations ?? [],
+        preferredEducationLevels = preferredEducationLevels ?? [],
+        preferredFieldsOfStudy = preferredFieldsOfStudy ?? [],
+        preferredWorkPreferences = preferredWorkPreferences ?? [],
+        preferredIncomes = preferredIncomes ?? [],
+        preferredPersonalities = preferredPersonalities ?? [],
+        preferredLifestyles = preferredLifestyles ?? [],
+        preferredExercise = preferredExercise ?? [],
+        preferredInterests = preferredInterests ?? [];
+
+  String subCaste;
+
+  /// ISO date (YYYY-MM-DD); age is recomputed from it like web.
+  String dateOfBirth;
+  List<String> languages;
+
+  String preferredCaste;
+  String preferredRashi;
+  String preferredMaxHeight;
+  String preferredSmoking;
+  String preferredDrinking;
+  List<String> preferredLanguages;
+  List<String> preferredOccupations;
+  List<String> preferredEducationLevels;
+  List<String> preferredFieldsOfStudy;
+  List<String> preferredWorkPreferences;
+  List<String> preferredIncomes;
+  List<String> preferredPersonalities;
+  List<String> preferredLifestyles;
+  List<String> preferredExercise;
+  List<String> preferredInterests;
 
   String fullName;
   String age;
@@ -249,6 +304,24 @@ class ProfileEditFormData {
       interCaste: interCaste ?? this.interCaste,
       interReligion: interReligion ?? this.interReligion,
       photos: photos ?? this.photos,
+      subCaste: subCaste,
+      dateOfBirth: dateOfBirth,
+      languages: List.of(languages),
+      preferredCaste: preferredCaste,
+      preferredRashi: preferredRashi,
+      preferredMaxHeight: preferredMaxHeight,
+      preferredSmoking: preferredSmoking,
+      preferredDrinking: preferredDrinking,
+      preferredLanguages: List.of(preferredLanguages),
+      preferredOccupations: List.of(preferredOccupations),
+      preferredEducationLevels: List.of(preferredEducationLevels),
+      preferredFieldsOfStudy: List.of(preferredFieldsOfStudy),
+      preferredWorkPreferences: List.of(preferredWorkPreferences),
+      preferredIncomes: List.of(preferredIncomes),
+      preferredPersonalities: List.of(preferredPersonalities),
+      preferredLifestyles: List.of(preferredLifestyles),
+      preferredExercise: List.of(preferredExercise),
+      preferredInterests: List.of(preferredInterests),
     );
   }
 }
@@ -288,6 +361,9 @@ ProfileEditFormData profileToEditForm(DuoProfile profile) {
     educationLevel: normalizeEnumValue(extra.educationLevel, educationLevelOptions),
     fieldOfStudy: normalizeEnumValue(extra.fieldOfStudy, fieldOfStudyOptions),
     caste: extra.caste ?? '',
+    subCaste: extra.str('subCaste'),
+    dateOfBirth: extra.str('dateOfBirth'),
+    languages: extra.list('languages'),
     gotra: extra.gotra ?? '',
     horoscope: normalizeEnumValue(extra.horoscope, horoscopeOptions),
     birthTime: extra.birthTime ?? '',
@@ -295,12 +371,12 @@ ProfileEditFormData profileToEditForm(DuoProfile profile) {
     lookingForText: extra.lookingForText ?? '',
     futureGoals: extra.futureGoals ?? '',
     prefGender: normalizeStaticDropdown(profile.prefGender ?? 'everyone', profilePrefGenderOptions),
-    prefAgeMin: profile.prefAgeMin ?? 22,
-    prefAgeMax: profile.prefAgeMax ?? 35,
+    prefAgeMin: (profile.prefAgeMin ?? 22).clamp(18, 99),
+    prefAgeMax: (profile.prefAgeMax ?? 35).clamp((profile.prefAgeMin ?? 22).clamp(18, 99), 99),
     prefMinHeight: profile.prefMinHeight ?? '',
     prefOccupation: profile.prefOccupation ?? '',
     prefLocation: profile.prefLocation ?? '',
-    prefMaxDistanceKm: profile.prefMaxDistanceKm ?? 50,
+    prefMaxDistanceKm: (profile.prefMaxDistanceKm ?? 50).clamp(5, 500),
     prefRelationshipGoal: normalizeStaticDropdown(
       profile.prefRelationshipGoal ?? 'everyone',
       profileRelationshipGoalOptions,
@@ -309,6 +385,21 @@ ProfileEditFormData profileToEditForm(DuoProfile profile) {
     preferredReligion: normalizeEnumValue(extra.preferredReligion, religionOptions),
     interCaste: normalizeEnumValue(extra.interCaste, marriagePrefOptions),
     interReligion: normalizeEnumValue(extra.interReligion, marriagePrefOptions),
+    preferredCaste: extra.str('preferredCaste'),
+    preferredRashi: extra.str('preferredRashi'),
+    preferredMaxHeight: extra.str('preferredMaxHeight'),
+    preferredSmoking: extra.str('preferredSmoking'),
+    preferredDrinking: extra.str('preferredDrinking'),
+    preferredLanguages: extra.list('preferredLanguages'),
+    preferredOccupations: extra.list('preferredOccupations'),
+    preferredEducationLevels: extra.list('preferredEducationLevels'),
+    preferredFieldsOfStudy: extra.list('preferredFieldsOfStudy'),
+    preferredWorkPreferences: extra.list('preferredWorkPreferences'),
+    preferredIncomes: extra.list('preferredIncomes'),
+    preferredPersonalities: extra.list('preferredPersonalities'),
+    preferredLifestyles: extra.list('preferredLifestyles'),
+    preferredExercise: extra.list('preferredExercise'),
+    preferredInterests: extra.list('preferredInterests'),
     photos: photos,
   );
 }
@@ -322,6 +413,9 @@ String _buildPrefValuesJson(ProfileEditFormData form, ParsedPrefValues existing)
     'educationLevel': form.educationLevel.trim(),
     'fieldOfStudy': form.fieldOfStudy.trim(),
     'caste': form.caste.trim(),
+    'subCaste': form.subCaste.trim(),
+    'dateOfBirth': form.dateOfBirth.trim(),
+    'languages': form.languages,
     'gotra': form.gotra.trim(),
     'horoscope': form.horoscope.trim(),
     'birthTime': form.birthTime.trim(),
@@ -331,6 +425,21 @@ String _buildPrefValuesJson(ProfileEditFormData form, ParsedPrefValues existing)
     'preferredReligion': form.preferredReligion.trim(),
     'interCaste': form.interCaste.trim(),
     'interReligion': form.interReligion.trim(),
+    'preferredCaste': form.preferredCaste.trim(),
+    'preferredRashi': form.preferredRashi.trim(),
+    'preferredMaxHeight': form.preferredMaxHeight.trim(),
+    'preferredSmoking': form.preferredSmoking.trim(),
+    'preferredDrinking': form.preferredDrinking.trim(),
+    'preferredLanguages': form.preferredLanguages,
+    'preferredOccupations': form.preferredOccupations,
+    'preferredEducationLevels': form.preferredEducationLevels,
+    'preferredFieldsOfStudy': form.preferredFieldsOfStudy,
+    'preferredWorkPreferences': form.preferredWorkPreferences,
+    'preferredIncomes': form.preferredIncomes,
+    'preferredPersonalities': form.preferredPersonalities,
+    'preferredLifestyles': form.preferredLifestyles,
+    'preferredExercise': form.preferredExercise,
+    'preferredInterests': form.preferredInterests,
   });
 }
 

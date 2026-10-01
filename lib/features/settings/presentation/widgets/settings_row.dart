@@ -51,14 +51,17 @@ class SettingsRow extends StatelessWidget {
                   onTap!();
                 },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             child: Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-                  child: Icon(icon, color: enabled ? iconColor : duo.disabledForeground, size: 22),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: enabled ? iconColor : duo.disabledForeground, size: 21),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -73,9 +76,11 @@ class SettingsRow extends StatelessWidget {
                             ),
                       ),
                       if (description != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           description!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                                 height: 1.35,
@@ -90,7 +95,10 @@ class SettingsRow extends StatelessWidget {
                 else if (showChevron)
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: enabled ? scheme.onSurfaceVariant : duo.disabledForeground,
+                    size: 22,
+                    color: enabled
+                        ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
+                        : duo.disabledForeground,
                   ),
               ],
             ),
@@ -131,7 +139,7 @@ class SettingsInfoTile extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: scheme.onSurfaceVariant),
           ),

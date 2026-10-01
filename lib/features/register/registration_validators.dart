@@ -155,11 +155,14 @@ String? validateAbout(RegistrationData data) {
   return null;
 }
 
+const minRegistrationPhotos = 1;
+const maxRegistrationPhotos = 3;
+
 String? validatePhotos(List<RegistrationPhoto> photos) {
-  if (photos.length < 2) return 'Upload at least 2 verified photos';
-  if (photos.length > 9) return 'Maximum 9 photos allowed';
-  final approved = photos.where((p) => p.status == RegistrationPhotoStatus.approved && (p.imageUrl?.isNotEmpty ?? false));
-  if (approved.length < 2) return 'Each photo must pass AI verification before continuing';
+  if (photos.length < minRegistrationPhotos) return 'Upload at least $minRegistrationPhotos verified photo';
+  if (photos.length > maxRegistrationPhotos) return 'Maximum $maxRegistrationPhotos photos allowed';
+  final allApproved = photos.every((p) => p.status == RegistrationPhotoStatus.approved && (p.imageUrl?.isNotEmpty ?? false));
+  if (!allApproved) return 'Each photo must pass AI verification before continuing';
   return null;
 }
 
@@ -257,10 +260,13 @@ Map<String, dynamic> mapRegistrationToProfile(
     'pref_gender': _mapPrefGender(data.lookingFor),
     'pref_location': '',
     'pref_max_distance_km': _mapDistanceKm(data.distancePreference),
-    'pref_relationship_goal': _mapPrefRelationshipGoal(data.relationshipGoal),
+    // The goal filter starts open; the member's own goal already ranks matching
+    // intent first (same as web).
+    'pref_relationship_goal': 'everyone',
     'pref_values': buildPrefValues(data),
-    'pref_min_height': "${data.heightFeet}'${data.heightInches}\"",
-    'pref_occupation': data.occupation.trim(),
+    // Partner preferences start empty; they are set on Match Preferences.
+    'pref_min_height': '',
+    'pref_occupation': '',
     'is_onboarded': true,
   };
 }
@@ -272,12 +278,18 @@ String _mapGender(String gender) {
 }
 
 String _mapReligion(String religion) {
+  // Registration no longer asks religion (web flow); send nothing rather than "Other".
+  if (religion.isEmpty) return '';
   const map = {
     'hindu': 'Hindu',
     'buddhist': 'Buddhist',
     'muslim': 'Muslim',
     'christian': 'Christian',
-    'kirat': 'Other',
+    'kirat': 'Kirat',
+    'sikh': 'Sikh',
+    'jain': 'Jain',
+    'jewish': 'Jewish',
+    'non_religious': 'Non-religious',
     'other': 'Other',
   };
   return map[religion] ?? 'Other';
@@ -307,12 +319,6 @@ String _mapRelationshipGoal(String goal) {
   return 'serious';
 }
 
-String _mapPrefRelationshipGoal(String goal) {
-  if (goal == 'dating') return 'dating';
-  if (goal == 'friendship') return 'casual';
-  if (goal == 'serious' || goal == 'marriage') return 'serious';
-  return 'everyone';
-}
 
 int _mapDistanceKm(String distance) {
   if (distance == 'anywhere') return 500;

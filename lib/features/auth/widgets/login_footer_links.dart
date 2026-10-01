@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/router/app_router.dart';
 
 /// Footer links from DuoFrontend `/login` (Privacy, Terms, Help).
 class LoginFooterLinks extends StatelessWidget {
@@ -11,25 +14,28 @@ class LoginFooterLinks extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      // Wrap (not Row) so the three links drop to a second line on narrow phones.
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 4,
         children: [
           _FooterLink(
             label: 'Privacy Policy',
             color: scheme.onSurfaceVariant,
-            onTap: () => _showComingSoon(context, 'Privacy Policy'),
+            onTap: () => _open(context, AppRoutes.legalPrivacy),
           ),
           _dot(scheme),
           _FooterLink(
             label: 'Terms of Service',
             color: scheme.onSurfaceVariant,
-            onTap: () => _showComingSoon(context, 'Terms of Service'),
+            onTap: () => _open(context, AppRoutes.legalTerms),
           ),
           _dot(scheme),
           _FooterLink(
             label: 'Help Center',
             color: scheme.onSurfaceVariant,
-            onTap: () => _showComingSoon(context, 'Help Center'),
+            onTap: () => _open(context, AppRoutes.help),
           ),
         ],
       ),
@@ -46,11 +52,9 @@ class LoginFooterLinks extends StatelessWidget {
     );
   }
 
-  void _showComingSoon(BuildContext context, String label) {
+  void _open(BuildContext context, String route) {
     HapticFeedback.selectionClick();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label — coming soon')),
-    );
+    context.push(route);
   }
 }
 

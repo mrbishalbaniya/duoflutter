@@ -21,6 +21,8 @@ import '../../features/shell/main_shell.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/map/map_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
+import '../../features/wallet/wallet_transactions_screen.dart';
+import '../../features/insights/insights_screen.dart';
 import '../../features/verify/verification_screen.dart';
 import '../../features/verify/verify_device_screen.dart';
 import '../../features/permissions/providers/permission_providers.dart';
@@ -35,6 +37,17 @@ import '../../features/security/presentation/screens/login_history_screen.dart';
 import '../../features/security/presentation/screens/security_alerts_screen.dart';
 import '../../features/security/presentation/screens/security_center_screen.dart';
 import '../../features/security/presentation/screens/two_factor_screen.dart';
+import '../../features/support/data/support_content.dart';
+import '../../features/support/presentation/blocked_users_screen.dart';
+import '../../features/settings/presentation/screens/account_screen.dart';
+import '../../features/settings/presentation/screens/appearance_screen.dart';
+import '../../features/settings/presentation/screens/mail_preferences_screen.dart';
+import '../../features/settings/presentation/screens/match_preferences_screen.dart';
+import '../../features/settings/presentation/screens/notification_preferences_screen.dart';
+import '../../features/support/presentation/delete_account_screen.dart';
+import '../../features/support/presentation/help_screens.dart';
+import '../../features/support/presentation/support_request_screen.dart';
+import '../../repositories/support_repository.dart';
 
 abstract final class AppRoutes {
   static const splash = '/';
@@ -50,7 +63,14 @@ abstract final class AppRoutes {
   static const map = '/map';
   static const profile = '/profile';
   static const wallet = '/wallet';
+  static const walletTransactions = '/wallet/transactions';
+  static const insights = '/insights';
   static const settings = '/settings';
+  static const settingsAppearance = '/settings/appearance';
+  static const settingsNotifications = '/settings/notifications';
+  static const settingsMails = '/settings/mails';
+  static const account = '/account';
+  static const matchPreferences = '/preferences';
   static const security = '/security';
   static const securityTwoFactor = '/security/two-factor';
   static const securityBiometric = '/security/biometric';
@@ -59,6 +79,14 @@ abstract final class AppRoutes {
   static const securityAlerts = '/security/alerts';
   static const securityChangePassword = '/security/change-password';
   static const notifications = '/notifications';
+  static const blockedUsers = '/blocked-users';
+  static const deleteAccount = '/delete-account';
+  static const help = '/help';
+  static const helpFaq = '/help/faq';
+  static const helpContact = '/help/contact';
+  static const helpReportBug = '/help/report-bug';
+  static const legalPrivacy = '/legal/privacy';
+  static const legalTerms = '/legal/terms';
   static const update = '/update';
   static const verify = '/verify';
   static const verifyDevice = '/verify/device';
@@ -68,24 +96,37 @@ abstract final class AppRoutes {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authControllerProvider);
-  final splash = ref.watch(splashControllerProvider);
-  final intro = ref.watch(onboardingControllerProvider);
-  final permissionSetupComplete = ref.watch(permissionSetupCompleteProvider);
-
+  // Build the router ONCE. It used to `ref.watch` auth/splash/onboarding/
+  // permission state, so every profile refresh (e.g. saving Match filters)
+  // created a brand-new GoRouter: the whole navigation stack was rebuilt,
+  // open sheets/awaits were orphaned and Match stayed "filters open" (frozen)
+  // until relaunch. Redirect reads the latest values; _AuthRefreshListenable
+  // re-runs it whenever they change.
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: _AuthRefreshListenable(ref),
     redirect: (context, state) {
+      final auth = ref.read(authControllerProvider);
+      final splash = ref.read(splashControllerProvider);
+      final intro = ref.read(onboardingControllerProvider);
+      final permissionSetupComplete = ref.read(permissionSetupCompleteProvider);
       final path = state.matchedLocation;
       final isOnboarding = path == AppRoutes.onboarding;
-      final isAuthRoute = path == AppRoutes.login ||
+      final isAuthRoute =
+          path == AppRoutes.login ||
           path == AppRoutes.register ||
           path == AppRoutes.forgotPassword ||
           isOnboarding;
       final isSplash = path == AppRoutes.splash;
+      // Static info pages reachable from the login footer before sign-in.
+      final isPublicInfo =
+          path == AppRoutes.legalPrivacy ||
+          path == AppRoutes.legalTerms ||
+          path == AppRoutes.help ||
+          path == AppRoutes.helpFaq;
       final isVerifyDevice = path == AppRoutes.verifyDevice;
-      final isPermissionRoute = path == AppRoutes.permissionWelcome ||
+      final isPermissionRoute =
+          path == AppRoutes.permissionWelcome ||
           path == AppRoutes.permissionSetup ||
           path == AppRoutes.permissionPersonalize;
 
@@ -104,7 +145,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return null;
         }
         if (isOnboarding) return AppRoutes.login;
-        if (isAuthRoute) return null;
+        if (isAuthRoute || isPublicInfo) return null;
         return AppRoutes.login;
       }
 
@@ -125,10 +166,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: AppRoutes.splash,
-        builder: (_, __) => const SplashScreen(),
-      ),
+      GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashScreen()),
       GoRoute(
         path: AppRoutes.onboarding,
         pageBuilder: (context, state) => CustomTransitionPage(
@@ -136,7 +174,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const OnboardingScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
               child: child,
             );
           },
@@ -149,10 +190,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
               child: ScaleTransition(
                 scale: Tween<double>(begin: 0.98, end: 1).animate(
-                  CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
                 ),
                 child: child,
               ),
@@ -170,9 +217,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.matchCelebration,
-        builder: (_, state) => MatchCelebrationScreen(
-          match: state.extra as dynamic,
-        ),
+        builder: (_, state) =>
+            MatchCelebrationScreen(match: state.extra as dynamic),
       ),
       GoRoute(
         path: AppRoutes.chatThread,
@@ -180,9 +226,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           conversationId: state.pathParameters['conversationId']!,
         ),
       ),
+      GoRoute(path: AppRoutes.wallet, builder: (_, __) => const WalletScreen()),
       GoRoute(
-        path: AppRoutes.wallet,
-        builder: (_, __) => const WalletScreen(),
+        path: AppRoutes.walletTransactions,
+        builder: (_, __) => const WalletTransactionsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.insights,
+        builder: (_, state) => InsightsScreen(
+          initialMatchId: int.tryParse(state.uri.queryParameters['match'] ?? ''),
+        ),
       ),
       GoRoute(
         path: AppRoutes.verify,
@@ -201,7 +254,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const PermissionWelcomeScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
               child: child,
             );
           },
@@ -214,7 +270,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const PermissionSetupScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
               child: child,
             );
           },
@@ -227,7 +286,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const PermissionPersonalizationScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
               child: child,
             );
           },
@@ -237,10 +299,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         builder: (_, __) => const SettingsScreen(),
       ),
+      GoRoute(path: AppRoutes.settingsAppearance, builder: (_, __) => const AppearanceScreen()),
       GoRoute(
-        path: AppRoutes.update,
-        builder: (_, __) => const UpdateScreen(),
+        path: AppRoutes.settingsNotifications,
+        builder: (_, __) => const NotificationPreferencesScreen(),
       ),
+      GoRoute(path: AppRoutes.settingsMails, builder: (_, __) => const MailPreferencesScreen()),
+      GoRoute(path: AppRoutes.account, builder: (_, __) => const AccountScreen()),
+      GoRoute(path: AppRoutes.matchPreferences, builder: (_, __) => const MatchPreferencesScreen()),
+      GoRoute(path: AppRoutes.update, builder: (_, __) => const UpdateScreen()),
       GoRoute(
         path: AppRoutes.security,
         builder: (_, __) => const SecurityCenterScreen(),
@@ -272,11 +339,44 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const ChangePasswordScreen(),
       ),
       GoRoute(
+        path: AppRoutes.blockedUsers,
+        builder: (_, __) => const BlockedUsersScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.deleteAccount,
+        builder: (_, __) => const DeleteAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.help,
+        builder: (_, __) => const HelpCenterScreen(),
+      ),
+      GoRoute(path: AppRoutes.helpFaq, builder: (_, __) => const FaqScreen()),
+      GoRoute(
+        path: AppRoutes.helpContact,
+        builder: (_, __) => const SupportRequestScreen(
+          category: SupportRequestCategory.contact,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.helpReportBug,
+        builder: (_, __) =>
+            const SupportRequestScreen(category: SupportRequestCategory.bug),
+      ),
+      GoRoute(
+        path: AppRoutes.legalPrivacy,
+        builder: (_, __) => const LegalScreen(document: privacyDocument),
+      ),
+      GoRoute(
+        path: AppRoutes.legalTerms,
+        builder: (_, __) => const LegalScreen(document: termsDocument),
+      ),
+      GoRoute(
         path: AppRoutes.notifications,
         builder: (_, __) => const NotificationsScreen(),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (_, __, navigationShell) => MainShell(navigationShell: navigationShell),
+        builder: (_, __, navigationShell) =>
+            MainShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
             routes: [

@@ -19,12 +19,14 @@ class ChatComposer extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onSend,
-    required     this.onTyping,
+    required this.onTyping,
     this.onTypingStop,
     this.replyingTo,
     this.onCancelReply,
     this.onPickImage,
     this.onPickCamera,
+    this.onShareLocation,
+    this.sharingLocation = false,
     this.showEmojiPicker = false,
     this.onOpenEmojiPicker,
     this.onCloseEmojiPicker,
@@ -49,6 +51,8 @@ class ChatComposer extends StatefulWidget {
   final VoidCallback? onCancelReply;
   final VoidCallback? onPickImage;
   final VoidCallback? onPickCamera;
+  final VoidCallback? onShareLocation;
+  final bool sharingLocation;
   final bool showEmojiPicker;
   final VoidCallback? onOpenEmojiPicker;
   final VoidCallback? onCloseEmojiPicker;
@@ -249,6 +253,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       _LeadingActions(
                         isVoiceComposeActive: widget.isVoiceComposeActive,
                         isTypingActive: _isTypingActive,
+                        hasText: _hasText,
                         attachmentsExpanded: _attachmentsExpanded,
                         busy: _busy,
                         uploading: widget.uploading,
@@ -257,6 +262,8 @@ class _ChatComposerState extends State<ChatComposer> {
                         onToggleAttachments: _toggleAttachments,
                         onPickCamera: () => _keepFocusAnd(widget.onPickCamera),
                         onPickImage: () => _keepFocusAnd(widget.onPickImage),
+                        onShareLocation: widget.onShareLocation,
+                        sharingLocation: widget.sharingLocation,
                         onVoiceListeningChange: widget.onVoiceListeningChange,
                         onCancelVoiceRecording: widget.onCancelVoiceRecording,
                       ),
@@ -317,10 +324,7 @@ class _ChatComposerState extends State<ChatComposer> {
 }
 
 class _ReplyBanner extends StatelessWidget {
-  const _ReplyBanner({
-    required this.replyingTo,
-    required this.onCancelReply,
-  });
+  const _ReplyBanner({required this.replyingTo, required this.onCancelReply});
 
   final ChatMessage replyingTo;
   final VoidCallback? onCancelReply;
@@ -375,6 +379,7 @@ class _LeadingActions extends StatelessWidget {
   const _LeadingActions({
     required this.isVoiceComposeActive,
     required this.isTypingActive,
+    required this.hasText,
     required this.attachmentsExpanded,
     required this.busy,
     required this.uploading,
@@ -383,11 +388,14 @@ class _LeadingActions extends StatelessWidget {
     required this.onToggleAttachments,
     required this.onPickCamera,
     required this.onPickImage,
+    required this.onShareLocation,
+    required this.sharingLocation,
     required this.onVoiceListeningChange,
     required this.onCancelVoiceRecording,
   });
 
   final bool isVoiceComposeActive;
+  final bool hasText;
   final bool isTypingActive;
   final bool attachmentsExpanded;
   final bool busy;
@@ -397,6 +405,8 @@ class _LeadingActions extends StatelessWidget {
   final VoidCallback onToggleAttachments;
   final VoidCallback? onPickCamera;
   final VoidCallback? onPickImage;
+  final VoidCallback? onShareLocation;
+  final bool sharingLocation;
   final ValueChanged<bool>? onVoiceListeningChange;
   final VoidCallback? onCancelVoiceRecording;
 
@@ -424,23 +434,30 @@ class _LeadingActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ExpandButton(
-          expanded: attachmentsExpanded,
-          onPressed: busy ? null : onToggleAttachments,
-        ),
+        // Web ChatComposer: the chevron (and the strip it expands) only exists while
+        // typing. When idle, camera/gallery show directly and the mic sits on the
+        // right, so showing both produced duplicate camera/gallery/mic icons.
+        if (isTypingActive)
+          _ExpandButton(
+            expanded: attachmentsExpanded,
+            onPressed: busy ? null : onToggleAttachments,
+          ),
         AnimatedSize(
           duration: _kComposerAnimDuration,
           curve: _kComposerAnimCurve,
           alignment: Alignment.centerLeft,
           clipBehavior: Clip.hardEdge,
-          child: attachmentsExpanded
+          child: attachmentsExpanded && isTypingActive
               ? _AttachmentStrip(
+                  showMic: hasText,
                   busy: busy,
                   uploading: uploading,
                   isRecording: isRecording,
                   voiceDraftReady: voiceDraftReady,
                   onPickCamera: onPickCamera,
                   onPickImage: onPickImage,
+                  onShareLocation: onShareLocation,
+                  sharingLocation: sharingLocation,
                   onVoiceListeningChange: onVoiceListeningChange,
                 )
               : const SizedBox.shrink(),
@@ -468,9 +485,18 @@ class _LeadingActions extends StatelessWidget {
                       tooltip: 'Take photo with camera',
                     ),
                     _CircleIconButton(
-                      icon: uploading ? Icons.hourglass_top : Icons.image_outlined,
+                      icon: uploading
+                          ? Icons.hourglass_top
+                          : Icons.image_outlined,
                       onPressed: busy ? null : onPickImage,
                       tooltip: 'Choose image from gallery',
+                    ),
+                    _CircleIconButton(
+                      icon: Icons.location_on_outlined,
+                      onPressed: busy || sharingLocation
+                          ? null
+                          : onShareLocation,
+                      tooltip: 'Share your location',
                     ),
                   ],
                 )
@@ -483,6 +509,9 @@ class _LeadingActions extends StatelessWidget {
 
 class _AttachmentStrip extends StatefulWidget {
   const _AttachmentStrip({
+    required this.showMic,
+    required this.onShareLocation,
+    required this.sharingLocation,
     required this.busy,
     required this.uploading,
     required this.isRecording,
@@ -499,6 +528,9 @@ class _AttachmentStrip extends StatefulWidget {
   final VoidCallback? onPickCamera;
   final VoidCallback? onPickImage;
   final ValueChanged<bool>? onVoiceListeningChange;
+  final bool showMic;
+  final VoidCallback? onShareLocation;
+  final bool sharingLocation;
 
   @override
   State<_AttachmentStrip> createState() => _AttachmentStripState();
@@ -513,10 +545,15 @@ class _AttachmentStripState extends State<_AttachmentStrip>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: _kComposerAnimDuration);
+    _controller = AnimationController(
+      vsync: this,
+      duration: _kComposerAnimDuration,
+    );
     _fade = CurvedAnimation(parent: _controller, curve: _kComposerAnimCurve);
-    _slide = Tween<Offset>(begin: const Offset(-0.12, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: _kComposerAnimCurve));
+    _slide = Tween<Offset>(
+      begin: const Offset(-0.12, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: _kComposerAnimCurve));
     _controller.forward();
   }
 
@@ -541,16 +578,27 @@ class _AttachmentStripState extends State<_AttachmentStrip>
               tooltip: 'Take photo with camera',
             ),
             _CircleIconButton(
-              icon: widget.uploading ? Icons.hourglass_top : Icons.image_outlined,
+              icon: widget.uploading
+                  ? Icons.hourglass_top
+                  : Icons.image_outlined,
               onPressed: widget.busy ? null : widget.onPickImage,
               tooltip: 'Choose image from gallery',
             ),
-            VoiceInputButton(
-              listening: widget.isRecording,
-              paused: widget.voiceDraftReady && !widget.isRecording,
-              disabled: widget.busy,
-              onListeningChange: widget.onVoiceListeningChange ?? (_) {},
+            _CircleIconButton(
+              icon: Icons.location_on_outlined,
+              onPressed: widget.busy || widget.sharingLocation
+                  ? null
+                  : widget.onShareLocation,
+              tooltip: 'Share your location',
             ),
+            // Right-hand button is the mic while empty; avoid a second mic here.
+            if (widget.showMic)
+              VoiceInputButton(
+                listening: widget.isRecording,
+                paused: widget.voiceDraftReady && !widget.isRecording,
+                disabled: widget.busy,
+                onListeningChange: widget.onVoiceListeningChange ?? (_) {},
+              ),
           ],
         ),
       ),
@@ -559,10 +607,7 @@ class _AttachmentStripState extends State<_AttachmentStrip>
 }
 
 class _ExpandButton extends StatelessWidget {
-  const _ExpandButton({
-    required this.expanded,
-    required this.onPressed,
-  });
+  const _ExpandButton({required this.expanded, required this.onPressed});
 
   final bool expanded;
   final VoidCallback? onPressed;
@@ -571,9 +616,7 @@ class _ExpandButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return _CircleIconButton(
       onPressed: onPressed,
-      tooltip: expanded
-          ? 'Hide attachment options'
-          : 'Show attachment options',
+      tooltip: expanded ? 'Hide attachment options' : 'Show attachment options',
       child: AnimatedRotation(
         turns: expanded ? 0.5 : 0,
         duration: _kComposerAnimDuration,
@@ -625,16 +668,18 @@ class _InputPill extends StatelessWidget {
     return AnimatedContainer(
       duration: _kComposerAnimDuration,
       curve: _kComposerAnimCurve,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        // 22 = half the single-line height: a pill for one line, a rounded
+        // rectangle (not a squashed oval) once long text wraps.
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isVoiceComposeActive
               ? DuoColors.primary.withValues(alpha: 0.2)
               : focused
-                  ? DuoColors.primary.withValues(alpha: 0.55)
-                  : scheme.outlineVariant.withValues(alpha: 0.4),
+              ? DuoColors.primary.withValues(alpha: 0.55)
+              : scheme.outlineVariant.withValues(alpha: 0.4),
           width: focused && !isVoiceComposeActive ? 1.5 : 1,
         ),
       ),
@@ -644,6 +689,8 @@ class _InputPill extends StatelessWidget {
               seconds: voiceRecordingSeconds,
             )
           : Row(
+              // Keep the emoji button pinned to the last line while typing.
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: TextField(
@@ -728,19 +775,20 @@ class _TrailingAction extends StatelessWidget {
               onPressed: busy ? null : onSendVoiceMessage,
               tooltip: 'Send voice message',
             )
-          : isTypingActive
-              ? _SendCircleButton(
-                  key: const ValueKey('send-text'),
-                  onPressed: busy || !hasText ? null : onSend,
-                  tooltip: 'Send message',
-                  showProgress: busy && !uploading,
-                  dimmed: !hasText,
-                )
-              : _MicTrailingButton(
-                  key: const ValueKey('mic'),
-                  disabled: busy,
-                  onPressed: onStartVoice,
-                ),
+          // Mic while the box is empty (even if focused); send once there is text.
+          : hasText
+          ? _SendCircleButton(
+              key: const ValueKey('send-text'),
+              onPressed: busy || !hasText ? null : onSend,
+              tooltip: 'Send message',
+              showProgress: busy && !uploading,
+              dimmed: !hasText,
+            )
+          : _MicTrailingButton(
+              key: const ValueKey('mic'),
+              disabled: busy,
+              onPressed: onStartVoice,
+            ),
     );
   }
 }
@@ -820,7 +868,9 @@ class _SendCircleButton extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   DuoColors.primary.withValues(alpha: dimmed ? 0.45 : 1),
-                  DuoColors.primaryContainer.withValues(alpha: dimmed ? 0.45 : 1),
+                  DuoColors.primaryContainer.withValues(
+                    alpha: dimmed ? 0.45 : 1,
+                  ),
                 ],
               ),
               boxShadow: enabled
@@ -879,7 +929,8 @@ class _CircleIconButton extends StatelessWidget {
           onPressed: onPressed,
           padding: EdgeInsets.zero,
           visualDensity: VisualDensity.compact,
-          icon: child ??
+          icon:
+              child ??
               Icon(
                 icon,
                 color: iconColor ?? DuoColors.primary,

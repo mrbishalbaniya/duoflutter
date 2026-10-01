@@ -77,7 +77,7 @@ class SettingsStorageService {
     try {
       final tempDir = await getTemporaryDirectory();
       final cacheDir = Directory('${tempDir.path}/libCachedImageData');
-      return _directorySize(cacheDir);
+      return await _directorySize(cacheDir);
     } catch (_) {
       return 0;
     }

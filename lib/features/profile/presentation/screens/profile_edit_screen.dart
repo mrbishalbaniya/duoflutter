@@ -16,20 +16,18 @@ import '../../../match/providers/match_providers.dart';
 import '../../domain/profile_edit_models.dart';
 import '../../providers/profile_providers.dart';
 import '../profile_edit_validation.dart';
-import '../widgets/edit/profile_edit_about_section.dart';
-import '../widgets/edit/profile_edit_background_section.dart';
-import '../widgets/edit/profile_edit_education_section.dart';
-import '../widgets/edit/profile_edit_lifestyle_section.dart';
-import '../widgets/edit/profile_edit_personal_section.dart';
 import '../widgets/edit/profile_edit_photos_section.dart';
-import '../widgets/edit/profile_edit_preferences_section.dart';
 import '../widgets/edit/profile_edit_section_tile.dart';
+import '../widgets/edit/profile_edit_web_sections.dart';
 import '../widgets/profile_responsive.dart';
 
 class ProfileEditScreen extends ConsumerStatefulWidget {
-  const ProfileEditScreen({super.key, required this.initialProfile});
+  const ProfileEditScreen({super.key, required this.initialProfile, this.onlySection});
 
   final DuoProfile initialProfile;
+
+  /// Edit only this section (web per-section edit), e.g. "Personal".
+  final String? onlySection;
 
   @override
   ConsumerState<ProfileEditScreen> createState() => _ProfileEditScreenState();
@@ -105,7 +103,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   }
 
   Future<void> _pickPhotos() async {
-    if (_form.photos.length >= 9) return;
+    if (_form.photos.length >= profileMaxPhotos) return;
     final picker = ImagePicker();
     final files = await picker.pickMultiImage(imageQuality: 85);
     if (files.isEmpty) return;
@@ -118,7 +116,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
 
     try {
       final repo = ref.read(photoRepositoryProvider);
-      final remaining = 9 - _form.photos.length;
+      final remaining = profileMaxPhotos - _form.photos.length;
       final selected = files.take(remaining).toList();
       final uploaded = <ProfileEditPhoto>[];
       final isFirst = _form.photos.isEmpty;
@@ -174,9 +172,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     });
   }
 
+  /// `onReorderItem` already gives the post-removal target index.
   void _reorderPhotos(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
       final next = List<ProfileEditPhoto>.from(_form.photos);
       final item = next.removeAt(oldIndex);
       next.insert(newIndex, item);
@@ -188,8 +186,12 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   Future<void> _save() async {
     final errors = validateProfileEditForm(_form);
     setState(() => _fieldErrors = errors);
+    if (_form.photos.length < profileMinPhotos) {
+      setState(() => _saveError = 'Add at least $profileMinPhotos photo to save.');
+      return;
+    }
     if (!profileEditFormIsValid(_form)) {
-      setState(() => _saveError = 'Please fix the highlighted fields.');
+      setState(() => _saveError = _fieldErrors.values.whereType<String>().join(' '));
       return;
     }
 
@@ -228,6 +230,52 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     }
   }
 
+  static const _sections = [
+    'Photos',
+    'Personal',
+    'Religion & Background',
+    'Education & Career',
+    'Lifestyle & Interests',
+    'About',
+  ];
+
+  static const _sectionIcons = {
+    'Photos': Icons.photo_library_outlined,
+    'Personal': Icons.person_outline,
+    'Religion & Background': Icons.temple_hindu_outlined,
+    'Education & Career': Icons.school_outlined,
+    'Lifestyle & Interests': Icons.style_outlined,
+    'About': Icons.format_quote_outlined,
+  };
+
+  List<String> get _visibleSections =>
+      widget.onlySection != null && _sections.contains(widget.onlySection) ? [widget.onlySection!] : _sections;
+
+  Widget _sectionBody(String section) => switch (section) {
+        'Photos' => ProfileEditPhotosSection(
+            photos: _form.photos,
+            photoError: _photoError,
+            analyzingPhotos: _analyzingPhotos,
+            uploadProgress: _uploadProgress,
+            onPickPhotos: _pickPhotos,
+            onRemovePhoto: _removePhoto,
+            onSetPrimary: _setProfilePhoto,
+            onReorder: _reorderPhotos,
+          ),
+        'Personal' => ProfileEditPersonalFields(
+            form: _form,
+            onChanged: _markDirty,
+            locationController: _locationController,
+            detectingLocation: _detectingLocation,
+            locationError: _locationError,
+            onDetectLocation: _detectLocation,
+          ),
+        'Religion & Background' => ProfileEditBackgroundFields(form: _form, onChanged: _markDirty),
+        'Education & Career' => ProfileEditEducationFields(form: _form, onChanged: _markDirty),
+        'Lifestyle & Interests' => ProfileEditLifestyleFields(form: _form, onChanged: _markDirty),
+        _ => ProfileEditAboutFields(form: _form, onChanged: _markDirty),
+      };
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -244,7 +292,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Edit profile'),
+          title: Text(widget.onlySection ?? 'Edit Profile'),
           leading: IconButton(
             icon: const Icon(Icons.close_rounded),
             onPressed: () async {
@@ -281,68 +329,18 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(_saveError!, style: TextStyle(color: scheme.error)),
               ),
-            ProfileEditSectionTile(
-              title: 'Photos',
-              subtitle: '${_form.photos.length}/9 uploaded',
-              icon: Icons.photo_library_outlined,
-              initiallyExpanded: true,
-              animationIndex: 0,
-              child: ProfileEditPhotosSection(
-                photos: _form.photos,
-                photoError: _photoError,
-                analyzingPhotos: _analyzingPhotos,
-                uploadProgress: _uploadProgress,
-                onPickPhotos: _pickPhotos,
-                onRemovePhoto: _removePhoto,
-                onSetPrimary: _setProfilePhoto,
-                onReorder: _reorderPhotos,
-              ),
-            ),
-            ProfileEditSectionTile(
-              title: 'Basic information',
-              icon: Icons.person_outline,
-              initiallyExpanded: true,
-              animationIndex: 1,
-              child: ProfileEditPersonalSection(
-                form: _form,
-                locationController: _locationController,
-                detectingLocation: _detectingLocation,
-                locationError: _locationError,
-                fieldErrors: _fieldErrors,
-                onChanged: _markDirty,
-                onDetectLocation: _detectLocation,
-              ),
-            ),
-            ProfileEditSectionTile(
-              title: 'About me',
-              icon: Icons.format_quote_outlined,
-              animationIndex: 2,
-              child: ProfileEditAboutSection(form: _form, onChanged: _markDirty),
-            ),
-            ProfileEditSectionTile(
-              title: 'Education & career',
-              icon: Icons.school_outlined,
-              animationIndex: 3,
-              child: ProfileEditEducationSection(form: _form, onChanged: _markDirty),
-            ),
-            ProfileEditSectionTile(
-              title: 'Religion & background',
-              icon: Icons.temple_hindu_outlined,
-              animationIndex: 4,
-              child: ProfileEditBackgroundSection(form: _form, onChanged: _markDirty),
-            ),
-            ProfileEditSectionTile(
-              title: 'Lifestyle & interests',
-              icon: Icons.interests_outlined,
-              animationIndex: 5,
-              child: ProfileEditLifestyleSection(form: _form, onChanged: _markDirty),
-            ),
-            ProfileEditSectionTile(
-              title: 'Discovery preferences',
-              icon: Icons.tune_rounded,
-              animationIndex: 6,
-              child: ProfileEditPreferencesSection(form: _form, onChanged: _markDirty),
-            ),
+            for (final (i, section) in _visibleSections.indexed)
+              if (widget.onlySection != null)
+                _sectionBody(section)
+              else
+                ProfileEditSectionTile(
+                  title: section,
+                  subtitle: section == 'Photos' ? '${_form.photos.length}/$profileMaxPhotos uploaded' : null,
+                  icon: _sectionIcons[section]!,
+                  initiallyExpanded: i < 2,
+                  animationIndex: i,
+                  child: _sectionBody(section),
+                ),
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: _saving

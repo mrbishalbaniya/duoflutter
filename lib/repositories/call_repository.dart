@@ -83,6 +83,11 @@ class CallRepository {
     return CallSessionDto.fromJson(response.data!);
   }
 
+  /// Tell the caller we're already on another call.
+  Future<void> markBusy(String callId) async {
+    await _client.post<Map<String, dynamic>>('/calls/$callId/busy/');
+  }
+
   Future<String> getCallWsTicket(String conversationId) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/calls/conversations/$conversationId/ws-ticket/',

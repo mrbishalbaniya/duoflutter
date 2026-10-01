@@ -3,11 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/providers/core_providers.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../widgets/duo_ui.dart';
 import '../../../auth/auth_controller.dart';
-import '../../../profile/profile_edit_screen.dart';
-import '../../../profile/providers/profile_providers.dart';
 import '../../domain/settings_domain.dart';
 import '../../models/settings_search.dart';
 import '../../providers/settings_providers.dart';
@@ -28,6 +27,13 @@ import '../sections/settings_storage_section.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_profile_header.dart';
 import '../widgets/settings_search_bar.dart';
+
+/// Live wallet balance, same source as the Wallet page; the profile value is
+/// only a fallback (matches web settings).
+final settingsWalletBalanceProvider = FutureProvider.autoDispose<num?>((ref) async {
+  final wallet = await ref.read(walletRepositoryProvider).getWallet();
+  return wallet.balance;
+});
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -54,38 +60,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   bool _shows(SettingsSectionId id) => _visibleSections.contains(id);
 
-  Future<void> _openEditProfile() async {
-    try {
-      final loaded = await ref.read(myProfileProvider.future);
-      if (!mounted) return;
-      final saved = await Navigator.of(context).push<bool>(
-        MaterialPageRoute<bool>(
-          builder: (_) => ProfileEditScreen(initialProfile: loaded),
-        ),
-      );
-      if (saved == true) {
-        ref.invalidate(myProfileProvider);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      final fallback = ref.read(authControllerProvider).user?.profile;
-      if (fallback != null) {
-        final saved = await Navigator.of(context).push<bool>(
-          MaterialPageRoute<bool>(
-            builder: (_) => ProfileEditScreen(initialProfile: fallback),
-          ),
-        );
-        if (saved == true) {
-          ref.invalidate(myProfileProvider);
-        }
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open profile editor: $e')),
-      );
-    }
-  }
-
   Future<void> _confirmLogout() async {
     final confirmed = await showLogoutDialog(context);
     if (confirmed != true || !mounted) return;
@@ -98,6 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final profile = user?.profile;
+    final liveBalance = ref.watch(settingsWalletBalanceProvider).valueOrNull;
     final padding = SettingsLayout.horizontalPadding(context);
     final spacing = SettingsLayout.sectionSpacing(context);
     final twoColumns = SettingsLayout.useTwoColumns(context);
@@ -110,14 +85,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final content = _SettingsContent(
-                email: user?.email ?? '—',
-                balanceLabel: formatWalletBalance(profile?.walletBalance),
-                phoneLabel: formatPhoneLabel(profile?.phoneCountryCode, profile?.phoneNumber),
-                username: profile?.username,
+                balanceLabel: formatWalletBalance(liveBalance?.toInt() ?? profile?.walletBalance),
                 isVerified: profile?.isVerified ?? false,
                 spacing: spacing,
                 shows: _shows,
-                onEditProfile: _openEditProfile,
                 onLogout: _confirmLogout,
               );
 
@@ -176,25 +147,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 class _SettingsContent {
   const _SettingsContent({
-    required this.email,
     required this.balanceLabel,
-    required this.phoneLabel,
-    required this.username,
     required this.isVerified,
     required this.spacing,
     required this.shows,
-    required this.onEditProfile,
     required this.onLogout,
   });
 
-  final String email;
   final String balanceLabel;
-  final String phoneLabel;
-  final String? username;
   final bool isVerified;
   final double spacing;
   final bool Function(SettingsSectionId id) shows;
-  final VoidCallback onEditProfile;
   final VoidCallback onLogout;
 
   Widget _gap() => SizedBox(height: spacing);
@@ -204,26 +167,19 @@ class _SettingsContent {
         children: [
           if (shows(SettingsSectionId.account))
             SettingsAccountSection(
-              email: email,
-              username: username,
-              phoneLabel: phoneLabel,
               balanceLabel: balanceLabel,
               isVerified: isVerified,
-              onEditProfile: onEditProfile,
               animationIndex: 0,
             ),
           if (shows(SettingsSectionId.account)) _gap(),
           SettingsAppearanceSection(animationIndex: 1, visible: shows(SettingsSectionId.appearance)),
           if (shows(SettingsSectionId.appearance)) _gap(),
-          SettingsNotificationsSection(animationIndex: 2, visible: shows(SettingsSectionId.notifications)),
+          SettingsNotificationLinksSection(animationIndex: 2, visible: shows(SettingsSectionId.notifications)),
           if (shows(SettingsSectionId.notifications)) _gap(),
           SettingsPrivacySection(
-            onEditProfile: onEditProfile,
             animationIndex: 3,
             visible: shows(SettingsSectionId.privacy),
           ),
-          if (shows(SettingsSectionId.privacy)) _gap(),
-          SettingsPermissionsSection(animationIndex: 4, visible: shows(SettingsSectionId.permissions)),
         ],
       );
 
@@ -232,8 +188,6 @@ class _SettingsContent {
         children: [
           SettingsSecuritySection(animationIndex: 5, visible: shows(SettingsSectionId.security)),
           if (shows(SettingsSectionId.security)) _gap(),
-          SettingsStorageSection(animationIndex: 6, visible: shows(SettingsSectionId.storage)),
-          if (shows(SettingsSectionId.storage)) _gap(),
           SettingsLanguageSection(animationIndex: 7, visible: shows(SettingsSectionId.language)),
           if (shows(SettingsSectionId.language)) _gap(),
           SettingsHelpSection(animationIndex: 8, visible: shows(SettingsSectionId.help)),
@@ -242,6 +196,11 @@ class _SettingsContent {
           _gap(),
           SettingsAboutSection(animationIndex: 10, visible: shows(SettingsSectionId.about)),
           if (shows(SettingsSectionId.about)) _gap(),
+          // Permissions, then storage, sit right above the danger zone.
+          SettingsPermissionsSection(animationIndex: 4, visible: shows(SettingsSectionId.permissions)),
+          if (shows(SettingsSectionId.permissions)) _gap(),
+          SettingsStorageSection(animationIndex: 6, visible: shows(SettingsSectionId.storage)),
+          if (shows(SettingsSectionId.storage)) _gap(),
           SettingsDangerZoneSection(
             onLogout: onLogout,
             animationIndex: 11,

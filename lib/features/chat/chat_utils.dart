@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../../core/models/chat_models.dart';
 import 'domain/chat_emoji_constants.dart';
 import 'domain/chat_message_list_entry.dart';
+import 'domain/chat_location.dart';
+import 'widgets/chat_system_message_bubble.dart';
 
 const voiceMessageLabel = ChatEmojiConstants.voiceMessageLabel;
 
@@ -24,7 +26,10 @@ List<ChatMessage> sortMessages(List<ChatMessage> messages) {
 bool isVoiceMessage(ChatMessage msg) {
   if (msg.content == voiceMessageLabel) return true;
   final url = msg.imageUrl ?? '';
-  return RegExp(r'\.(webm|ogg|mp3|wav|m4a|aac)(\?|$)', caseSensitive: false).hasMatch(url);
+  return RegExp(
+    r'\.(webm|ogg|mp3|wav|m4a|aac)(\?|$)',
+    caseSensitive: false,
+  ).hasMatch(url);
 }
 
 bool isImageOnlyMessage(ChatMessage msg) {
@@ -33,6 +38,21 @@ bool isImageOnlyMessage(ChatMessage msg) {
   if (msg.messageType == 'image') return true;
   if (msg.localMediaPath != null && msg.localMediaPath!.isNotEmpty) return true;
   return (msg.imageUrl?.isNotEmpty ?? false) && msg.content.trim().isEmpty;
+}
+
+/// Web `isEmojiOnlyMessage`: a few emoji and nothing else render large, without a bubble.
+bool isEmojiOnlyMessage(ChatMessage msg) {
+  if (msg.isDeletedForEveryone || (msg.imageUrl?.isNotEmpty ?? false)) {
+    return false;
+  }
+  final text = msg.content.replaceAll(RegExp(r'\s'), '');
+  if (text.isEmpty || text.runes.length > 12) return false;
+  if (RegExp(r'^[#*0-9]+$').hasMatch(text)) return false;
+  return RegExp(
+    r'^(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}'
+    r'\u{FE0F}\u{200D}\u{E0020}-\u{E007F}\u{20E3}#*0-9])+$',
+    unicode: true,
+  ).hasMatch(text);
 }
 
 bool isVoiceOnlyMessage(ChatMessage msg) {
@@ -46,13 +66,14 @@ String lastMessagePreview(Conversation convo) {
   final last = convo.lastMessage;
   if (last == null) return 'Start the conversation!';
   if (last.isSystemMessage) {
-    return last.content.isNotEmpty ? last.content : 'Security event';
+    return systemEventText(last) ?? (last.content.isNotEmpty ? last.content : 'Security event');
   }
   if (last.isDeletedForEveryone) return 'Message deleted';
   if (isVoiceMessage(last)) return voiceMessageLabel;
   if (last.imageUrl?.isNotEmpty ?? false) {
     return last.content.trim().isEmpty ? '📷 Photo' : last.content;
   }
+  if (parseLocationMessage(last.content) != null) return '📍 Location';
   return last.content.isNotEmpty ? last.content : 'Start the conversation!';
 }
 
@@ -151,7 +172,9 @@ List<ChatMessageListEntry> buildMessageListEntries(List<ChatMessage> messages) {
   for (final message in messages) {
     if (!message.isVisible) continue;
 
-    final grouped = message.isSystemMessage ? false : isGroupedWithPrevious(message, previous);
+    final grouped = message.isSystemMessage
+        ? false
+        : isGroupedWithPrevious(message, previous);
     final showDate = shouldShowDateSeparator(message, previous);
 
     entries.add(

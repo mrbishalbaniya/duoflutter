@@ -22,6 +22,7 @@ class SwipeableCardStack extends StatefulWidget {
     required this.disabled,
     required this.onSwipe,
     this.overlayBuilder,
+    this.onSwipeUp,
   });
 
   /// Bottom → top order. Last item is the swipeable front card.
@@ -29,6 +30,9 @@ class SwipeableCardStack extends StatefulWidget {
   final bool disabled;
   final SwipeCommitCallback onSwipe;
   final Widget Function(DuoProfile profile, bool isTop)? overlayBuilder;
+
+  /// Swiping the top card upward (opens the full profile).
+  final ValueChanged<DuoProfile>? onSwipeUp;
 
   @override
   SwipeableCardStackState createState() => SwipeableCardStackState();
@@ -38,6 +42,8 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     with SingleTickerProviderStateMixin {
   late List<DuoProfile> _cards;
   Offset _drag = Offset.zero;
+  String? _photoCardId;
+  int _photoIndex = 0;
   bool _flying = false;
   late AnimationController _flyController;
   Animation<Offset>? _flyAnimation;
@@ -55,14 +61,20 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
   @override
   void didUpdateWidget(covariant SwipeableCardStack oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_flying) return;
-
-    if (!_sameDeck(_cards, widget.profiles)) {
-      setState(() {
-        _cards = List<DuoProfile>.from(widget.profiles);
-        _drag = Offset.zero;
-      });
+    if (_sameDeck(_cards, widget.profiles)) return;
+    // Mid-swipe: only ignore the update if it's just the parent catching up on
+    // this same swipe (new deck == ours minus the flying top card). A genuinely
+    // different deck (filters / refresh) replaces it and cancels the fling.
+    if (_flying && _cards.isNotEmpty &&
+        _sameDeck(_cards.sublist(0, _cards.length - 1), widget.profiles)) {
+      return;
     }
+    _flyController.stop();
+    setState(() {
+      _cards = List<DuoProfile>.from(widget.profiles);
+      _drag = Offset.zero;
+      _flying = false;
+    });
   }
 
   bool _sameDeck(List<DuoProfile> a, List<DuoProfile> b) {
@@ -147,6 +159,14 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     } else if (shouldLeft) {
       HapticFeedback.lightImpact();
       _flyOff(SwipeDirection.left);
+    } else if (widget.onSwipeUp != null &&
+        _cards.isNotEmpty &&
+        _drag.dx.abs() < _swipeThreshold &&
+        (_drag.dy < -90 || details.velocity.pixelsPerSecond.dy < -650)) {
+      // Upward swipe: snap back and open the profile.
+      HapticFeedback.selectionClick();
+      setState(() => _drag = Offset.zero);
+      widget.onSwipeUp!(_cards.last);
     } else {
       setState(() => _drag = Offset.zero);
     }
@@ -186,8 +206,19 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
     final depth = (total - 1) - index;
     final scale = 1 - depth * 0.05;
     final yOffset = -depth * 14.0;
-    final photo = resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard);
-    final cardKey = ValueKey('match-card-${profile.resolvedUserId ?? profile.displayName}');
+    final cardId = 'match-card-${profile.resolvedUserId ?? profile.displayName}';
+    final cardKey = ValueKey(cardId);
+    final photos = isTop
+        ? resolveProfilePhotoUrls(profile)
+        : [resolveProfilePhotoUrl(profile, preset: CloudinaryPreset.matchCard)];
+    if (isTop && _photoCardId != cardId) {
+      _photoCardId = cardId;
+      _photoIndex = 0;
+      for (final url in photos.skip(1)) {
+        precacheImage(CachedNetworkImageProvider(url), context);
+      }
+    }
+    final current = isTop ? _photoIndex.clamp(0, photos.length - 1) : 0;
 
     final card = KeyedSubtree(
       key: cardKey,
@@ -199,7 +230,8 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _CardPhoto(url: photo),
+              _CardPhoto(key: ValueKey(photos[current]), url: photos[current]),
+              if (isTop && photos.length > 1) _PhotoProgress(count: photos.length, current: current),
               widget.overlayBuilder?.call(profile, isTop) ??
                   MatchCardOverlay(profile: profile, isTopCard: isTop),
             ],
@@ -232,6 +264,15 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
             ? null
             : (d) => setState(() => _drag += d.delta),
         onPanEnd: widget.disabled || _flying ? null : _onPanEnd,
+        onTapUp: photos.length < 2 || _flying
+            ? null
+            : (d) {
+                final goBack = d.localPosition.dx < constraints.maxWidth / 3;
+                final next = goBack
+                    ? (current - 1).clamp(0, photos.length - 1)
+                    : (current + 1).clamp(0, photos.length - 1);
+                if (next != current) setState(() => _photoIndex = next);
+              },
         child: AnimatedBuilder(
           animation: _flying && _flyAnimation != null ? _flyAnimation! : const AlwaysStoppedAnimation(0),
           builder: (context, child) {
@@ -306,7 +347,7 @@ class SwipeableCardStackState extends State<SwipeableCardStack>
 }
 
 class _CardPhoto extends StatelessWidget {
-  const _CardPhoto({required this.url});
+  const _CardPhoto({super.key, required this.url});
 
   final String url;
 
@@ -375,6 +416,88 @@ class _SwipeStamp extends StatelessWidget {
             letterSpacing: 2,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Stories-style photo progress bars and counter (mirrors web match card).
+class _PhotoProgress extends StatelessWidget {
+  const _PhotoProgress({required this.count, required this.current});
+
+  final int count;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 80,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x73000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          // Photo bars hug the card's top edge (inset just enough to clear
+          // the rounded corners).
+          Positioned(
+            left: 24,
+            right: 24,
+            top: 2,
+            child: Row(
+              children: [
+                for (var i = 0; i < count; i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedFractionallySizedBox(
+                        duration: const Duration(milliseconds: 260),
+                        widthFactor: i <= current ? 1 : 0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: i < current ? 0.4 : 0.6),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Positioned(
+            right: 12,
+            top: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${current + 1} / $count',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

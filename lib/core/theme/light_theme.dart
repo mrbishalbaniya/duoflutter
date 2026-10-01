@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'appearance.dart';
 import 'dark_theme.dart' show buildDuoTheme;
 import 'theme_extensions.dart';
 
-ThemeData buildLightTheme() {
+ThemeData buildLightTheme([DuoAppearance appearance = DuoAppearance.standard]) {
   const tokens = DuoThemeTokens(
     accent: AppColors.accent,
     love: AppColors.love,
@@ -91,5 +92,6 @@ ThemeData buildLightTheme() {
     surfaceDim: AppColors.surfaceDimLight,
   );
 
-  return buildDuoTheme(scheme, tokens, AppColors.backgroundLight);
+  final (themed, themedTokens, themedBg) = applyAppearance(scheme, tokens, AppColors.backgroundLight, appearance);
+  return buildDuoTheme(themed, themedTokens, themedBg);
 }

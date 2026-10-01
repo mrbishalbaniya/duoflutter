@@ -72,15 +72,18 @@ class ChatTypingLabel extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Explicit size: inside the app bar it otherwise inherits the large title style.
         Text(
-          'Typing',
+          'typing',
           style: TextStyle(
+            fontSize: 12.5,
+            height: 1.2,
             color: DuoColors.primary,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(width: 4),
-        const _TypingDots(dotSize: 4),
+        const _TypingDots(dotSize: 3.5),
       ],
     );
   }

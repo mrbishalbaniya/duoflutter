@@ -152,6 +152,13 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     );
   }
 
+  /// Select every visible item, or clear when all are already selected.
+  void toggleSelectAll(Iterable<String> ids) {
+    final all = ids.toSet();
+    final allSelected = all.isNotEmpty && all.every(state.selectedIds.contains);
+    state = state.copyWith(selectedIds: allSelected ? {} : all);
+  }
+
   void toggleSelected(String id) {
     final next = Set<String>.from(state.selectedIds);
     if (next.contains(id)) {

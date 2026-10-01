@@ -62,25 +62,27 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.3
 
 flutter_launcher_icons:
-  # Android/iOS use pre-built assets from AppIcons/ (see AppIcons/README below).
-  android: false
-  ios: false
-  image_path: AppIcons/playstore.png
+  # Source: assets/logo.png, cleaned and squared into AppIcons/icon_source.png.
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: AppIcons/icon_source.png
   web:
     generate: true
-    image_path: AppIcons/playstore.png
+    image_path: AppIcons/icon_source.png
     background_color: "#B83280"
     theme_color: "#B83280"
   windows:
     generate: true
-    image_path: AppIcons/playstore.png
+    image_path: AppIcons/icon_source.png
   macos:
     generate: true
-    image_path: AppIcons/playstore.png
+    image_path: AppIcons/icon_source.png
 
 flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
+    - assets/brand/duo_logo.png
     - assets/lottie/duo_glow.json
     - assets/map/duo_globe.html

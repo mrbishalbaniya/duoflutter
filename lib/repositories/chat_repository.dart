@@ -21,6 +21,15 @@ class ChatRepository {
         .toList();
   }
 
+  /// Images shared in a conversation (web ChatProfileView "Shared media").
+  Future<ConversationMedia> getConversationMedia(String conversationId, {int limit = 60}) async {
+    final response = await _client.get<Map<String, dynamic>>(
+      '/chat/conversations/$conversationId/media/',
+      queryParameters: {'limit': limit},
+    );
+    return ConversationMedia.fromJson(response.data ?? const {});
+  }
+
   Future<Conversation> getConversation(String conversationId) async {
     final response = await _client.get<Map<String, dynamic>>(
       '/chat/conversations/$conversationId/',
@@ -166,4 +175,37 @@ class ChatRepository {
   Future<void> clearConversationHistory(String conversationId) async {
     await _client.post('/chat/conversations/$conversationId/clear/');
   }
+}
+
+class ConversationMediaItem {
+  const ConversationMediaItem({required this.id, required this.imageUrl, required this.isMine, this.timestamp});
+  final int id;
+  final String imageUrl;
+  final bool isMine;
+  final String? timestamp;
+}
+
+class ConversationMedia {
+  const ConversationMedia({required this.count, required this.fromMe, required this.fromThem, required this.results});
+
+  factory ConversationMedia.fromJson(Map<String, dynamic> json) => ConversationMedia(
+        count: (json['count'] as num?)?.toInt() ?? 0,
+        fromMe: (json['from_me'] as num?)?.toInt() ?? 0,
+        fromThem: (json['from_them'] as num?)?.toInt() ?? 0,
+        results: [
+          for (final e in (json['results'] as List? ?? const []))
+            if (e is Map)
+              ConversationMediaItem(
+                id: (e['id'] as num?)?.toInt() ?? 0,
+                imageUrl: '${e['image_url'] ?? ''}',
+                isMine: e['is_mine'] == true,
+                timestamp: e['timestamp']?.toString(),
+              ),
+        ],
+      );
+
+  final int count;
+  final int fromMe;
+  final int fromThem;
+  final List<ConversationMediaItem> results;
 }

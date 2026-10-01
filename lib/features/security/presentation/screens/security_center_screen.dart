@@ -7,6 +7,7 @@ import '../../../settings/presentation/widgets/settings_section.dart';
 import '../../models/security_models.dart';
 import '../../providers/security_providers.dart';
 import '../widgets/security_widgets.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class SecurityCenterScreen extends ConsumerWidget {
   const SecurityCenterScreen({super.key});
@@ -22,11 +23,17 @@ class SecurityCenterScreen extends ConsumerWidget {
       ),
       body: overview.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Could not load security settings: $e')),
+        error: (e, _) => DuoStateView.error(
+          e,
+          title: 'Could not load security settings',
+          onRetry: () => ref.invalidate(securityOverviewProvider),
+        ),
         data: (data) => RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(securityOverviewProvider);
-            await ref.read(securityOverviewProvider.future);
+            try {
+              await ref.read(securityOverviewProvider.future);
+            } catch (_) {}
           },
           child: LayoutBuilder(
             builder: (context, constraints) {

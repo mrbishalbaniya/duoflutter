@@ -52,11 +52,13 @@ Future<DiscoverData> _fetchDiscover(MatchingRepository matching) async {
     matching.getProfileVisitors(),
     matching.getLikedByYou(),
     matching.getLikesYou(),
+    matching.getMatches(),
   ]);
   return DiscoverData(
     visitors: results[0] as PaywalledList<VisitedProfileEntry>,
     sent: results[1] as List<LikedProfileEntry>,
     received: results[2] as PaywalledList<LikedProfileEntry>,
+    matches: results[3] as List<MatchSession>,
   );
 }
 

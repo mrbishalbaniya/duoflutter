@@ -21,10 +21,7 @@ enum GallerySaveStatus {
 }
 
 class GallerySaveProgress {
-  const GallerySaveProgress({
-    required this.phase,
-    this.progress,
-  });
+  const GallerySaveProgress({required this.phase, this.progress});
 
   final String phase;
   final double? progress;
@@ -47,8 +44,8 @@ class GallerySaveOutcome {
 /// Resolves cached/local media and saves to the device gallery.
 class ChatMediaSaveService {
   ChatMediaSaveService({Dio? dio, BaseCacheManager? cacheManager})
-      : _dio = dio ?? Dio(),
-        _cache = cacheManager ?? DefaultCacheManager();
+    : _dio = dio ?? Dio(),
+      _cache = cacheManager ?? DefaultCacheManager();
 
   final Dio _dio;
   final BaseCacheManager _cache;
@@ -59,8 +56,12 @@ class ChatMediaSaveService {
     void Function(GallerySaveProgress progress)? onProgress,
   }) async {
     try {
-      onProgress?.call(const GallerySaveProgress(phase: 'Checking permissions'));
-      final permission = await _ensureGalleryAccess(isVideo: isVideoMediaUrl(remoteUrl));
+      onProgress?.call(
+        const GallerySaveProgress(phase: 'Checking permissions'),
+      );
+      final permission = await _ensureGalleryAccess(
+        isVideo: isVideoMediaUrl(remoteUrl),
+      );
       if (permission == GallerySaveStatus.permissionDenied) {
         return const GallerySaveOutcome(
           status: GallerySaveStatus.permissionDenied,
@@ -70,7 +71,8 @@ class ChatMediaSaveService {
       if (permission == GallerySaveStatus.permissionPermanentlyDenied) {
         return const GallerySaveOutcome(
           status: GallerySaveStatus.permissionPermanentlyDenied,
-          message: 'Gallery access was denied. Open Settings to allow saving photos.',
+          message:
+              'Gallery access was denied. Open Settings to allow saving photos.',
         );
       }
 
@@ -88,7 +90,8 @@ class ChatMediaSaveService {
       }
 
       onProgress?.call(const GallerySaveProgress(phase: 'Saving to gallery'));
-      final isVideo = isVideoMediaUrl(remoteUrl) || isVideoMediaUrl(resolved.path);
+      final isVideo =
+          isVideoMediaUrl(remoteUrl) || isVideoMediaUrl(resolved.path);
       try {
         if (isVideo) {
           await Gal.putVideo(resolved.path);
@@ -104,7 +107,8 @@ class ChatMediaSaveService {
 
       return GallerySaveOutcome(
         status: GallerySaveStatus.success,
-        message: '${mediaTypeLabel(url: remoteUrl, localPath: localPath)} saved to gallery',
+        message:
+            '${mediaTypeLabel(url: remoteUrl, localPath: localPath)} saved to gallery',
         savedFromCache: resolved.fromCache,
       );
     } on DioException catch (error) {
@@ -135,7 +139,9 @@ class ChatMediaSaveService {
     }
   }
 
-  Future<GallerySaveStatus?> _ensureGalleryAccess({required bool isVideo}) async {
+  Future<GallerySaveStatus?> _ensureGalleryAccess({
+    required bool isVideo,
+  }) async {
     if (kIsWeb) return GallerySaveStatus.saveFailed;
 
     if (Platform.isAndroid || Platform.isIOS) {
@@ -188,7 +194,9 @@ class ChatMediaSaveService {
       return _ResolvedMedia(file: cached.file, fromCache: true);
     }
 
-    onProgress?.call(const GallerySaveProgress(phase: 'Downloading', progress: 0));
+    onProgress?.call(
+      const GallerySaveProgress(phase: 'Downloading', progress: 0),
+    );
     try {
       final file = await _cache.getSingleFile(url);
       if (await file.exists()) {

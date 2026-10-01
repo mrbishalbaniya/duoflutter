@@ -14,7 +14,7 @@ class LoginBrandHeader extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: Image.asset(
-            'assets/logo.png',
+            'assets/brand/duo_logo.png',
             width: 112,
             height: 112,
             fit: BoxFit.cover,

@@ -58,7 +58,10 @@ class _ChatMediaActionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final label = mediaTypeLabel(url: media.remoteUrl, localPath: media.localPath);
+    final label = mediaTypeLabel(
+      url: media.remoteUrl,
+      localPath: media.localPath,
+    );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
@@ -68,9 +71,15 @@ class _ChatMediaActionsSheet extends StatelessWidget {
           ListTile(
             leading: CircleAvatar(
               backgroundColor: scheme.primaryContainer,
-              child: Icon(Icons.perm_media_outlined, color: scheme.onPrimaryContainer),
+              child: Icon(
+                Icons.perm_media_outlined,
+                color: scheme.onPrimaryContainer,
+              ),
             ),
-            title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: Text(
               media.senderName ?? 'Shared media',
               maxLines: 1,
@@ -90,17 +99,6 @@ class _ChatMediaActionsSheet extends StatelessWidget {
           ),
           if (media.onReply != null)
             _ActionTile(
-              icon: Icons.forward_rounded,
-              title: 'Forward',
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Forward is not available yet.')),
-                );
-              },
-            ),
-          if (media.onReply != null)
-            _ActionTile(
               icon: Icons.reply_rounded,
               title: 'Reply',
               onTap: () {
@@ -115,9 +113,9 @@ class _ChatMediaActionsSheet extends StatelessWidget {
               onTap: () {
                 Navigator.pop(context);
                 Clipboard.setData(ClipboardData(text: media.remoteUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Link copied')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Link copied')));
               },
             ),
           if (media.canDeleteForEveryone && media.onDeleteForEveryone != null)
@@ -179,7 +177,10 @@ class _ChatMediaActionsSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DetailRow(label: 'Type', value: mediaTypeLabel(url: media.remoteUrl)),
+            _DetailRow(
+              label: 'Type',
+              value: mediaTypeLabel(url: media.remoteUrl),
+            ),
             if (media.senderName != null)
               _DetailRow(label: 'From', value: media.senderName!),
             if (media.timestamp != null && media.timestamp!.isNotEmpty)
@@ -189,7 +190,10 @@ class _ChatMediaActionsSheet extends StatelessWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -241,8 +245,8 @@ class _DetailRow extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 2),
           Text(

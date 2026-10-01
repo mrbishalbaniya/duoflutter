@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/router/app_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../core/config/app_config.dart';
-import '../dialogs/settings_dialogs.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
 
@@ -34,13 +36,13 @@ class SettingsAboutSection extends ConsumerWidget {
           SettingsRow(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy policy',
-            onTap: () => showSettingsComingSoonDialog(context, title: 'Privacy policy'),
+            onTap: () => context.push(AppRoutes.legalPrivacy),
           ),
           const SettingsDivider(),
           SettingsRow(
             icon: Icons.description_outlined,
             title: 'Terms of service',
-            onTap: () => showSettingsComingSoonDialog(context, title: 'Terms of service'),
+            onTap: () => context.push(AppRoutes.legalTerms),
           ),
           const SettingsDivider(),
           packageAsync.when(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/duo_theme.dart';
 import '../../domain/notification_item.dart';
 
 class NotificationFilterBar extends StatelessWidget {
@@ -26,10 +25,10 @@ class NotificationFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _filters.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, index) {
@@ -43,22 +42,32 @@ class NotificationFilterBar extends StatelessWidget {
             NotificationFilter.likes => 'Likes',
           };
 
-          return FilterChip(
+          final icon = switch (filter) {
+            NotificationFilter.all => Icons.notifications_rounded,
+            NotificationFilter.unread => Icons.mark_email_unread_rounded,
+            NotificationFilter.messages => Icons.chat_bubble_rounded,
+            NotificationFilter.matches => Icons.favorite_rounded,
+            NotificationFilter.likes => Icons.thumb_up_alt_rounded,
+          };
+          final scheme = Theme.of(context).colorScheme;
+
+          return ChoiceChip(
+            avatar: Icon(icon, size: 16, color: selected ? scheme.onPrimary : scheme.onSurfaceVariant),
             label: Text(label),
             selected: selected,
             showCheckmark: false,
             onSelected: (_) => onChanged(filter),
             labelStyle: TextStyle(
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+              color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
             ),
-            selectedColor: DuoColors.primary,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            selectedColor: scheme.primary,
+            backgroundColor: scheme.surfaceContainerHigh,
+            shape: const StadiumBorder(),
             side: BorderSide(
-              color: selected
-                  ? DuoColors.primary
-                  : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+              color: selected ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.4),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
           );
         },
       ),

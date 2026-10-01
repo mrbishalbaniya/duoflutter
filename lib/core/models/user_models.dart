@@ -21,7 +21,9 @@ class DuoProfile extends Equatable {
     this.subscriptionExpiresAt,
     this.walletBalance,
     this.profileCompleteness = 0,
+    this.profileChecklist = const [],
     this.previewDistanceKm,
+    this.distanceKm,
     this.locked = false,
     this.locationShared = true,
     this.locationGhostMode = false,
@@ -44,11 +46,15 @@ class DuoProfile extends Equatable {
     this.prefGender,
     this.prefRelationshipGoal,
     this.prefVerifiedOnly = false,
+    this.prefExpandDistance = true,
+    this.prefExpandAge = true,
     this.phoneCountryCode,
     this.phoneNumber,
     this.prefMinHeight,
     this.prefOccupation,
     this.prefValues,
+    this.appLanguage = 'en',
+    this.appRegion = 'Nepal',
   });
 
   factory DuoProfile.fromJson(Map<String, dynamic> json) {
@@ -73,7 +79,12 @@ class DuoProfile extends Equatable {
       subscriptionExpiresAt: json['subscription_expires_at'] as String?,
       walletBalance: json['wallet_balance'] as int?,
       profileCompleteness: json['profile_completeness'] as int? ?? 0,
+      profileChecklist: (json['profile_checklist'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(ProfileChecklistItem.fromJson)
+          .toList(),
       previewDistanceKm: (json['preview_distance_km'] as num?)?.toDouble(),
+      distanceKm: (json['distance_km'] as num?)?.toInt(),
       locked: json['locked'] as bool? ?? false,
       locationShared: json['location_shared'] as bool? ?? true,
       locationGhostMode: json['location_ghost_mode'] as bool? ?? false,
@@ -109,11 +120,17 @@ class DuoProfile extends Equatable {
       prefGender: json['pref_gender'] as String?,
       prefRelationshipGoal: json['pref_relationship_goal'] as String?,
       prefVerifiedOnly: json['pref_verified_only'] as bool? ?? false,
+      prefExpandDistance: json['pref_expand_distance'] as bool? ?? true,
+      prefExpandAge: json['pref_expand_age'] as bool? ?? true,
       phoneCountryCode: json['phone_country_code'] as String?,
       phoneNumber: json['phone_number'] as String?,
       prefMinHeight: json['pref_min_height'] as String?,
       prefOccupation: json['pref_occupation'] as String?,
       prefValues: json['pref_values'] as String?,
+      appLanguage: json['app_language'] as String? ?? 'en',
+      appRegion: (json['app_region'] as String?)?.trim().isNotEmpty == true
+          ? (json['app_region'] as String).trim()
+          : 'Nepal',
     );
   }
 
@@ -142,7 +159,14 @@ class DuoProfile extends Equatable {
   final String? subscriptionExpiresAt;
   final int? walletBalance;
   final int profileCompleteness;
+
+  /// Backend completeness checklist, grouped by profile section (web ProfileChecklist).
+  final List<ProfileChecklistItem> profileChecklist;
   final double? previewDistanceKm;
+
+  /// Real rounded distance from the viewer on Match results (0 = under 1 km);
+  /// null when unknown or the person is in ghost mode.
+  final int? distanceKm;
   final bool locked;
   final bool locationShared;
   final bool locationGhostMode;
@@ -165,11 +189,19 @@ class DuoProfile extends Equatable {
   final String? prefGender;
   final String? prefRelationshipGoal;
   final bool prefVerifiedOnly;
+
+  /// Let the server widen distance / age when nobody matches exactly.
+  final bool prefExpandDistance;
+  final bool prefExpandAge;
   final String? phoneCountryCode;
   final String? phoneNumber;
   final String? prefMinHeight;
   final String? prefOccupation;
   final String? prefValues;
+
+  /// Synced with web Settings → Language & region (`app_language`: en | ne).
+  final String appLanguage;
+  final String appRegion;
 
   String get displayPhoto {
     if (photoUrl != null && photoUrl!.isNotEmpty) return photoUrl!;
@@ -242,4 +274,21 @@ class AuthTokens extends Equatable {
 
   @override
   List<Object?> get props => [access, refresh];
+}
+
+/// One `profile_checklist` entry: {section, key, label, done}.
+class ProfileChecklistItem {
+  const ProfileChecklistItem({required this.section, required this.key, required this.label, required this.done});
+
+  factory ProfileChecklistItem.fromJson(Map<String, dynamic> json) => ProfileChecklistItem(
+        section: json['section'] as String? ?? '',
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        done: json['done'] == true,
+      );
+
+  final String section;
+  final String key;
+  final String label;
+  final bool done;
 }

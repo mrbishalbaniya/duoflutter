@@ -8,25 +8,25 @@ Future<bool> showConfirmDialog(
   bool destructive = false,
 }) {
   return showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(content),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: destructive
-                  ? FilledButton.styleFrom(backgroundColor: Colors.redAccent)
-                  : null,
-              child: Text(confirmLabel),
-            ),
-          ],
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      ).then((v) => v ?? false);
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: destructive
+              ? FilledButton.styleFrom(backgroundColor: Colors.redAccent)
+              : null,
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  ).then((v) => v ?? false);
 }
 
 Future<bool> showBlockDialog(BuildContext context) {
@@ -44,7 +44,8 @@ Future<bool> showUnmatchDialog(BuildContext context) {
   return showConfirmDialog(
     context,
     title: 'Unmatch?',
-    content: 'You will lose this match and conversation. This cannot be undone.',
+    content:
+        'You will lose this match and conversation. This cannot be undone.',
     confirmLabel: 'Unmatch',
     destructive: true,
   );
@@ -63,44 +64,44 @@ Future<bool> showUnmatchAndBlockDialog(BuildContext context) {
 
 Future<bool> showDeleteConversationDialog(BuildContext context) {
   return showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Delete conversation?'),
-          content: const Text('This removes the chat from your inbox.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
-            ),
-          ],
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Delete conversation?'),
+      content: const Text('This removes the chat from your inbox.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      ).then((v) => v ?? false);
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  ).then((v) => v ?? false);
 }
 
 Future<bool> showClearHistoryDialog(BuildContext context) {
   return showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Clear chat history?'),
-          content: const Text(
-            'All messages in this conversation will be removed for you.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Clear'),
-            ),
-          ],
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Clear chat history?'),
+      content: const Text(
+        'All messages in this conversation will be removed for you.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      ).then((v) => v ?? false);
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Clear'),
+        ),
+      ],
+    ),
+  ).then((v) => v ?? false);
 }
 
 Future<String?> showNicknameDialog(
@@ -133,7 +134,10 @@ Future<String?> showNicknameDialog(
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, controller.text),
           child: const Text('Save'),
@@ -172,7 +176,9 @@ Future<ChatPrivacySettings?> showPrivacySettingsDialog(
             CheckboxListTile(
               value: notify,
               onChanged: (value) => setState(() => notify = value ?? true),
-              title: const Text('Notify participants when screenshots are taken'),
+              title: const Text(
+                'Notify participants when screenshots are taken',
+              ),
               subtitle: const Text(
                 'When enabled, others are alerted if you capture this chat.',
               ),
@@ -191,7 +197,10 @@ Future<ChatPrivacySettings?> showPrivacySettingsDialog(
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(
               ctx,
@@ -257,7 +266,10 @@ Future<String?> showReportDialog(BuildContext context) {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
               final reason = selected == 'Other'

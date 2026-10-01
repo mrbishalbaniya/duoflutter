@@ -59,6 +59,9 @@ class BiometricAuthService {
       );
     } on PlatformException {
       return false;
+    } catch (_) {
+      // Never leave the lock screen stuck because the prompt itself failed.
+      return false;
     }
   }
 
@@ -70,9 +73,14 @@ class BiometricAuthService {
   Future<String?> readToken() => _storage.read(key: _tokenKey);
 
   Future<bool> isLocallyEnabled() async {
-    final enabled = await _storage.read(key: _enabledKey);
-    final token = await _storage.read(key: _tokenKey);
-    return enabled == 'true' && token != null && token.isNotEmpty;
+    try {
+      final enabled = await _storage.read(key: _enabledKey);
+      final token = await _storage.read(key: _tokenKey);
+      return enabled == 'true' && token != null && token.isNotEmpty;
+    } catch (_) {
+      // Android keystore can fail after OS/backup changes; treat as disabled.
+      return false;
+    }
   }
 
   Future<void> clearLocal() async {

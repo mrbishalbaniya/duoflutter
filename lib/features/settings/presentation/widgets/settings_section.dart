@@ -26,15 +26,15 @@ class SettingsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
             child: Semantics(
               header: true,
               child: Text(
                 title.toUpperCase(),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
-                      color: scheme.onSurfaceVariant,
+                      letterSpacing: 1.2,
+                      color: scheme.primary.withValues(alpha: 0.85),
                     ),
               ),
             ),
@@ -43,9 +43,16 @@ class SettingsSection extends StatelessWidget {
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
-              color: scheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.22)),
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: scheme.shadow.withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             clipBehavior: Clip.antiAlias,
             child: child,
@@ -67,6 +74,7 @@ class SettingsDivider extends StatelessWidget {
     return Divider(
       height: 1,
       thickness: 1,
+      indent: 66,
       color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.2),
     );
   }

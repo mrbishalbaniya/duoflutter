@@ -11,6 +11,8 @@ class DiscoveryFilters {
     required this.prefGender,
     required this.prefRelationshipGoal,
     required this.prefVerifiedOnly,
+    this.prefExpandDistance = true,
+    this.prefExpandAge = true,
   });
 
   final int prefAgeMin;
@@ -20,6 +22,8 @@ class DiscoveryFilters {
   final String prefGender;
   final String prefRelationshipGoal;
   final bool prefVerifiedOnly;
+  final bool prefExpandDistance;
+  final bool prefExpandAge;
 
   static const defaults = DiscoveryFilters(
     prefAgeMin: 22,
@@ -43,6 +47,8 @@ class DiscoveryFilters {
       prefRelationshipGoal:
           profile.prefRelationshipGoal ?? defaults.prefRelationshipGoal,
       prefVerifiedOnly: profile.prefVerifiedOnly,
+      prefExpandDistance: profile.prefExpandDistance,
+      prefExpandAge: profile.prefExpandAge,
     );
   }
 
@@ -54,7 +60,21 @@ class DiscoveryFilters {
         'pref_gender': prefGender,
         'pref_relationship_goal': prefRelationshipGoal,
         'pref_verified_only': prefVerifiedOnly,
+        'pref_expand_distance': prefExpandDistance,
+        'pref_expand_age': prefExpandAge,
       };
+
+  /// Same rule as web `countActiveFilters`: non-default filters shown as a badge.
+  int get activeCount {
+    const d = defaults;
+    var count = 0;
+    if (prefGender != 'everyone') count++;
+    if (prefRelationshipGoal != 'everyone') count++;
+    if (prefVerifiedOnly) count++;
+    if (prefAgeMin != d.prefAgeMin || prefAgeMax != d.prefAgeMax) count++;
+    if (prefMaxDistanceKm != d.prefMaxDistanceKm) count++;
+    return count;
+  }
 }
 
 String normalizeCityPref(String location) {
@@ -95,4 +115,52 @@ String emptyDeckMessage(DuoProfile? prefs) {
     return 'Your age range may be too narrow. Widen it in discovery filters.';
   }
   return 'No one matches your current filters, or you have swiped through everyone nearby. Try adjusting filters or check back later.';
+}
+
+/// Free-tier Like allowance from `/matching/likes/quota/`.
+class LikeQuota {
+  const LikeQuota({
+    required this.unlimited,
+    this.limit,
+    this.used = 0,
+    this.likesRemaining,
+    this.resetAt,
+    this.windowHours = 24,
+  });
+
+  factory LikeQuota.fromJson(Map<String, dynamic> json) {
+    return LikeQuota(
+      unlimited: json['unlimited'] as bool? ?? false,
+      limit: (json['limit'] as num?)?.toInt(),
+      used: (json['used'] as num?)?.toInt() ?? 0,
+      likesRemaining: (json['likes_remaining'] as num?)?.toInt(),
+      resetAt: DateTime.tryParse(json['reset_at'] as String? ?? ''),
+      windowHours: (json['window_hours'] as num?)?.toInt() ?? 24,
+    );
+  }
+
+  final bool unlimited;
+  final int? limit;
+  final int used;
+  final int? likesRemaining;
+  final DateTime? resetAt;
+  final int windowHours;
+
+  /// Out of free Likes right now (the backend is the source of truth).
+  bool get exhausted {
+    if (unlimited) return false;
+    if ((likesRemaining ?? 0) > 0) return false;
+    return resetAt == null || resetAt!.isAfter(DateTime.now());
+  }
+}
+
+/// Thrown when a free user is out of Likes (HTTP 429 `like_limit_reached`).
+class LikeLimitException implements Exception {
+  const LikeLimitException(this.message, this.quota);
+
+  final String message;
+  final LikeQuota? quota;
+
+  @override
+  String toString() => message;
 }

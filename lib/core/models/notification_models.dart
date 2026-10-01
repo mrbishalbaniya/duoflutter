@@ -100,6 +100,13 @@ class NotificationPreferences extends Equatable {
     this.paymentEnabled = true,
     this.soundEnabled = true,
     this.vibrationEnabled = true,
+    this.callsEnabled = true,
+    this.emailEnabled = true,
+    this.emailMatches = true,
+    this.emailPayments = true,
+    this.emailVerification = true,
+    this.emailAnnouncements = true,
+    this.emailMarketing = false,
   });
 
   factory NotificationPreferences.fromJson(Map<String, dynamic> json) {
@@ -114,6 +121,13 @@ class NotificationPreferences extends Equatable {
       paymentEnabled: json['payment_enabled'] as bool? ?? true,
       soundEnabled: json['sound_enabled'] as bool? ?? true,
       vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
+      callsEnabled: json['calls_enabled'] as bool? ?? true,
+      emailEnabled: json['email_enabled'] as bool? ?? true,
+      emailMatches: json['email_matches'] as bool? ?? true,
+      emailPayments: json['email_payments'] as bool? ?? true,
+      emailVerification: json['email_verification'] as bool? ?? true,
+      emailAnnouncements: json['email_announcements'] as bool? ?? true,
+      emailMarketing: json['email_marketing'] as bool? ?? false,
     );
   }
 
@@ -127,6 +141,13 @@ class NotificationPreferences extends Equatable {
   final bool paymentEnabled;
   final bool soundEnabled;
   final bool vibrationEnabled;
+  final bool callsEnabled;
+  final bool emailEnabled;
+  final bool emailMatches;
+  final bool emailPayments;
+  final bool emailVerification;
+  final bool emailAnnouncements;
+  final bool emailMarketing;
 
   Map<String, bool> toJson() => {
         'push_enabled': pushEnabled,
@@ -139,7 +160,17 @@ class NotificationPreferences extends Equatable {
         'payment_enabled': paymentEnabled,
         'sound_enabled': soundEnabled,
         'vibration_enabled': vibrationEnabled,
+        'calls_enabled': callsEnabled,
+        'email_enabled': emailEnabled,
+        'email_matches': emailMatches,
+        'email_payments': emailPayments,
+        'email_verification': emailVerification,
+        'email_announcements': emailAnnouncements,
+        'email_marketing': emailMarketing,
       };
+
+  /// Value for a backend preference key, e.g. `chat_enabled`.
+  bool valueFor(String key) => toJson()[key] ?? false;
 
   @override
   List<Object?> get props => [
@@ -153,5 +184,12 @@ class NotificationPreferences extends Equatable {
         paymentEnabled,
         soundEnabled,
         vibrationEnabled,
+        callsEnabled,
+        emailEnabled,
+        emailMatches,
+        emailPayments,
+        emailVerification,
+        emailAnnouncements,
+        emailMarketing,
       ];
 }

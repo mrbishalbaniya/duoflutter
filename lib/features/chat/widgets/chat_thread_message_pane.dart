@@ -30,8 +30,9 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
   @override
   Widget build(BuildContext context) {
     final loading = ref.watch(
-      chatThreadControllerProvider(widget.conversationId)
-          .select((s) => s.loading),
+      chatThreadControllerProvider(
+        widget.conversationId,
+      ).select((s) => s.loading),
     );
     final listSlice = ref.watch(
       chatThreadControllerProvider(widget.conversationId).select(
@@ -52,8 +53,9 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
     final error = listSlice.$4;
     final otherPhoto = listSlice.$5;
     final isOtherUserTyping = listSlice.$6;
-    final notifier =
-        ref.read(chatThreadControllerProvider(widget.conversationId).notifier);
+    final notifier = ref.read(
+      chatThreadControllerProvider(widget.conversationId).notifier,
+    );
 
     if (loading) {
       return const ChatThreadShimmer();
@@ -64,20 +66,20 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
         .listEntries;
 
     if (entryCount == 0 && error != null) {
-      return _ChatLoadError(
-        message: error,
-        onRetry: notifier.load,
-      );
+      return _ChatLoadError(message: error, onRetry: notifier.load);
     }
 
     if (entryCount == 0) {
       return const _ChatEmptyState();
     }
 
-    return Stack(
-      alignment: Alignment.bottomLeft,
+    // Typing bubble sits *below* the list (like an incoming message), so it
+    // never covers the newest message.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ChatMessageList(
+        Expanded(
+          child: ChatMessageList(
           key: ValueKey('chat-list-$structureRevision'),
           conversationId: widget.conversationId,
           entries: entries,
@@ -86,13 +88,12 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
           scrollController: widget.scrollController,
           onReply: (entry) => notifier.setReplyingTo(entry.message),
           onReact: (entry, emoji) => notifier.react(entry.message, emoji),
-          onDeleteForMe: (entry) => notifier.deleteMessage(entry.message, 'for_me'),
+          onDeleteForMe: (entry) =>
+              notifier.deleteMessage(entry.message, 'for_me'),
           onDeleteForEveryone: (entry) =>
               notifier.deleteMessage(entry.message, 'for_everyone'),
-          onRetry: (entry) => notifier.retryFailed(
-            entry.message,
-            widget.onSetRetryText,
-          ),
+          onRetry: (entry) =>
+              notifier.retryFailed(entry.message, widget.onSetRetryText),
           onImageTap: (entry) {
             final msg = entry.message;
             if (msg.imageUrl?.isNotEmpty ?? false) {
@@ -106,15 +107,22 @@ class _ChatThreadMessagePaneState extends ConsumerState<ChatThreadMessagePane> {
               );
             }
           },
-        ),
-        if (isOtherUserTyping)
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: ChatTypingIndicator(
-              compact: true,
-              avatarUrl: otherPhoto?.isNotEmpty == true ? otherPhoto : null,
-            ),
           ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: Alignment.topLeft,
+          child: isOtherUserTyping
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+                  child: ChatTypingIndicator(
+                    showLabel: false,
+                    avatarUrl: otherPhoto?.isNotEmpty == true ? otherPhoto : null,
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
       ],
     );
   }
@@ -141,7 +149,10 @@ class _ChatLoadError extends StatelessWidget {
               color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 12),
-            Text('Could not load messages', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Could not load messages',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             Text(
               message,

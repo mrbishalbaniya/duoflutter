@@ -10,7 +10,11 @@ class MatchCardOverlay extends StatelessWidget {
     required this.isTopCard,
     this.onInfoTap,
     this.infoDisabled = false,
+    this.infoKey,
   });
+
+  /// Lets the Match tour highlight the "view profile" arrow.
+  final Key? infoKey;
 
   final DuoProfile profile;
   final bool isTopCard;
@@ -105,6 +109,20 @@ class MatchCardOverlay extends StatelessWidget {
                             ),
                         ],
                       ),
+                      if (profile.distanceKm != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.near_me_rounded, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                profile.distanceKm == 0 ? 'Less than 1 km away' : '${profile.distanceKm} km away',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
                       if (profile.location != null && profile.location!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
@@ -136,6 +154,7 @@ class MatchCardOverlay extends StatelessWidget {
               ),
               if (onInfoTap != null)
                 Material(
+                  key: infoKey,
                   color: Colors.black.withValues(alpha: 0.35),
                   shape: const CircleBorder(),
                   child: InkWell(
@@ -145,7 +164,7 @@ class MatchCardOverlay extends StatelessWidget {
                       width: 36,
                       height: 36,
                       child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
+                        Icons.keyboard_arrow_up_rounded,
                         color: Colors.white,
                       ),
                     ),

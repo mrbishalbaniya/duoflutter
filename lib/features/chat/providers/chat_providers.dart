@@ -27,7 +27,10 @@ final chatCacheServiceProvider = Provider<ChatCacheService>((ref) {
 });
 
 class ConversationListFilter {
-  const ConversationListFilter({this.archived = false, this.unreadOnly = false});
+  const ConversationListFilter({
+    this.archived = false,
+    this.unreadOnly = false,
+  });
 
   final bool archived;
   final bool unreadOnly;
@@ -80,8 +83,7 @@ class ConversationsListState {
 }
 
 /// Cache-first conversation list — shows disk/memory instantly, syncs in background.
-class ConversationsListNotifier
-    extends StateNotifier<ConversationsListState> {
+class ConversationsListNotifier extends StateNotifier<ConversationsListState> {
   ConversationsListNotifier({
     required this.filter,
     required this.cache,
@@ -156,32 +158,39 @@ class ConversationsListNotifier
 }
 
 final conversationsListProvider = StateNotifierProvider.autoDispose
-    .family<ConversationsListNotifier, ConversationsListState, ConversationListFilter>(
-  (ref, filter) {
-    return ConversationsListNotifier(
-      filter: filter,
-      cache: ref.watch(chatCacheServiceProvider),
-      repository: ref.watch(chatRepositoryProvider),
-    );
-  },
-);
+    .family<
+      ConversationsListNotifier,
+      ConversationsListState,
+      ConversationListFilter
+    >((ref, filter) {
+      return ConversationsListNotifier(
+        filter: filter,
+        cache: ref.watch(chatCacheServiceProvider),
+        repository: ref.watch(chatRepositoryProvider),
+      );
+    });
 
 /// Backward-compatible alias used across the app.
 final conversationsProvider = Provider.autoDispose
-    .family<AsyncValue<List<Conversation>>, ConversationListFilter>((ref, filter) {
-  final listState = ref.watch(conversationsListProvider(filter));
-  if (listState.error != null && !listState.hasData) {
-    return AsyncValue.error(listState.error!, StackTrace.current);
-  }
-  if (!listState.hasData && listState.isRefreshing) {
-    return const AsyncValue.loading();
-  }
-  return AsyncValue.data(listState.conversations);
-});
+    .family<AsyncValue<List<Conversation>>, ConversationListFilter>((
+      ref,
+      filter,
+    ) {
+      final listState = ref.watch(conversationsListProvider(filter));
+      if (listState.error != null && !listState.hasData) {
+        return AsyncValue.error(listState.error!, StackTrace.current);
+      }
+      if (!listState.hasData && listState.isRefreshing) {
+        return const AsyncValue.loading();
+      }
+      return AsyncValue.data(listState.conversations);
+    });
 
 final chatUnreadTotalProvider = Provider<int>((ref) {
   final conversations = ref.watch(
-    conversationsListProvider(const ConversationListFilter()).select((s) => s.conversations),
+    conversationsListProvider(
+      const ConversationListFilter(),
+    ).select((s) => s.conversations),
   );
   return totalUnreadCount(conversations);
 });

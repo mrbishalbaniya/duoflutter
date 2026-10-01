@@ -158,7 +158,9 @@ class _ChatEmojiPickerState extends State<ChatEmojiPicker> {
                   : GridView.builder(
                       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _query.isEmpty && _categoryIndex == 0 ? 4 : 8,
+                        crossAxisCount: _query.isEmpty && _categoryIndex == 0
+                            ? 4
+                            : 8,
                         mainAxisSpacing: 2,
                         crossAxisSpacing: 2,
                         childAspectRatio: 1,
@@ -180,9 +182,9 @@ class _ChatEmojiPickerState extends State<ChatEmojiPicker> {
   }
 
   TextStyle? themeOf(BuildContext context, ColorScheme scheme) {
-    return Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: scheme.onSurfaceVariant,
-        );
+    return Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
   }
 
   void _pick(String emoji) {

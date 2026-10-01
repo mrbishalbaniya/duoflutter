@@ -2,6 +2,14 @@ import 'package:equatable/equatable.dart';
 
 import '../config/app_config.dart';
 
+/// Premium lists that are sold separately. Values match the backend.
+abstract final class SubscriptionFeature {
+  static const whoLikedYou = 'who_liked_you';
+  static const visitedYou = 'visited_you';
+  static const rewind = 'rewind';
+  static const unlimitedLikes = 'unlimited_likes';
+}
+
 class SubscriptionPlan extends Equatable {
   const SubscriptionPlan({
     required this.planId,
@@ -11,6 +19,8 @@ class SubscriptionPlan extends Equatable {
     required this.amount,
     required this.durationDays,
     this.badge,
+    this.feature = SubscriptionFeature.whoLikedYou,
+    this.featureLabel,
   });
 
   factory SubscriptionPlan.fromJson(Map<String, dynamic> json) {
@@ -22,6 +32,8 @@ class SubscriptionPlan extends Equatable {
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       durationDays: json['duration_days'] as int? ?? 0,
       badge: json['badge'] as String?,
+      feature: json['feature'] as String? ?? SubscriptionFeature.whoLikedYou,
+      featureLabel: json['feature_label'] as String?,
     );
   }
 
@@ -33,12 +45,21 @@ class SubscriptionPlan extends Equatable {
   final int durationDays;
   final String? badge;
 
+  /// Premium list this plan unlocks, see [SubscriptionFeature].
+  final String feature;
+  final String? featureLabel;
+
   @override
   List<Object?> get props => [planId];
 }
 
 class WalletTransaction extends Equatable {
   const WalletTransaction({
+    this.id,
+    this.status = 'complete',
+    this.paymentMethod = '',
+    this.totalAmount = '',
+    this.updatedAt = '',
     required this.type,
     required this.amount,
     required this.balanceAfter,
@@ -49,6 +70,11 @@ class WalletTransaction extends Equatable {
 
   factory WalletTransaction.fromJson(Map<String, dynamic> json) {
     return WalletTransaction(
+      id: (json['id'] as num?)?.toInt(),
+      status: json['status'] as String? ?? 'complete',
+      paymentMethod: json['payment_method'] as String? ?? '',
+      totalAmount: '${json['total_amount'] ?? ''}',
+      updatedAt: '${json['updated_at'] ?? ''}',
       type: json['type'] as String? ?? 'adjustment',
       amount: '${json['amount'] ?? 0}',
       balanceAfter: '${json['balance_after'] ?? 0}',
@@ -58,6 +84,16 @@ class WalletTransaction extends Equatable {
     );
   }
 
+  /// Server id (used for `/wallet/transactions/<id>/`); null on very old payloads.
+  final int? id;
+
+  /// complete | pending | failed
+  final String status;
+
+  /// esewa | wallet | gift | ''
+  final String paymentMethod;
+  final String totalAmount;
+  final String updatedAt;
   final String type;
   final String amount;
   final String balanceAfter;
@@ -74,6 +110,7 @@ class WalletTransaction extends Equatable {
     if (description.isNotEmpty) return description;
     return switch (type) {
       'top_up' => 'Coin pack purchase',
+      'gift_redeem' => 'Gift card redeemed',
       'purchase' => 'Premium purchase',
       'adjustment' => 'Balance adjustment',
       _ => 'Transaction',
@@ -81,7 +118,56 @@ class WalletTransaction extends Equatable {
   }
 
   @override
-  List<Object?> get props => [type, amount, createdAt, referenceId];
+  List<Object?> get props => [id, type, amount, createdAt, referenceId, status];
+
+  String get statusLabel => switch (status) {
+        'pending' => 'Pending',
+        'failed' => 'Failed',
+        _ => 'Completed',
+      };
+
+  String get paymentMethodLabel => switch (paymentMethod) {
+        'esewa' => 'eSewa',
+        'stripe' => 'Card (Stripe)',
+        'wallet' => 'Wallet balance',
+        'gift' => 'Gift card',
+        '' => '—',
+        _ => paymentMethod,
+      };
+}
+
+/// One page of `GET /wallet/transactions/` (cursor = `next_before`).
+class WalletTransactionPage {
+  const WalletTransactionPage({required this.results, required this.hasMore, this.nextBefore});
+
+  factory WalletTransactionPage.fromJson(Map<String, dynamic> json) {
+    return WalletTransactionPage(
+      results: (json['results'] as List<dynamic>? ?? [])
+          .map((e) => WalletTransaction.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      hasMore: json['has_more'] as bool? ?? false,
+      nextBefore: (json['next_before'] as num?)?.toInt(),
+    );
+  }
+
+  final List<WalletTransaction> results;
+  final bool hasMore;
+  final int? nextBefore;
+}
+
+/// Response of `POST /wallet/giftcard/redeem/`.
+class GiftCardRedeemResult {
+  const GiftCardRedeemResult({required this.message, required this.amount, required this.balance});
+
+  factory GiftCardRedeemResult.fromJson(Map<String, dynamic> json) => GiftCardRedeemResult(
+        message: json['detail'] as String? ?? 'Gift card redeemed.',
+        amount: (json['amount'] as num?)?.toInt() ?? 0,
+        balance: (json['balance'] as num?)?.toInt() ?? 0,
+      );
+
+  final String message;
+  final int amount;
+  final int balance;
 }
 
 class WalletSummary extends Equatable {
@@ -90,11 +176,20 @@ class WalletSummary extends Equatable {
     required this.currency,
     required this.topUpPresets,
     required this.transactions,
+    this.coinPacks = const [],
+    this.paymentMethods = const WalletPaymentMethods(),
   });
 
   factory WalletSummary.fromJson(Map<String, dynamic> json) {
     return WalletSummary(
-      balance: (json['balance'] as num?)?.toInt() ?? 0,
+      balance: ((json['coins'] ?? json['balance']) as num?)?.toInt() ?? 0,
+      coinPacks: (json['coin_packs'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(CoinPack.fromJson)
+          .toList(),
+      paymentMethods: json['payment_methods'] is Map<String, dynamic>
+          ? WalletPaymentMethods.fromJson(json['payment_methods'] as Map<String, dynamic>)
+          : const WalletPaymentMethods(),
       currency: json['currency'] as String? ?? 'COIN',
       topUpPresets: (json['top_up_presets'] as List<dynamic>? ?? [])
           .map((e) => (e as num).toInt())
@@ -110,8 +205,86 @@ class WalletSummary extends Equatable {
   final List<int> topUpPresets;
   final List<WalletTransaction> transactions;
 
+  /// Packs the server sells; empty on older backends (use [CoinPack.defaults]).
+  final List<CoinPack> coinPacks;
+  final WalletPaymentMethods paymentMethods;
+
   @override
-  List<Object?> get props => [balance, transactions.length];
+  List<Object?> get props => [balance, transactions.length, coinPacks.length, paymentMethods];
+}
+
+/// A coin pack from `/wallet/` `coin_packs` (web `CoinPack`).
+class CoinPack extends Equatable {
+  const CoinPack({required this.id, required this.coins, required this.priceNpr, this.label = ''});
+
+  factory CoinPack.fromJson(Map<String, dynamic> json) => CoinPack(
+        id: json['id'] as String? ?? 'coins_${json['coins']}',
+        coins: (json['coins'] as num?)?.toInt() ?? 0,
+        priceNpr: (json['price_npr'] as num?)?.toInt() ?? (json['coins'] as num?)?.toInt() ?? 0,
+        label: json['label'] as String? ?? '',
+      );
+
+  final String id;
+  final int coins;
+  final int priceNpr;
+  final String label;
+
+  /// Same fallback list as web `DEFAULT_COIN_PACKS`.
+  static const defaults = [
+    CoinPack(id: 'coins_50', coins: 50, priceNpr: 50),
+    CoinPack(id: 'coins_100', coins: 100, priceNpr: 100),
+    CoinPack(id: 'coins_250', coins: 250, priceNpr: 250),
+    CoinPack(id: 'coins_500', coins: 500, priceNpr: 500),
+    CoinPack(id: 'coins_1000', coins: 1000, priceNpr: 1000),
+    CoinPack(id: 'coins_2000', coins: 2000, priceNpr: 2000),
+    CoinPack(id: 'coins_3000', coins: 3000, priceNpr: 3000),
+    CoinPack(id: 'coins_5000', coins: 5000, priceNpr: 5000),
+  ];
+
+  @override
+  List<Object?> get props => [id, coins, priceNpr];
+}
+
+/// Which top-up gateways the server has enabled (web `WalletPaymentMethods`).
+class WalletPaymentMethods extends Equatable {
+  const WalletPaymentMethods({
+    this.esewa = true,
+    this.stripe = false,
+    this.stripeCurrency = 'NPR',
+    this.stripeMinAmount = 0,
+  });
+
+  factory WalletPaymentMethods.fromJson(Map<String, dynamic> json) => WalletPaymentMethods(
+        esewa: json['esewa'] as bool? ?? true,
+        stripe: json['stripe'] as bool? ?? false,
+        stripeCurrency: (json['stripe_currency'] as String? ?? '').isEmpty
+            ? 'NPR'
+            : (json['stripe_currency'] as String).toUpperCase(),
+        stripeMinAmount: (json['stripe_min_amount'] as num?)?.toInt() ?? 0,
+      );
+
+  final bool esewa;
+  final bool stripe;
+  final String stripeCurrency;
+  final int stripeMinAmount;
+
+  @override
+  List<Object?> get props => [esewa, stripe, stripeCurrency, stripeMinAmount];
+}
+
+/// Response of `POST /wallet/topup/stripe/`.
+class StripeCheckout {
+  const StripeCheckout({required this.checkoutUrl, this.sessionId = '', this.transactionUuid = ''});
+
+  factory StripeCheckout.fromJson(Map<String, dynamic> json) => StripeCheckout(
+        checkoutUrl: json['checkout_url'] as String? ?? '',
+        sessionId: json['session_id'] as String? ?? '',
+        transactionUuid: json['transaction_uuid'] as String? ?? '',
+      );
+
+  final String checkoutUrl;
+  final String sessionId;
+  final String transactionUuid;
 }
 
 class EsewaMobileSdkConfig extends Equatable {

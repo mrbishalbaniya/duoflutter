@@ -2,33 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/widgets/duo_coin.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
 
+/// Web settings: Wallet, Verification, Account and Match Preferences sections.
 class SettingsAccountSection extends StatelessWidget {
   const SettingsAccountSection({
     super.key,
-    required this.email,
-    required this.username,
-    required this.phoneLabel,
     required this.balanceLabel,
     required this.isVerified,
-    required this.onEditProfile,
     required this.animationIndex,
     this.visible = true,
   });
 
-  final String email;
-  final String? username;
-  final String phoneLabel;
   final String balanceLabel;
   final bool isVerified;
-  final VoidCallback onEditProfile;
   final int animationIndex;
   final bool visible;
 
   @override
   Widget build(BuildContext context) {
+    final gap = visible ? const SizedBox(height: 20) : const SizedBox.shrink();
     return Column(
       children: [
         SettingsSection(
@@ -38,57 +33,57 @@ class SettingsAccountSection extends StatelessWidget {
           child: SettingsRow(
             icon: Icons.account_balance_wallet_outlined,
             title: 'Duo Wallet',
-            description: 'Buy coins with eSewa and spend on Premium',
-            trailing: Text(
-              balanceLabel,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            description: 'Buy coins and spend on Premium',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const DuoCoin(size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  balanceLabel.replaceAll(' coins', ''),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
             ),
             onTap: () => context.push(AppRoutes.wallet),
           ),
         ),
-        const SizedBox(height: 20),
+        gap,
         SettingsSection(
           title: 'Verification',
-          animationIndex: animationIndex + 1,
+          animationIndex: animationIndex,
           visible: visible,
-          child: isVerified ? _VerifiedTile() : SettingsRow(
-            icon: Icons.photo_camera_front_outlined,
-            title: 'Verify your profile',
-            description: 'Take a selfie to earn a verified badge',
-            onTap: () => context.push(AppRoutes.verify),
-          ),
+          child: isVerified
+              ? const _VerifiedTile()
+              : SettingsRow(
+                  icon: Icons.photo_camera_front_outlined,
+                  title: 'Verify your profile',
+                  description: 'Take a selfie to earn a verified badge',
+                  onTap: () => context.push(AppRoutes.verify),
+                ),
         ),
-        const SizedBox(height: 20),
+        gap,
         SettingsSection(
           title: 'Account',
+          animationIndex: animationIndex + 1,
+          visible: visible,
+          child: SettingsRow(
+            icon: Icons.person_outline,
+            title: 'Account information',
+            description: 'Email, username, phone & verification',
+            onTap: () => context.push(AppRoutes.account),
+          ),
+        ),
+        gap,
+        SettingsSection(
+          title: 'Match Preferences',
           animationIndex: animationIndex + 2,
           visible: visible,
-          child: Column(
-            children: [
-              SettingsInfoTile(icon: Icons.mail_outline, title: 'Email', value: email),
-              const SettingsDivider(),
-              SettingsInfoTile(
-                icon: Icons.alternate_email_rounded,
-                title: 'Username',
-                value: username?.isNotEmpty == true ? '@$username' : 'Not set',
-              ),
-              const SettingsDivider(),
-              SettingsInfoTile(icon: Icons.phone_outlined, title: 'Phone', value: phoneLabel),
-              const SettingsDivider(),
-              SettingsRow(
-                icon: Icons.person_outline,
-                title: 'Edit profile',
-                description: 'Update photos, bio, and preferences',
-                onTap: onEditProfile,
-              ),
-              const SettingsDivider(),
-              SettingsRow(
-                icon: Icons.badge_outlined,
-                title: 'Personal information',
-                description: 'Name, birthday, location, and more',
-                onTap: onEditProfile,
-              ),
-            ],
+          child: SettingsRow(
+            icon: Icons.favorite_border_rounded,
+            title: 'Partner preferences',
+            description: 'Religion, caste, rashi, age, height and more',
+            onTap: () => context.push(AppRoutes.matchPreferences),
           ),
         ),
       ],
@@ -97,6 +92,8 @@ class SettingsAccountSection extends StatelessWidget {
 }
 
 class _VerifiedTile extends StatelessWidget {
+  const _VerifiedTile();
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -120,7 +117,7 @@ class _VerifiedTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Verified profile',
+                  'Verified Profile',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 Text(

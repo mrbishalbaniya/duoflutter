@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/core_providers.dart';
+import '../../../core/theme/duo_gradients.dart';
 import '../../../repositories/photo_repository.dart';
 import '../../match/services/match_location_service.dart';
 import '../about/about_quality.dart';
@@ -39,10 +40,57 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
   String _relationshipGoal = '';
   String? _error;
 
+  // Location (web merges it into this step).
+  final _locationService = MatchLocationService();
+  bool _gpsLoading = false;
+  String? _gpsError;
+  DetectedLocation? _location;
+
+  Future<void> _detect() async {
+    setState(() {
+      _gpsLoading = true;
+      _gpsError = null;
+      _error = null;
+    });
+    try {
+      final detected = await _locationService.detectUserLocation();
+      if (!mounted) return;
+      setState(() => _location = detected);
+      ref.read(registrationControllerProvider.notifier).patchData(
+            (d) => d.copyWith(
+              gpsEnabled: true,
+              currentLocation: detected.label,
+              country: detected.country,
+              province: detected.province,
+              district: detected.district,
+              municipality: detected.municipality,
+            ),
+          );
+    } catch (e) {
+      if (mounted) setState(() => _gpsError = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _gpsLoading = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     final d = ref.read(registrationControllerProvider).data;
+    if (d.gpsEnabled && d.country.isNotEmpty && d.municipality.isNotEmpty) {
+      _location = DetectedLocation(
+        label: d.currentLocation.isNotEmpty ? d.currentLocation : '${d.municipality}, ${d.country}',
+        city: d.municipality,
+        latitude: 0,
+        longitude: 0,
+        country: d.country,
+        province: d.province,
+        district: d.district,
+        municipality: d.municipality,
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _detect());
+    }
     _firstName = TextEditingController(text: d.firstName);
     _lastName = TextEditingController(text: d.lastName);
     _gender = d.gender;
@@ -86,8 +134,128 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
       setState(() => _error = error);
       return;
     }
+    if (_location == null) {
+      setState(() => _error = 'We need your GPS location to continue. Tap detect and allow permission.');
+      return;
+    }
     ref.read(registrationControllerProvider.notifier).patchData((_) => data);
     await widget.onContinue();
+  }
+
+  Widget _locationCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final loc = _location;
+    final area = loc == null
+        ? 'We show people near you. Only your area is visible.'
+        : <String>{loc.district, loc.province, loc.country}
+            .where((p) => p.isNotEmpty && p != loc.municipality)
+            .join(', ');
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.2)),
+        color: scheme.surfaceContainer.withValues(alpha: 0.6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 176,
+            color: scheme.surfaceContainerHigh.withValues(alpha: 0.6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  loc != null
+                      ? Icons.location_on_rounded
+                      : _gpsLoading
+                          ? Icons.travel_explore_rounded
+                          : Icons.location_off_rounded,
+                  size: 36,
+                  color: loc != null ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  loc != null
+                      ? 'Location shared'
+                      : _gpsLoading
+                          ? 'Finding your location…'
+                          : 'Location not shared yet',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.location_on_rounded, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        loc != null
+                            ? (loc.municipality.isNotEmpty ? loc.municipality : loc.label)
+                            : _gpsLoading
+                                ? 'Detecting…'
+                                : 'Allow location access',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        area,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                loc != null
+                    ? OutlinedButton.icon(
+                        onPressed: _gpsLoading ? null : _detect,
+                        style: OutlinedButton.styleFrom(
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Detect again'),
+                      )
+                    : FilledButton.icon(
+                        onPressed: _gpsLoading ? null : _detect,
+                        style: FilledButton.styleFrom(
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        icon: _gpsLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.my_location_rounded, size: 18),
+                        label: const Text('Detect'),
+                      ),
+              ],
+            ),
+          ),
+          if ((_error ?? _gpsError) != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: scheme.error.withValues(alpha: 0.06),
+                border: Border(top: BorderSide(color: scheme.error.withValues(alpha: 0.2))),
+              ),
+              child: Text(_error ?? _gpsError!, style: TextStyle(fontSize: 13, color: scheme.error)),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -105,59 +273,79 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
             ],
           ),
           const SizedBox(height: 16),
-          RegistrationChipSelect(
+          RegistrationOptionSelectField<String>(
             label: 'Gender',
-            value: _gender.isEmpty ? null : _gender,
+            value: _gender,
             options: genderOptions,
-            onChanged: (v) => setState(() => _gender = v),
+            onChanged: (v) => setState(() => _gender = v ?? ''),
           ),
           const SizedBox(height: 16),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Date of birth'),
-            subtitle: Text(_dob.isEmpty ? 'Select date' : _dob),
-            trailing: const Icon(Icons.calendar_today_outlined),
+          InkWell(
             onTap: _pickDob,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Theme.of(context).dividerColor)),
+            borderRadius: BorderRadius.circular(16),
+            child: InputDecorator(
+              isEmpty: _dob.isEmpty,
+              decoration: const InputDecoration(
+                labelText: 'Date of birth',
+                hintText: 'Select your date of birth',
+                suffixIcon: Icon(Icons.calendar_today_outlined),
+              ),
+              child: Text(
+                _dob.isEmpty
+                    ? ''
+                    : DateFormat('MMM d, yyyy').format(DateTime.tryParse(_dob) ?? DateTime.now()),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: RegistrationSelectField(
-                  label: 'Height (feet)',
-                  value: '$_heightFeet',
-                  options: heightFeetOptions.map((e) => '$e').toList(),
-                  onChanged: (v) => setState(() => _heightFeet = int.parse(v ?? '5')),
+          Builder(builder: (context) {
+            final inches = (_heightFeet * 12 + _heightInches).clamp(54, 84);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(child: Text('Height', style: TextStyle(fontWeight: FontWeight.w700))),
+                    Text("${inches ~/ 12}'${inches % 12}\" (${(inches * 2.54).round()} cm)",
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: RegistrationSelectField(
-                  label: 'Height (inches)',
-                  value: '$_heightInches',
-                  options: heightInchesOptions.map((e) => '$e').toList(),
-                  onChanged: (v) => setState(() => _heightInches = int.parse(v ?? '6')),
+                Slider(
+                  value: inches.toDouble(),
+                  min: 54,
+                  max: 84,
+                  divisions: 30,
+                  label: "${inches ~/ 12}'${inches % 12}\"",
+                  onChanged: (v) => setState(() {
+                    _heightFeet = v.round() ~/ 12;
+                    _heightInches = v.round() % 12;
+                  }),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
           const SizedBox(height: 16),
-          RegistrationChipSelect(
+          RegistrationOptionSelectField<String>(
             label: 'Marital status',
-            value: _maritalStatus.isEmpty ? null : _maritalStatus,
+            value: _maritalStatus,
             options: maritalStatusOptions,
-            onChanged: (v) => setState(() => _maritalStatus = v),
+            onChanged: (v) => setState(() => _maritalStatus = v ?? ''),
           ),
           const SizedBox(height: 16),
-          RegistrationChipSelect(
+          RegistrationOptionSelectField<String>(
             label: 'Relationship goal',
-            value: _relationshipGoal.isEmpty ? null : _relationshipGoal,
+            value: _relationshipGoal,
             options: relationshipGoalOptions,
-            onChanged: (v) => setState(() => _relationshipGoal = v),
+            onChanged: (v) => setState(() => _relationshipGoal = v ?? ''),
           ),
-          RegistrationFieldError(message: _error),
-          RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit),
+          const SizedBox(height: 24),
+          _locationCard(context),
+          RegistrationStepNavigation(
+            onBack: widget.onBack,
+            onNext: _submit,
+            loading: _gpsLoading,
+            disableNext: _location == null || _gpsLoading,
+          ),
         ],
       ),
     );
@@ -1166,8 +1354,8 @@ class _StepPhotosState extends ConsumerState<StepPhotos> {
   }
 
   Future<void> _pickPhotos() async {
-    if (_photos.length >= 9) return;
-    final files = await _picker.pickMultiImage(imageQuality: 85);
+    if (_photos.length >= maxRegistrationPhotos) return;
+    final files = await _picker.pickMultiImage(imageQuality: 85, limit: maxRegistrationPhotos - _photos.length);
     if (files.isEmpty) return;
 
     final reg = ref.read(registrationControllerProvider);
@@ -1186,7 +1374,7 @@ class _StepPhotosState extends ConsumerState<StepPhotos> {
       var uploaded = List<RegistrationPhoto>.from(_photos);
       final isFirst = uploaded.isEmpty;
 
-      for (var i = 0; i < files.length && uploaded.length < 9; i++) {
+      for (var i = 0; i < files.length && uploaded.length < maxRegistrationPhotos; i++) {
         final file = files[i];
         final isPrimary = isFirst && i == 0 && !uploaded.any((p) => p.isProfile);
         final result = await repo.uploadAndAnalyzePhoto(File(file.path), isPrimary: isPrimary);
@@ -1249,83 +1437,185 @@ class _StepPhotosState extends ConsumerState<StepPhotos> {
 
     return RegistrationStepCard(
       title: 'Photos',
-      subtitle: 'Upload at least 2 photos. Each photo is checked with AI for face, quality, and safety.',
+      subtitle:
+          'Upload $minRegistrationPhotos–$maxRegistrationPhotos photos. Each photo is checked instantly with AI for face, quality, and safety.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
+          Row(
+            children: [
+              for (var i = 0; i < maxRegistrationPhotos; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(child: _photoSlot(context, i)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$approvedCount of $minRegistrationPhotos required verified photos'
+            '${_analyzing ? ' · verification in progress…' : ''}',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+          RegistrationFieldError(message: _error),
+          RegistrationStepNavigation(
+            onBack: widget.onBack,
+            onNext: _submit,
+            loading: _analyzing,
+            nextLabel: _analyzing ? 'Analyzing…' : 'Continue',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _photoSlot(BuildContext context, int index) {
+    final scheme = Theme.of(context).colorScheme;
+    final photo = index < _photos.length ? _photos[index] : null;
+    final radius = BorderRadius.circular(20);
+
+    if (photo == null) {
+      final isNext = index == _photos.length;
+      return AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Material(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(color: scheme.primary.withValues(alpha: isNext ? 0.35 : 0.15), width: 1.5),
+          ),
+          child: InkWell(
+            borderRadius: radius,
             onTap: _analyzing ? null : _pickPhotos,
-            borderRadius: BorderRadius.circular(24),
-            child: Ink(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: scheme.outline.withValues(alpha: 0.3), style: BorderStyle.solid),
-                color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.add_photo_alternate_outlined, size: 40, color: scheme.primary),
-                  const SizedBox(height: 8),
-                  Text(_analyzing ? 'Analyzing photos...' : 'Tap to add photos'),
-                  Text('$approvedCount verified · ${_photos.length}/9', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
-                ],
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_analyzing && isNext)
+                  const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+                else
+                  Icon(Icons.add_a_photo_outlined, size: 28, color: scheme.primary),
+                const SizedBox(height: 8),
+                Text(
+                  _analyzing && isNext ? 'Verifying…' : 'Upload',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
+                ),
+              ],
             ),
           ),
-          if (_photos.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8),
-              itemCount: _photos.length,
-              itemBuilder: (context, index) {
-                final photo = _photos[index];
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: photo.localPath != null
-                          ? Image.file(File(photo.localPath!), fit: BoxFit.cover)
-                          : ColoredBox(color: scheme.surfaceContainerHighest),
+        ),
+      );
+    }
+
+    final approved = photo.status == RegistrationPhotoStatus.approved;
+    return AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: photo.isProfile ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.3),
+            width: photo.isProfile ? 2 : 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              photo.localPath != null
+                  ? Image.file(File(photo.localPath!), fit: BoxFit.cover)
+                  : photo.imageUrl != null
+                      ? Image.network(photo.imageUrl!, fit: BoxFit.cover)
+                      : ColoredBox(color: scheme.surfaceContainerHighest),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black54],
+                    stops: [0.55, 1],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 6,
+                left: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: approved ? Colors.green.shade600 : scheme.surface,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(approved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+                          size: 11, color: approved ? Colors.white : scheme.onSurface),
+                      const SizedBox(width: 3),
+                      Text(
+                        approved ? 'Verified' : 'Verifying',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: approved ? Colors.white : scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Material(
+                  color: Colors.black45,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _removePhoto(photo.id),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close_rounded, size: 16, color: Colors.white),
                     ),
-                    if (photo.isProfile)
-                      Positioned(
-                        top: 4,
-                        left: 4,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 6,
+                right: 6,
+                bottom: 6,
+                child: photo.isProfile
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: DuoGradients.brand,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Profile photo',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                        ),
+                      )
+                    : InkWell(
+                        onTap: () => _setProfile(photo.id),
+                        borderRadius: BorderRadius.circular(999),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: scheme.primary, borderRadius: BorderRadius.circular(8)),
-                          child: const Text('Main', style: TextStyle(color: Colors.white, fontSize: 10)),
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'Set profile',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () => _removePhoto(photo.id),
-                      ),
-                    ),
-                    if (!photo.isProfile)
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: TextButton(
-                          onPressed: () => _setProfile(photo.id),
-                          child: const Text('Set main', style: TextStyle(fontSize: 10)),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-          RegistrationFieldError(message: _error),
-          RegistrationStepNavigation(onBack: widget.onBack, onNext: _submit, loading: _analyzing),
-        ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1369,47 +1659,55 @@ class StepReview extends ConsumerWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: AspectRatio(
-                aspectRatio: 1,
+                aspectRatio: 16 / 7,
                 child: profilePhoto.localPath != null
                     ? Image.file(File(profilePhoto.localPath!), fit: BoxFit.cover)
                     : ColoredBox(color: scheme.surfaceContainerHighest),
               ),
             ),
           const SizedBox(height: 16),
-          _ReviewSection(title: 'Account', step: 1, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Email', value: data.email),
-            _ReviewRow(label: 'Phone', value: data.phone),
+          _ReviewSection(title: registrationStepLabels[1]!, step: 1, onEdit: onEditStep, children: [
+            _ReviewRow(label: 'Phone', value: data.phone.isEmpty ? '—' : data.phone),
+            _ReviewRow(label: 'Email', value: data.email.isEmpty ? 'Not provided' : data.email),
           ]),
           const SizedBox(height: 12),
-          _ReviewSection(title: 'Basic Info', step: 2, onEdit: onEditStep, children: [
+          _ReviewSection(title: registrationStepLabels[2]!, step: 2, onEdit: onEditStep, children: [
             _ReviewRow(label: 'Name', value: '${data.firstName} ${data.lastName}'.trim()),
             _ReviewRow(label: 'Gender', value: labelForOption(genderOptions, data.gender)),
-            _ReviewRow(label: 'Age', value: '${calculateAgeFromDob(data.dateOfBirth)}'),
-            _ReviewRow(label: 'Goal', value: labelForOption(relationshipGoalOptions, data.relationshipGoal)),
+            _ReviewRow(label: 'Date of birth', value: data.dateOfBirth),
+            _ReviewRow(label: 'Height', value: "${data.heightFeet}'${data.heightInches}\""),
+            _ReviewRow(label: 'Relationship goal', value: labelForOption(relationshipGoalOptions, data.relationshipGoal)),
+            _ReviewRow(label: 'Country', value: data.country),
+            _ReviewRow(label: 'Province', value: data.province),
+            _ReviewRow(label: 'District', value: data.district),
+            _ReviewRow(label: 'Municipality / City', value: data.municipality),
+            _ReviewRow(label: 'Current location', value: data.currentLocation),
           ]),
           const SizedBox(height: 12),
-          _ReviewSection(title: 'Location', step: 3, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Location', value: buildLocation(data)),
+          _ReviewSection(title: registrationStepLabels[3]!, step: 3, onEdit: onEditStep, children: [
+            _ReviewRow(
+              label: 'Verified photos',
+              value: '${data.photos.where((p) => p.status == RegistrationPhotoStatus.approved).length} photo(s)',
+            ),
           ]),
           const SizedBox(height: 12),
-          _ReviewSection(title: 'Education', step: 4, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Education', value: buildEducation(data)),
-            _ReviewRow(label: 'Occupation', value: data.occupation),
-          ]),
-          const SizedBox(height: 12),
-          _ReviewSection(title: 'Preferences', step: 8, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Looking for', value: labelForOption(lookingForOptions, data.lookingFor)),
-            _ReviewRow(label: 'Age range', value: '${data.prefAgeMin}–${data.prefAgeMax}'),
-            _ReviewRow(label: 'Distance', value: labelForOption(distanceOptions, data.distancePreference)),
-          ]),
-          const SizedBox(height: 12),
-          _ReviewSection(title: 'Photos', step: 10, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Verified photos', value: '${data.photos.length}'),
-          ]),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+            ),
+            child: Text(
+              'You can add your education, religion, lifestyle, interests, partner preferences, and '
+              'bio anytime from your profile after you finish signing up.',
+              style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+            ),
+          ),
           RegistrationStepNavigation(
             onBack: onBack,
             onNext: onSubmit,
-            nextLabel: 'Complete registration',
+            nextLabel: 'Submit & Start Matching',
             loading: loading,
           ),
         ],
@@ -1432,17 +1730,27 @@ class _ReviewSection extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.15)),
+        color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.4),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-              OutlinedButton(onPressed: () => onEdit(step), child: const Text('Edit')),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18))),
+              OutlinedButton(
+                onPressed: () => onEdit(step),
+                style: OutlinedButton.styleFrom(
+                  shape: const StadiumBorder(),
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: const Text('Edit'),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           ...children,
         ],
       ),
@@ -1458,13 +1766,15 @@ class _ReviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 120, child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant))),
-          Expanded(child: Text(value.isEmpty ? '—' : value)),
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+          const SizedBox(height: 2),
+          Text(value.isEmpty ? '—' : value, style: TextStyle(fontSize: 14, color: scheme.onSurface)),
         ],
       ),
     );

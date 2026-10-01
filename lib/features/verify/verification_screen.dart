@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../auth/auth_controller.dart';
 import '../../widgets/duo_ui.dart';
 import 'domain/verification_domain.dart';
@@ -59,11 +60,12 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Verify your profile'),
-        centerTitle: true,
+        title: const Text('Verify profile', style: TextStyle(fontWeight: FontWeight.w700)),
+        centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+          // Opened directly (nothing to pop), go to the profile instead of crashing.
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.profile),
         ),
       ),
       body: DuoAmbientBackground(
@@ -77,7 +79,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
             ),
             child: Column(
               children: [
-                VerificationProgressBar(progress: state.progressPercent),
+                VerificationProgressBar(step: state.step),
                 const SizedBox(height: 12),
                 Expanded(
                   child: AnimatedSwitcher(

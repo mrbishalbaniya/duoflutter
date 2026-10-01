@@ -46,6 +46,58 @@ class MapRepository {
     );
   }
 
+  /// City / town name for [coords] (Nominatim reverse); null on failure.
+  Future<String?> reverseCity(LatLng coords) async {
+    try {
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+          headers: {'User-Agent': 'DuoMobile/1.0'},
+        ),
+      );
+      final response = await dio.get<String>(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'lat': coords.latitude,
+          'lon': coords.longitude,
+          'format': 'json',
+          'zoom': 10,
+          'addressdetails': 1,
+          // English names (not Devanagari).
+          'accept-language': 'en',
+        },
+      );
+      final data = jsonDecode(response.data ?? '{}') as Map<String, dynamic>;
+      final address = (data['address'] as Map?) ?? const {};
+      for (final key in const ['city', 'town', 'village', 'municipality', 'county', 'state_district', 'state']) {
+        final value = address[key];
+        if (value is String && value.trim().isNotEmpty) return _shortPlaceName(value);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// "Kathmandu Metropolitan City" -> "Kathmandu".
+  static String _shortPlaceName(String name) {
+    var n = name.trim();
+    for (final suffix in const [
+      ' Sub-Metropolitan City',
+      ' Metropolitan City',
+      ' Rural Municipality',
+      ' Municipality',
+      ' District',
+    ]) {
+      if (n.toLowerCase().endsWith(suffix.toLowerCase())) {
+        n = n.substring(0, n.length - suffix.length).trim();
+        break;
+      }
+    }
+    return n;
+  }
+
   Future<LatLng?> geocodePlace(String query) async {
     final results = await searchPlaces(query, limit: 1);
     return results.isEmpty ? null : results.first.coordinates;
@@ -70,6 +122,7 @@ class MapRepository {
         'format': 'json',
         'limit': limit,
         'addressdetails': 0,
+        'accept-language': 'en',
       },
     );
 

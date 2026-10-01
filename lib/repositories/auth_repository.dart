@@ -1,5 +1,7 @@
 import '../core/models/user_models.dart';
+import '../core/network/api_exception.dart';
 import '../core/network/dio_client.dart';
+import '../core/network/otp_cooldown_exception.dart';
 import '../core/network/two_factor_exception.dart';
 import '../core/storage/token_storage.dart';
 import '../features/security/models/security_models.dart';
@@ -141,8 +143,51 @@ class AuthRepository {
     return DuoUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
-  Future<void> sendEmailOtp(String email) async {
-    await _client.post('/auth/email/send-otp/', data: {'email': email.trim().toLowerCase()});
+  /// Returns the resend cooldown in seconds; throws [OtpCooldownException] on 429.
+  Future<int> sendEmailOtp(String email) async {
+    try {
+      final res = await _client.post<Map<String, dynamic>>(
+        '/auth/email/send-otp/',
+        data: {'email': email.trim().toLowerCase()},
+      );
+      return otpRetryAfter(res.data);
+    } on ApiException catch (e) {
+      rethrowOtpError(e);
+    }
+  }
+
+  /// Email a one-time login code (web "Sign in with email code").
+  Future<int> requestLoginOtp(String email) async {
+    try {
+      final res = await _client.post<Map<String, dynamic>>(
+        '/auth/login/otp/request/',
+        data: {'email': email.trim().toLowerCase()},
+      );
+      return otpRetryAfter(res.data);
+    } on ApiException catch (e) {
+      rethrowOtpError(e);
+    }
+  }
+
+  /// Sign in with an emailed code; throws [TwoFactorRequiredException] when 2FA is on.
+  Future<DuoUser> verifyLoginOtp({required String email, required String otp}) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/auth/login/otp/verify/',
+      data: {
+        'email': email.trim().toLowerCase(),
+        'otp': otp,
+        ...(await _devicePayload()),
+      },
+    );
+    final data = response.data!;
+    if (data['requires_2fa'] == true) {
+      throw TwoFactorRequiredException(TwoFactorLoginChallenge.fromJson(data));
+    }
+    await _tokenStorage.saveTokens(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+    );
+    return getMe();
   }
 
   Future<void> verifyEmailOtp({required String email, required String otp}) async {
@@ -152,8 +197,17 @@ class AuthRepository {
     });
   }
 
-  Future<void> requestPasswordReset(String email) async {
-    await _client.post('/auth/password/forgot/', data: {'email': email.trim().toLowerCase()});
+  /// Returns the resend cooldown in seconds; throws [OtpCooldownException] on 429.
+  Future<int> requestPasswordReset(String email) async {
+    try {
+      final res = await _client.post<Map<String, dynamic>>(
+        '/auth/password/forgot/',
+        data: {'email': email.trim().toLowerCase()},
+      );
+      return otpRetryAfter(res.data);
+    } on ApiException catch (e) {
+      rethrowOtpError(e);
+    }
   }
 
   Future<void> resetPassword({

@@ -48,6 +48,10 @@ class ProfileHeader extends StatelessWidget {
                       fit: BoxFit.cover,
                       color: scheme.surface.withValues(alpha: 0.15),
                       colorBlendMode: BlendMode.darken,
+                      // Never show a raw exception over the hero if the photo fails.
+                      errorWidget: (_, __, ___) => const DecoratedBox(
+                        decoration: BoxDecoration(gradient: DuoGradients.profileHero),
+                      ),
                     )
                   else
                     const DecoratedBox(decoration: BoxDecoration(gradient: DuoGradients.profileHero)),

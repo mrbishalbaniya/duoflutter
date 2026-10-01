@@ -12,6 +12,8 @@ import '../chat_utils.dart';
 import '../domain/chat_message_status.dart';
 import '../providers/chat_thread_controller.dart';
 import '../domain/chat_media_utils.dart';
+import '../domain/chat_location.dart';
+import 'location_message_card.dart';
 import 'chat_media_actions_sheet.dart';
 import 'voice_message_bubble.dart';
 
@@ -52,9 +54,9 @@ class ChatMessageBubble extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final message = ref.watch(
-      chatThreadControllerProvider(conversationId).select(
-        (s) => s.messagesByKey[messageKey] ?? fallbackMessage,
-      ),
+      chatThreadControllerProvider(
+        conversationId,
+      ).select((s) => s.messagesByKey[messageKey] ?? fallbackMessage),
     );
 
     if (!message.isVisible) return const SizedBox.shrink();
@@ -71,7 +73,9 @@ class ChatMessageBubble extends ConsumerWidget {
         right: isMine ? 0 : 48,
       ),
       child: Row(
-        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMine && showAvatar)
@@ -91,10 +95,13 @@ class ChatMessageBubble extends ConsumerWidget {
           Flexible(
             child: GestureDetector(
               onLongPress: () => _showActions(context, message),
-              onTap: message.sendStatus == MessageSendStatus.failed ? onRetry : null,
+              onTap: message.sendStatus == MessageSendStatus.failed
+                  ? onRetry
+                  : null,
               child: Column(
-                crossAxisAlignment:
-                    isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isMine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: [
                   _BubbleBody(
                     message: message,
@@ -130,7 +137,7 @@ class ChatMessageBubble extends ConsumerWidget {
                             .toList(),
                       ),
                     ),
-                  if (isMine && !isVoiceOnlyMessage(message))
+                  if (isImageOnlyMessage(message))
                     Padding(
                       padding: const EdgeInsets.only(top: 4, right: 4),
                       child: Row(
@@ -138,9 +145,8 @@ class ChatMessageBubble extends ConsumerWidget {
                         children: [
                           Text(
                             formatClockTime(message.timestamp),
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
                           const SizedBox(width: 4),
                           _StatusIcon(message: message),
@@ -159,7 +165,12 @@ class ChatMessageBubble extends ConsumerWidget {
       row = row
           .animate()
           .fadeIn(duration: 180.ms)
-          .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic, duration: 220.ms);
+          .slideY(
+            begin: 0.06,
+            end: 0,
+            curve: Curves.easeOutCubic,
+            duration: 220.ms,
+          );
     }
 
     return row;
@@ -209,7 +220,10 @@ class ChatMessageBubble extends ConsumerWidget {
             ),
             if (message.isMine && !message.isDeletedForEveryone)
               ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                leading: const Icon(
+                  Icons.delete_forever,
+                  color: Colors.redAccent,
+                ),
                 title: const Text('Delete for everyone'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -277,7 +291,9 @@ class _BubbleBody extends StatelessWidget {
       final player = VoiceMessageBubble(
         messageId: '${message.id}',
         audioUrl: message.imageUrl!,
-        waveColor: isMine ? duo.chatVoiceWaveOutgoing : duo.chatVoiceWaveIncoming,
+        waveColor: isMine
+            ? duo.chatVoiceWaveOutgoing
+            : duo.chatVoiceWaveIncoming,
         onGradientBubble: isMine,
         compact: true,
       );
@@ -291,16 +307,21 @@ class _BubbleBody extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           border: isMine
               ? null
-              : Border.all(color: duo.chatIncomingBorder.withValues(alpha: 0.55)),
+              : Border.all(
+                  color: duo.chatIncomingBorder.withValues(alpha: 0.55),
+                ),
         ),
-        child: Stack(
-          clipBehavior: Clip.none,
+        // Time sits on its own line under the player; overlaying it (Stack) made it
+        // collide with the waveform and duration label.
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: isMine
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             player,
-            Positioned(
-              bottom: 0,
-              right: isMine ? 0 : null,
-              left: isMine ? null : 0,
+            Padding(
+              padding: const EdgeInsets.only(left: 6, right: 6, bottom: 2),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -343,7 +364,9 @@ class _BubbleBody extends StatelessWidget {
                 : CachedNetworkImage(
                     imageUrl: message.imageUrl!,
                     fit: BoxFit.cover,
-                    memCacheWidth: isAnimatedImageUrl(message.imageUrl) ? 320 : 640,
+                    memCacheWidth: isAnimatedImageUrl(message.imageUrl)
+                        ? 320
+                        : 640,
                     filterQuality: FilterQuality.medium,
                     placeholder: (_, __) => Container(
                       height: 180,
@@ -369,12 +392,60 @@ class _BubbleBody extends StatelessWidget {
       );
     }
 
+    final meta = _BubbleMeta(message: message, onBubble: true);
+
+    // Web: a shared-location message renders as a map card with no bubble.
+    final sharedLocation =
+        deleted ||
+            isVoiceMessage(message) ||
+            (message.imageUrl?.isNotEmpty ?? false)
+        ? null
+        : parseLocationMessage(message.content);
+    if (sharedLocation != null) {
+      return Column(
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LocationMessageCard(location: sharedLocation, mine: isMine),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _BubbleMeta(message: message, onBubble: false),
+          ),
+        ],
+      );
+    }
+
+    // Web: emoji-only messages render large with no bubble.
+    if (isEmojiOnlyMessage(message)) {
+      final count = message.content.replaceAll(RegExp(r'\s'), '').runes.length;
+      return Column(
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message.content,
+            style: TextStyle(fontSize: count <= 3 ? 44 : 34, height: 1.1),
+          ),
+          const SizedBox(height: 2),
+          _BubbleMeta(message: message, onBubble: false),
+        ],
+      );
+    }
+
+    // Web: rounded-[1.25rem] with a 0.2rem tail corner on the sender's side.
     final radius = BorderRadius.only(
-      topLeft: const Radius.circular(18),
-      topRight: const Radius.circular(18),
-      bottomLeft: Radius.circular(isMine ? 18 : 4),
-      bottomRight: Radius.circular(isMine ? 4 : 18),
+      topLeft: const Radius.circular(20),
+      topRight: const Radius.circular(20),
+      bottomLeft: Radius.circular(isMine ? 20 : 3),
+      bottomRight: Radius.circular(isMine ? 3 : 20),
     );
+    final textOnly =
+        (message.imageUrl?.isEmpty ?? true) && message.replyTo == null;
 
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -386,7 +457,9 @@ class _BubbleBody extends StatelessWidget {
             ? null
             : Border.all(color: duo.chatIncomingBorder.withValues(alpha: 0.55)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: textOnly
+          ? const EdgeInsets.fromLTRB(12, 7, 10, 6)
+          : const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -398,8 +471,9 @@ class _BubbleBody extends StatelessWidget {
                   ? VoiceMessageBubble(
                       messageId: '${message.id}',
                       audioUrl: message.imageUrl!,
-                      waveColor:
-                          isMine ? duo.chatVoiceWaveOutgoing : duo.chatVoiceWaveIncoming,
+                      waveColor: isMine
+                          ? duo.chatVoiceWaveOutgoing
+                          : duo.chatVoiceWaveIncoming,
                       onGradientBubble: isMine,
                       compact: true,
                     )
@@ -409,11 +483,21 @@ class _BubbleBody extends StatelessWidget {
                         onTap: onImageTap,
                         onLongPress: onImageLongPress,
                         child: CachedNetworkImage(
+                          errorWidget: (_, __, ___) => const ColoredBox(
+                            color: Color(0x14000000),
+                            child: Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
                           imageUrl: message.imageUrl!,
                           width: maxWidth - 28,
                           fit: BoxFit.cover,
-                          memCacheWidth:
-                              isAnimatedImageUrl(message.imageUrl) ? 320 : 640,
+                          memCacheWidth: isAnimatedImageUrl(message.imageUrl)
+                              ? 320
+                              : 640,
                           filterQuality: FilterQuality.medium,
                           placeholder: (_, __) => Container(
                             height: 140,
@@ -424,15 +508,73 @@ class _BubbleBody extends StatelessWidget {
                     ),
             ),
           if (!isVoiceMessage(message))
-            Text(
-              deleted ? 'This message was deleted' : message.content,
+            // Web: time + status sit inline at the end of the text.
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: deleted
+                        ? 'This message was deleted'
+                        : message.content,
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.bottom,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, top: 4),
+                      child: meta,
+                    ),
+                  ),
+                ],
+              ),
               style: TextStyle(
+                fontSize: 15,
+                height: 1.3,
                 color: isMine ? duo.chatOnOutgoing : scheme.onSurface,
                 fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
               ),
-            ),
+            )
+          else
+            Align(alignment: Alignment.centerRight, child: meta),
         ],
       ),
+    );
+  }
+}
+
+/// Clock time + delivery status (mine only): web `formatClockTime` + status indicator.
+class _BubbleMeta extends StatelessWidget {
+  const _BubbleMeta({required this.message, required this.onBubble});
+
+  final ChatMessage message;
+  final bool onBubble;
+
+  @override
+  Widget build(BuildContext context) {
+    final duo = context.duo;
+    final scheme = Theme.of(context).colorScheme;
+    final color = onBubble && message.isMine
+        ? duo.chatOnOutgoing.withValues(alpha: 0.7)
+        : scheme.onSurfaceVariant.withValues(alpha: 0.75);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          formatClockTime(message.timestamp),
+          style: TextStyle(
+            fontSize: 10.5,
+            height: 1,
+            color: color,
+            fontStyle: FontStyle.normal,
+          ),
+        ),
+        if (message.isMine) ...[
+          const SizedBox(width: 3),
+          SizedBox(
+            height: 13,
+            child: FittedBox(child: _StatusIcon(message: message)),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -505,11 +647,23 @@ class _StatusIcon extends StatelessWidget {
       case MessageStatusIcon.failed:
         return Icon(Icons.error_outline, size: 14, color: scheme.error);
       case MessageStatusIcon.read:
-        return const Icon(Icons.done_all, size: 14, color: AppColors.chatReadReceipt);
+        return const Icon(
+          Icons.done_all,
+          size: 14,
+          color: AppColors.chatReadReceipt,
+        );
       case MessageStatusIcon.delivered:
-        return Icon(Icons.done_all, size: 14, color: duo.chatOnOutgoing.withValues(alpha: 0.75));
+        return Icon(
+          Icons.done_all,
+          size: 14,
+          color: duo.chatOnOutgoing.withValues(alpha: 0.75),
+        );
       case MessageStatusIcon.sent:
-        return Icon(Icons.done, size: 14, color: duo.chatOnOutgoing.withValues(alpha: 0.75));
+        return Icon(
+          Icons.done,
+          size: 14,
+          color: duo.chatOnOutgoing.withValues(alpha: 0.75),
+        );
     }
   }
 }

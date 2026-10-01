@@ -12,8 +12,12 @@ import 'map_utils.dart';
 import 'providers/map_providers.dart';
 import 'widgets/duo_map_view.dart';
 import 'widgets/map_focus_card.dart';
-import 'widgets/match_friends_sheet.dart';
+import 'widgets/match_avatar_strip.dart';
 import 'widgets/zone_detail_sheet.dart';
+
+/// Profile whose card is open: set only by tapping their marker after they
+/// have been located (tapping the avatar strip just flies to them).
+final _mapCardProfileIdProvider = StateProvider.autoDispose<String?>((ref) => null);
 
 class MapScreen extends ConsumerWidget {
   const MapScreen({super.key});
@@ -34,13 +38,24 @@ class MapScreen extends ConsumerWidget {
         .where((p) => p.locationShared && p.coordinates != null && p.distanceMeters != null)
         .toList();
 
-    MapProfile? focused;
-    if (screenState.focusProfileId != null) {
-      for (final profile in matches) {
-        if (mapProfileKey(profile.profile) == screenState.focusProfileId) {
-          focused = profile;
-          break;
-        }
+    final cardId = ref.watch(_mapCardProfileIdProvider);
+    MapProfile? cardProfile;
+    for (final p in mapProfiles) {
+      if (mapProfileKey(p.profile) == cardId) cardProfile = p;
+    }
+
+    // Strip avatar: locate only (closes any open card).
+    void locateProfile(String id) {
+      ref.read(_mapCardProfileIdProvider.notifier).state = null;
+      notifier.setFocus(id);
+    }
+
+    // Marker on the map: first tap locates, tapping the located one opens the card.
+    void onMarkerTap(String id) {
+      if (screenState.focusProfileId == id) {
+        ref.read(_mapCardProfileIdProvider.notifier).state = id;
+      } else {
+        locateProfile(id);
       }
     }
 
@@ -74,7 +89,7 @@ class MapScreen extends ConsumerWidget {
         isFullscreen: isFullscreen,
         flyToTarget: screenState.flyToTarget,
         locateNonce: screenState.locateNonce,
-        onProfileFocus: notifier.setFocus,
+        onProfileFocus: onMarkerTap,
         onZoneSelected: showZoneSheet,
         onToggleFollowMe: notifier.toggleFollowMe,
         onToggleFullscreen: () {
@@ -106,22 +121,14 @@ class MapScreen extends ConsumerWidget {
                   userLocation.valueOrNull?.coordinates ?? fallbackCoords,
                 ),
                 userLocation.when(
-                  loading: () => !isFullscreen
-                      ? Positioned(
-                          top: MediaQuery.paddingOf(context).top + 12,
-                          left: 12,
-                          right: 72,
-                          child: const _MapStatusBanner(
-                            message: 'Finding your location…',
-                            icon: Icons.location_searching,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                  // No "Finding your location…" banner: the map shows a fallback
+                  // view and the locate button spins while the fix comes in.
+                  loading: () => const SizedBox.shrink(),
                   error: (_, __) => !isFullscreen
                       ? Positioned(
-                          top: MediaQuery.paddingOf(context).top + 12,
+                          top: MediaQuery.paddingOf(context).top + 68,
                           left: 12,
-                          right: 72,
+                          right: 12,
                           child: _MapStatusBanner(
                             message: 'Could not determine your location.',
                             icon: Icons.location_disabled,
@@ -135,9 +142,9 @@ class MapScreen extends ConsumerWidget {
                         location.status != LocationPermissionStatus.granted &&
                         !isFullscreen) {
                       return Positioned(
-                        top: MediaQuery.paddingOf(context).top + 12,
+                        top: MediaQuery.paddingOf(context).top + 68,
                         left: 12,
-                        right: 72,
+                        right: 12,
                         child: _LocationBanner(status: location.status),
                       );
                     }
@@ -172,29 +179,26 @@ class MapScreen extends ConsumerWidget {
               top: MediaQuery.sizeOf(context).height * 0.22,
               child: const _EmptyMatchesCard(),
             ),
-          if (!isFullscreen && focused != null && mapProfiles.isNotEmpty)
+          // Match avatars: one horizontal row above the bottom navigation bar.
+          if (!isFullscreen)
             Positioned(
               left: 0,
               right: 0,
-              bottom: MediaQuery.paddingOf(context).bottom + 168,
-              child: MapFocusCard(
-                profile: focused,
-                onClose: () => notifier.setFocus(null),
-              ),
-            ),
-          if (!isFullscreen)
-            Positioned.fill(
-              child: MatchFriendsSheet(
+              bottom: MediaQuery.paddingOf(context).bottom + kMatchStripBottom,
+              child: MatchAvatarStrip(
                 matches: matches,
                 loading: loadingMatches,
-                waitingForLocation: userLocation.isLoading,
-                error: matchesAsync.hasError ? 'Could not load your matches.' : null,
                 focusProfileId: screenState.focusProfileId,
-                onProfileFocus: notifier.setFocus,
-                onRetry: () {
-                  ref.invalidate(mapMatchesProvider);
-                  ref.invalidate(rawMatchesProvider);
-                },
+                onProfileFocus: locateProfile,
+              ),
+            ),
+          if (!isFullscreen && cardProfile != null)
+            Positioned.fill(
+              child: Center(
+                child: MapFocusCard(
+                  profile: cardProfile,
+                  onClose: () => ref.read(_mapCardProfileIdProvider.notifier).state = null,
+                ),
               ),
             ),
         ],

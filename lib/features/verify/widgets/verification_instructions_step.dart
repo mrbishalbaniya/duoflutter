@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import '../../../core/theme/duo_gradients.dart';
+import '../../../core/theme/theme_extensions.dart';
 import '../../../widgets/duo_ui.dart';
-import '../domain/verification_domain.dart';
-import '../models/verification_models.dart';
 import '../verification_controller.dart';
 import 'verification_error_banner.dart';
-import 'verification_status_badge.dart';
-import 'verification_timeline.dart';
 
+/// Start screen, matching web VerificationFlow "instructions".
 class VerificationInstructionsStep extends StatelessWidget {
   const VerificationInstructionsStep({
     super.key,
@@ -22,187 +19,113 @@ class VerificationInstructionsStep extends StatelessWidget {
   final VoidCallback onStartDevice;
   final VoidCallback onStartCrossDevice;
 
+  static const _tips = [
+    (Icons.light_mode_outlined, 'Find good light and face the camera'),
+    (Icons.gesture_rounded, 'Follow 3 quick moves, like a smile or a head turn'),
+    (Icons.person_outline_rounded, 'Keep only your face in the frame'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dashboard = state.dashboardStatus;
+    final scheme = theme.colorScheme;
+    final duo = context.duo;
+
+    if (state.submitting) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 14),
+            Text('Getting things ready…', style: TextStyle(color: scheme.onSurfaceVariant)),
+          ],
+        ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        if (state.dashboardLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (dashboard != null && dashboard.status != VerificationStatus.pending) ...[
-          _DashboardCard(status: dashboard),
-          const SizedBox(height: 16),
-        ],
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.12)),
-            color: theme.colorScheme.secondary.withValues(alpha: 0.45),
+        const SizedBox(height: 16),
+        Center(
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: duo.brandGradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(color: scheme.primary.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 8)),
+              ],
+            ),
+            child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 32),
           ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Get your verified badge',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "A quick face check shows people you're the person in your photos.",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.secondary.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: scheme.primary.withValues(alpha: 0.1)),
+          ),
+          clipBehavior: Clip.antiAlias,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: DuoGradients.brand,
-                ),
-                child: const Icon(Icons.verified_user_rounded, color: Colors.white),
-              ),
-              const SizedBox(height: 14),
-              Text('Verify your profile', style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                'Quick identity check with your front camera.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 16),
-              ...defaultInstructions.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+              for (var i = 0; i < _tips.length; i++) ...[
+                if (i > 0) Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.15)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 18, color: theme.colorScheme.tertiary),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(item, style: theme.textTheme.bodyMedium)),
+                      Icon(_tips[i].$1, size: 22, color: scheme.primary),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_tips[i].$2, style: const TextStyle(fontSize: 14))),
                     ],
                   ),
                 ),
-              ),
+              ],
             ],
           ),
-        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.04, end: 0),
-        const SizedBox(height: 16),
-        VerificationTimeline(
-          currentStep: VerificationFlowStep.instructions,
-          livenessSteps: state.session?.livenessSteps ??
-              const [
-                LivenessStep.smile,
-                LivenessStep.blink,
-                LivenessStep.headLeft,
-                LivenessStep.headRight,
-              ],
-          completedSteps: const [],
-          resultStatus: dashboard?.status,
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Takes under a minute. Photos are captured automatically.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
         ),
         if (state.error != null) ...[
           const SizedBox(height: 16),
           VerificationErrorBanner(message: state.error!),
         ],
-        const SizedBox(height: 20),
-        DuoGradientButton(
-          label: state.submitting ? 'Starting…' : 'Start verification',
-          onPressed: state.submitting ? null : onStartDevice,
-        ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(child: Divider(color: theme.colorScheme.outline)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('OR', style: theme.textTheme.labelSmall),
-            ),
-            Expanded(child: Divider(color: theme.colorScheme.outline)),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: theme.colorScheme.outline),
+        const SizedBox(height: 24),
+        DuoGradientButton(label: 'Start verification', onPressed: onStartDevice),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: onStartCrossDevice,
+          style: TextButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            shape: const StadiumBorder(),
+            foregroundColor: scheme.primary,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.devices_rounded, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text('Verify on another device', style: theme.textTheme.titleMedium),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Share a QR code, link, or email to finish verification on a phone with a camera — no login required on that device.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: state.submitting ? null : onStartCrossDevice,
-                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                child: Text(state.submitting ? 'Preparing link…' : 'Get QR code, link & email'),
-              ),
-            ],
-          ),
+          icon: const Icon(Icons.smartphone_rounded, size: 20),
+          label: const Text('Use another device instead', style: TextStyle(fontWeight: FontWeight.w600)),
         ),
-      ],
-    );
-  }
-}
-
-class _DashboardCard extends StatelessWidget {
-  const _DashboardCard({required this.status});
-
-  final VerificationStatusResponse status;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Current status', style: theme.textTheme.titleSmall),
-              const Spacer(),
-              VerificationStatusBadge(status: status.status, compact: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _MetricRow(label: 'Face match', value: '${(status.similarityScore * 100).round()}%'),
-          _MetricRow(label: 'Liveness', value: '${(status.livenessScore * 100).round()}%'),
-          _MetricRow(label: 'Fraud risk', value: '${(status.fraudProbability * 100).round()}%'),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          Text(value, style: theme.textTheme.labelLarge),
-        ],
-      ),
+      ].animate(interval: 40.ms).fadeIn(duration: 260.ms).slideY(begin: 0.04, end: 0),
     );
   }
 }

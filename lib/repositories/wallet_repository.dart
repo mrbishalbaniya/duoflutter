@@ -30,8 +30,53 @@ class WalletRepository {
     });
   }
 
-  Future<List<SubscriptionPlan>> getPlans() async {
-    final response = await _client.get<List<dynamic>>('/subscriptions/plan/');
+  /// Full, cursor-paginated history (web `WalletTransactionsPage`).
+  Future<WalletTransactionPage> getTransactions({
+    int? before,
+    int limit = 20,
+    String paymentMethod = '',
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    return _withWalletFallback((prefix) async {
+      final response = await _client.get<Map<String, dynamic>>(
+        '$prefix/transactions/',
+        queryParameters: {
+          'limit': limit,
+          if (before != null) 'before': before,
+          if (paymentMethod.isNotEmpty) 'payment_method': paymentMethod,
+          if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+          if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+        },
+      );
+      return WalletTransactionPage.fromJson(response.data ?? const {});
+    });
+  }
+
+  Future<WalletTransaction> getTransaction(int id) async {
+    return _withWalletFallback((prefix) async {
+      final response = await _client.get<Map<String, dynamic>>('$prefix/transactions/$id/');
+      return WalletTransaction.fromJson(response.data!);
+    });
+  }
+
+  Future<GiftCardRedeemResult> redeemGiftCard(String code) async {
+    return _withWalletFallback((prefix) async {
+      final response = await _client.post<Map<String, dynamic>>(
+        '$prefix/giftcard/redeem/',
+        data: {'code': code.trim()},
+      );
+      return GiftCardRedeemResult.fromJson(response.data ?? const {});
+    });
+  }
+
+  Future<List<SubscriptionPlan>> getPlans({
+    String feature = SubscriptionFeature.whoLikedYou,
+  }) async {
+    final response = await _client.get<List<dynamic>>(
+      '/subscriptions/plan/',
+      queryParameters: {'feature': feature},
+    );
     return (response.data ?? [])
         .map((e) => SubscriptionPlan.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -44,6 +89,17 @@ class WalletRepository {
         data: {'amount': amount},
       );
       return EsewaPaymentForm.fromJson(response.data!);
+    });
+  }
+
+  /// Start a Stripe Checkout session for a card top-up (web `initiateStripeTopUp`).
+  Future<StripeCheckout> initiateStripeTopUp(int amount) async {
+    return _withWalletFallback((prefix) async {
+      final response = await _client.post<Map<String, dynamic>>(
+        '$prefix/topup/stripe/',
+        data: {'amount': amount},
+      );
+      return StripeCheckout.fromJson(response.data!);
     });
   }
 

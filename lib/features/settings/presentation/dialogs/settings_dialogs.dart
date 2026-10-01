@@ -6,14 +6,34 @@ Future<bool?> showLogoutDialog(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Log out?'),
-      content: const Text('You will need to sign in again to access your account.'),
+      icon: CircleAvatar(
+        radius: 28,
+        backgroundColor: scheme.error.withValues(alpha: 0.15),
+        child: Icon(Icons.logout_rounded, color: scheme.error, size: 28),
+      ),
+      title: const Text('Log out of Duo?', textAlign: TextAlign.center),
+      content: const Text(
+        "You'll be signed out on this device. Your matches and chats stay saved, "
+        'and you can sign back in anytime.',
+        textAlign: TextAlign.center,
+      ),
+      actionsAlignment: MainAxisAlignment.center,
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: FilledButton.styleFrom(backgroundColor: scheme.error),
-          child: const Text('Log out'),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(backgroundColor: scheme.error, foregroundColor: scheme.onError),
+              child: const Text('Yes, log out'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No, stay logged in'),
+            ),
+          ],
         ),
       ],
     ),
@@ -34,19 +54,6 @@ Future<bool?> showClearCacheDialog(BuildContext context) {
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Clear cache'),
         ),
-      ],
-    ),
-  );
-}
-
-Future<void> showSettingsComingSoonDialog(BuildContext context, {required String title}) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text('$title is coming soon.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
       ],
     ),
   );

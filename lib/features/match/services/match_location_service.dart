@@ -86,9 +86,11 @@ class MatchLocationService {
           'lon': lng,
           'format': 'json',
           'addressdetails': 1,
+          // English names, never Devanagari (this becomes the profile location).
+          'accept-language': 'en',
         },
         options: Options(
-          headers: {'Accept': 'application/json', 'User-Agent': 'DuoMobile/1.0'},
+          headers: {'Accept': 'application/json', 'Accept-Language': 'en', 'User-Agent': 'DuoMobile/1.0'},
           receiveTimeout: const Duration(seconds: 8),
         ),
       );

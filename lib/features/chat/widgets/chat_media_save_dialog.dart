@@ -76,17 +76,14 @@ class _ChatMediaSaveDialogState extends State<ChatMediaSaveDialog> {
           const SizedBox(height: 12),
           Text(
             _phase,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: widget.onCancel,
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
       ],
     );
   }
@@ -146,10 +143,10 @@ Future<void> saveChatMediaToGallery(
   }
 
   void retry() => saveChatMediaToGallery(
-        context,
-        remoteUrl: remoteUrl,
-        localPath: localPath,
-      );
+    context,
+    remoteUrl: remoteUrl,
+    localPath: localPath,
+  );
 
   if (outcome.status == GallerySaveStatus.permissionPermanentlyDenied) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -198,17 +195,17 @@ Future<void> shareChatMedia(
     }
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not share this media')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not share this media')));
   } catch (_) {
     if (!context.mounted) return;
     if (remoteUrl != null && remoteUrl.startsWith('http')) {
       await Share.share(remoteUrl);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not share this media')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not share this media')));
   }
 }

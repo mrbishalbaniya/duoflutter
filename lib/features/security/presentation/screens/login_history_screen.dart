@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../providers/security_providers.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class LoginHistoryScreen extends ConsumerStatefulWidget {
   const LoginHistoryScreen({super.key});
@@ -79,7 +80,7 @@ class _LoginHistoryScreenState extends ConsumerState<LoginHistoryScreen> {
           Expanded(
             child: history.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('$e')),
+              error: (e, _) => DuoStateView.error(e, onRetry: () => ref.invalidate(loginHistoryProvider(query))),
               data: (page) {
                 if (page.results.isEmpty) {
                   return const Center(child: Text('No login activity found.'));

@@ -2,20 +2,14 @@ import 'package:equatable/equatable.dart';
 
 typedef RegistrationStep = int;
 
-const int totalRegistrationSteps = 11;
+/// Web flow: Account → Basic Info & Location → Photos → Review.
+const int totalRegistrationSteps = 4;
 
 const Map<int, String> registrationStepLabels = {
   1: 'Account',
-  2: 'Basic Info',
-  3: 'Location',
-  4: 'Education',
-  5: 'Religion',
-  6: 'Lifestyle',
-  7: 'Interests',
-  8: 'Preferences',
-  9: 'About',
-  10: 'Photos',
-  11: 'Review',
+  2: 'Basic Info & Location',
+  3: 'Photos',
+  4: 'Review',
 };
 
 enum AccountSubStep { form, otp, phone }
@@ -94,6 +88,7 @@ class RegistrationData extends Equatable {
     this.password = '',
     this.confirmPassword = '',
     this.otpVerified = false,
+    this.verifiedEmail = '',
     this.signedUpWithGoogle = false,
     this.firstName = '',
     this.lastName = '',
@@ -146,6 +141,9 @@ class RegistrationData extends Equatable {
   final String password;
   final String confirmPassword;
   final bool otpVerified;
+
+  /// Email the OTP was verified for (a changed email must be verified again).
+  final String verifiedEmail;
   final bool signedUpWithGoogle;
   final String firstName;
   final String lastName;
@@ -198,6 +196,7 @@ class RegistrationData extends Equatable {
     String? password,
     String? confirmPassword,
     bool? otpVerified,
+    String? verifiedEmail,
     bool? signedUpWithGoogle,
     String? firstName,
     String? lastName,
@@ -250,6 +249,7 @@ class RegistrationData extends Equatable {
       password: password ?? this.password,
       confirmPassword: confirmPassword ?? this.confirmPassword,
       otpVerified: otpVerified ?? this.otpVerified,
+      verifiedEmail: verifiedEmail ?? this.verifiedEmail,
       signedUpWithGoogle: signedUpWithGoogle ?? this.signedUpWithGoogle,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
@@ -303,6 +303,7 @@ class RegistrationData extends Equatable {
       'phone': phone,
       'email': email,
       'otpVerified': otpVerified,
+      'verifiedEmail': verifiedEmail,
       'signedUpWithGoogle': signedUpWithGoogle,
       'firstName': firstName,
       'lastName': lastName,
@@ -355,6 +356,7 @@ class RegistrationData extends Equatable {
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String? ?? '',
       otpVerified: json['otpVerified'] as bool? ?? false,
+      verifiedEmail: json['verifiedEmail'] as String? ?? '',
       signedUpWithGoogle: json['signedUpWithGoogle'] as bool? ?? false,
       firstName: json['firstName'] as String? ?? '',
       lastName: json['lastName'] as String? ?? '',
@@ -409,6 +411,7 @@ class RegistrationData extends Equatable {
         password,
         confirmPassword,
         otpVerified,
+        verifiedEmail,
         signedUpWithGoogle,
         firstName,
         lastName,

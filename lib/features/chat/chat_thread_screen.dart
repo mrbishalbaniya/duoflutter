@@ -9,6 +9,8 @@ import 'widgets/chat_dialogs.dart';
 import 'widgets/chat_thread_composer_pane.dart';
 import 'widgets/chat_thread_header.dart';
 import 'widgets/chat_thread_message_pane.dart';
+import '../../core/router/app_router.dart';
+import 'chat_profile_screen.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({super.key, required this.conversationId});
@@ -73,8 +75,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final notifier =
-        ref.read(chatThreadControllerProvider(widget.conversationId).notifier);
+    final notifier = ref.read(
+      chatThreadControllerProvider(widget.conversationId).notifier,
+    );
 
     ref.listen(
       chatThreadControllerProvider(widget.conversationId).select(
@@ -90,67 +93,66 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ),
       ),
       (prev, next) {
-      if (prev?.$1 == true && next.$1 == false) {
-        _scrollToBottom(jump: true);
-      }
-      if (next.$2 && next.$3 > 0) {
-        _scrollToBottom(jump: true);
-      }
-
-      final prevCount = prev?.$3 ?? _lastMessageCount;
-      final nextCount = next.$3;
-      if (nextCount != prevCount && nextCount > prevCount) {
-        final grewAtEnd = nextCount > 0 &&
-            (prev == null || prev.$4.isEmpty || next.$4 != prev.$4);
-        if (grewAtEnd) {
-          final last = ref
-              .read(chatThreadControllerProvider(widget.conversationId))
-              .messages
-              .lastOrNull;
-          if (_isNearBottom() || (last?.isMine ?? false)) {
-            _scrollToBottom();
-          }
+        if (prev?.$1 == true && next.$1 == false) {
+          _scrollToBottom(jump: true);
         }
-        _lastMessageCount = nextCount;
-      }
+        if (next.$2 && next.$3 > 0) {
+          _scrollToBottom(jump: true);
+        }
 
-      if (next.$5 != null && next.$5 != prev?.$5) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.$5!),
-            action: next.$6
-                ? SnackBarAction(
-                    label: 'Settings',
-                    onPressed: notifier.openMicrophoneSettings,
-                  )
-                : null,
-          ),
-        );
-        notifier.clearError();
-      }
-    });
+        final prevCount = prev?.$3 ?? _lastMessageCount;
+        final nextCount = next.$3;
+        if (nextCount != prevCount && nextCount > prevCount) {
+          final grewAtEnd =
+              nextCount > 0 &&
+              (prev == null || prev.$4.isEmpty || next.$4 != prev.$4);
+          if (grewAtEnd) {
+            final last = ref
+                .read(chatThreadControllerProvider(widget.conversationId))
+                .messages
+                .lastOrNull;
+            if (_isNearBottom() || (last?.isMine ?? false)) {
+              _scrollToBottom();
+            }
+          }
+          _lastMessageCount = nextCount;
+        }
+
+        if (next.$5 != null && next.$5 != prev?.$5) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(next.$5!),
+              action: next.$6
+                  ? SnackBarAction(
+                      label: 'Settings',
+                      onPressed: notifier.openMicrophoneSettings,
+                    )
+                  : null,
+            ),
+          );
+          notifier.clearError();
+        }
+      },
+    );
 
     final headerSlice = ref.watch(
       chatThreadControllerProvider(widget.conversationId).select(
-        (s) => (
-          s.conversation,
-          s.loading,
-          s.isOtherUserTyping,
-          s.wsConnected,
-        ),
+        (s) => (s.conversation, s.loading, s.isOtherUserTyping, s.wsConnected),
       ),
     );
     final showBanner = ref.watch(
-      chatThreadControllerProvider(widget.conversationId)
-          .select((s) => s.showReconnectBanner),
+      chatThreadControllerProvider(
+        widget.conversationId,
+      ).select((s) => s.showReconnectBanner),
     );
 
     final convo = headerSlice.$1;
     final loading = headerSlice.$2;
 
     final showEmojiPicker = ref.watch(
-      chatThreadControllerProvider(widget.conversationId)
-          .select((s) => s.showEmojiPicker),
+      chatThreadControllerProvider(
+        widget.conversationId,
+      ).select((s) => s.showEmojiPicker),
     );
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
@@ -167,115 +169,148 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         }
       },
       child: Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      appBar: convo == null
-          ? AppBar(
-              title: const Text('Chat'),
-              bottom: loading
-                  ? const PreferredSize(
-                      preferredSize: Size.fromHeight(2),
-                      child: LinearProgressIndicator(minHeight: 2),
-                    )
-                  : null,
-            )
-          : ChatThreadHeader(
-              conversation: convo,
-              isOtherUserTyping: headerSlice.$3,
-              wsConnected: headerSlice.$4,
-              onVoiceCall: () => _startCall(context, ref, convo, 'voice'),
-              onVideoCall: () => _startCall(context, ref, convo, 'video'),
-              onMute: () => notifier.updateSettings(muted: !convo.isMuted),
-              onPin: () => notifier.updateSettings(pinned: !convo.isPinned),
-              onNickname: () async {
-                final nickname = await showNicknameDialog(
-                  context,
-                  currentName: convo.otherUserProfile.displayName,
-                  initialNickname: convo.otherUserNickname,
-                );
-                if (nickname != null) await notifier.setNickname(nickname);
-              },
-              onPrivacy: () async {
-                final settings = await showPrivacySettingsDialog(
-                  context,
-                  notifyScreenshots: convo.notifyScreenshots,
-                  secureChat: convo.secureChat,
-                );
-                if (settings != null) {
-                  await notifier.updateSettings(
-                    notifyScreenshots: settings.notifyScreenshots,
-                    secureChat: settings.secureChat,
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        appBar: convo == null
+            ? AppBar(
+                title: const Text('Chat'),
+                bottom: loading
+                    ? const PreferredSize(
+                        preferredSize: Size.fromHeight(2),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      )
+                    : null,
+              )
+            : ChatThreadHeader(
+                conversation: convo,
+                isOtherUserTyping: headerSlice.$3,
+                wsConnected: headerSlice.$4,
+                onVoiceCall: () => _startCall(context, ref, convo, 'voice'),
+                onVideoCall: () => _startCall(context, ref, convo, 'video'),
+                onMute: () => notifier.updateSettings(muted: !convo.isMuted),
+                onPin: () => notifier.updateSettings(pinned: !convo.isPinned),
+                onProfile: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ChatProfileScreen(
+                      profile: convo.otherUserProfile,
+                      conversationId: convo.publicId,
+                      matchedAt: convo.matchCreatedAt,
+                      onVoiceCall: () => _startCall(context, ref, convo, 'voice'),
+                      onVideoCall: () => _startCall(context, ref, convo, 'video'),
+                      onOpenInsights: convo.matchId == null
+                          ? null
+                          : () async {
+                              final starter = await context.push<String>(
+                                '${AppRoutes.insights}?match=${convo.matchId}',
+                              );
+                              if (starter != null && starter.isNotEmpty) {
+                                _controller.value = TextEditingValue(
+                                  text: starter,
+                                  selection: TextSelection.collapsed(offset: starter.length),
+                                );
+                              }
+                            },
+                    ),
+                  ),
+                ),
+                onNickname: () async {
+                  final nickname = await showNicknameDialog(
+                    context,
+                    currentName: convo.otherUserProfile.displayName,
+                    initialNickname: convo.otherUserNickname,
                   );
-                }
-              },
-              onClearHistory: () async {
-                final ok = await showClearHistoryDialog(context);
-                if (ok) await notifier.clearHistory();
-              },
-              onReport: () async {
-                final reason = await showReportDialog(context);
-                if (reason != null) {
-                  final ok = await notifier.report(reason);
-                  if (ok && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Report submitted. Thank you.')),
+                  if (nickname != null) await notifier.setNickname(nickname);
+                },
+                onPrivacy: () async {
+                  final settings = await showPrivacySettingsDialog(
+                    context,
+                    notifyScreenshots: convo.notifyScreenshots,
+                    secureChat: convo.secureChat,
+                  );
+                  if (settings != null) {
+                    await notifier.updateSettings(
+                      notifyScreenshots: settings.notifyScreenshots,
+                      secureChat: settings.secureChat,
                     );
                   }
-                }
-              },
-              onBlock: () async {
-                final ok = await showBlockDialog(context);
-                if (ok) {
-                  final success = await notifier.block();
-                  if (success && context.mounted) context.pop();
-                }
-              },
-              onUnmatch: () async {
-                final ok = await showUnmatchDialog(context);
-                if (ok) {
-                  final success = await notifier.unmatch();
-                  if (success && context.mounted) context.pop();
-                }
-              },
-              onUnmatchAndBlock: () async {
-                final ok = await showUnmatchAndBlockDialog(context);
-                if (ok) {
-                  final success = await notifier.unmatchAndBlock();
-                  if (success && context.mounted) context.pop();
-                }
-              },
-            ),
-      body: Column(
-        children: [
-          if (showBanner)
-            MaterialBanner(
-              content: const Text('Reconnecting… messages may be delayed'),
-              leading: const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                },
+                onClearHistory: () async {
+                  final ok = await showClearHistoryDialog(context);
+                  if (ok) await notifier.clearHistory();
+                },
+                onUseStarter: (text) {
+                  // Web: "Use" drops the starter into the composer for editing.
+                  _controller.value = TextEditingValue(
+                    text: text,
+                    selection: TextSelection.collapsed(offset: text.length),
+                  );
+                },
+                onReport: () async {
+                  final reason = await showReportDialog(context);
+                  if (reason != null) {
+                    final ok = await notifier.report(reason);
+                    if (ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Report submitted. Thank you.'),
+                        ),
+                      );
+                    }
+                  }
+                },
+                onBlock: () async {
+                  final ok = await showBlockDialog(context);
+                  if (ok) {
+                    final success = await notifier.block();
+                    if (success && context.mounted) context.pop();
+                  }
+                },
+                onUnmatch: () async {
+                  final ok = await showUnmatchDialog(context);
+                  if (ok) {
+                    final success = await notifier.unmatch();
+                    if (success && context.mounted) context.pop();
+                  }
+                },
+                onUnmatchAndBlock: () async {
+                  final ok = await showUnmatchAndBlockDialog(context);
+                  if (ok) {
+                    final success = await notifier.unmatchAndBlock();
+                    if (success && context.mounted) context.pop();
+                  }
+                },
               ),
-              actions: [
-                TextButton(
-                  onPressed: notifier.reconnect,
-                  child: const Text('Retry'),
+        body: Column(
+          children: [
+            if (showBanner)
+              MaterialBanner(
+                content: const Text('Reconnecting… messages may be delayed'),
+                leading: const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ],
+                actions: [
+                  TextButton(
+                    onPressed: notifier.reconnect,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            Expanded(
+              child: ChatThreadMessagePane(
+                conversationId: widget.conversationId,
+                scrollController: _scrollController,
+                onSetRetryText: (text) => _controller.text = text,
+              ),
             ),
-          Expanded(
-            child: ChatThreadMessagePane(
+            ChatThreadComposerPane(
               conversationId: widget.conversationId,
-              scrollController: _scrollController,
-              onSetRetryText: (text) => _controller.text = text,
+              controller: _controller,
             ),
-          ),
-          ChatThreadComposerPane(
-            conversationId: widget.conversationId,
-            controller: _controller,
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -287,7 +322,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   ) {
     final user = ref.read(authControllerProvider).user;
     if (user == null) return;
-    ref.read(callControllerProvider.notifier).startOutgoingCall(
+    ref
+        .read(callControllerProvider.notifier)
+        .startOutgoingCall(
           conversationId: convo.publicId,
           callType: callType,
           remoteName: convo.otherUserProfile.displayName,

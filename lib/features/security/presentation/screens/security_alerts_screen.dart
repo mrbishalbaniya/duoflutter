@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../providers/security_providers.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class SecurityAlertsScreen extends ConsumerWidget {
   const SecurityAlertsScreen({super.key});
@@ -17,7 +18,8 @@ class SecurityAlertsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () async {
-              await ref.read(securityRepositoryProvider).markAllEventsRead();
+              await runWithFeedback(context, () => ref.read(securityRepositoryProvider).markAllEventsRead());
+              if (!context.mounted) return;
               ref.invalidate(securityEventsProvider);
               ref.invalidate(securityOverviewProvider);
             },
@@ -27,10 +29,13 @@ class SecurityAlertsScreen extends ConsumerWidget {
       ),
       body: events.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => DuoStateView.error(e, onRetry: () => ref.invalidate(securityEventsProvider)),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(child: Text('No security alerts yet.'));
+            return RefreshIndicator(
+              onRefresh: () async => ref.invalidate(securityEventsProvider),
+              child: const DuoStateView(icon: Icons.verified_user_outlined, title: 'No security alerts yet'),
+            );
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(securityEventsProvider),
@@ -62,7 +67,8 @@ class SecurityAlertsScreen extends ConsumerWidget {
                     child: Icon(Icons.delete_outline, color: scheme.onErrorContainer),
                   ),
                   onDismissed: (_) async {
-                    await ref.read(securityRepositoryProvider).deleteEvent(event.id);
+                    await runWithFeedback(context, () => ref.read(securityRepositoryProvider).deleteEvent(event.id));
+                    if (!context.mounted) return;
                     ref.invalidate(securityEventsProvider);
                     ref.invalidate(securityOverviewProvider);
                   },
@@ -83,7 +89,11 @@ class SecurityAlertsScreen extends ConsumerWidget {
                         ),
                         onTap: () async {
                           if (!event.isRead) {
-                            await ref.read(securityRepositoryProvider).markEventRead(event.id);
+                            await runWithFeedback(
+                              context,
+                              () => ref.read(securityRepositoryProvider).markEventRead(event.id),
+                            );
+                            if (!context.mounted) return;
                             ref.invalidate(securityEventsProvider);
                             ref.invalidate(securityOverviewProvider);
                           }

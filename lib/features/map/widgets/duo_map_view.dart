@@ -12,6 +12,8 @@ import 'duo_globe_webview.dart';
 import 'map_floating_controls.dart';
 import 'map_layer_settings_sheet.dart';
 import 'zone_popup_card.dart';
+import 'match_avatar_strip.dart';
+import '../../../widgets/duo_profile_avatar_button.dart';
 
 class DuoMapView extends ConsumerStatefulWidget {
   const DuoMapView({
@@ -269,22 +271,11 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
                 }
               : null,
         ),
-        Positioned(
-          left: 8,
-          bottom: 120,
-          child: Text(
-            '© OpenStreetMap · CARTO · Esri',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-                ),
-          ),
-        ),
         if (_selectedZonePopup != null)
           Positioned(
             left: 16,
-            right: 72,
-            top: MediaQuery.paddingOf(context).top + 12,
+            right: 16,
+            top: MediaQuery.paddingOf(context).top + 68,
             child: Align(
               alignment: Alignment.topCenter,
               child: ZonePopupCard(
@@ -320,17 +311,28 @@ class _DuoMapViewState extends ConsumerState<DuoMapView> {
               ),
             ),
           ),
+        // Top-left: your profile, then temperature at your location.
+        Positioned(
+          left: 16,
+          top: MediaQuery.paddingOf(context).top + 12,
+          child: const DuoProfileAvatarButton(size: 36),
+        ),
+        // Top-right: map settings.
         Positioned(
           right: 16,
           top: MediaQuery.paddingOf(context).top + 12,
-          child: SafeArea(
-            bottom: false,
-            child: MapFloatingControls(
-              onRecenterNorth: () => _issueCamera(GlobeCameraAction.resetNorth),
-              onOpenSettings: _openSettingsSheet,
-              onLocateMe: widget.onLocateMe,
-              locateLoading: widget.locateLoading,
-            ),
+          child: const MapLocationWeatherCard(),
+        ),
+        // Bottom-right, above the match avatar strip:
+        // layers (with "reset rotation" inside) + find my location.
+        Positioned(
+          right: 16,
+          bottom: MediaQuery.paddingOf(context).bottom + kMatchStripBottom + kMatchAvatarStripHeight + 6,
+          child: MapBottomControls(
+            onRecenterNorth: () => _issueCamera(GlobeCameraAction.resetNorth),
+            onOpenSettings: _openSettingsSheet,
+            onLocateMe: widget.onLocateMe,
+            locateLoading: widget.locateLoading,
           ),
         ),
       ],

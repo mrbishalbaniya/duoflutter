@@ -54,9 +54,13 @@ class _CallBridgeState extends ConsumerState<CallBridge> {
     return Stack(
       children: [
         widget.child,
-        if (call.phase == CallPhase.incoming || call.phase == CallPhase.outgoing)
+        if (call.phase == CallPhase.incoming)
           const Positioned.fill(child: IncomingCallOverlay()),
-        if (call.phase == CallPhase.active || call.phase == CallPhase.connecting)
+        // Outgoing ring, connecting, in-call and the short "Call ended" screen.
+        if (call.phase == CallPhase.outgoing ||
+            call.phase == CallPhase.connecting ||
+            call.phase == CallPhase.active ||
+            call.phase == CallPhase.ended)
           const Positioned.fill(child: ActiveCallScreen()),
       ],
     );

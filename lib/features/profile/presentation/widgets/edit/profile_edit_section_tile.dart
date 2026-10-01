@@ -24,30 +24,45 @@ class ProfileEditSectionTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.25)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-          leading: Icon(icon, color: scheme.primary),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          subtitle: subtitle == null
-              ? null
-              : Text(
-                  subtitle!,
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.25),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: Material(
+              type: MaterialType.transparency,
+              child: ExpansionTile(
+                initiallyExpanded: initiallyExpanded,
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
                 ),
-          children: [child],
-        ),
-      ),
-    )
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                leading: Icon(icon, color: scheme.primary),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: subtitle == null
+                    ? null
+                    : Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                children: [child],
+              ),
+            ),
+          ),
+        )
         .animate(delay: (40 * animationIndex).ms)
         .fadeIn(duration: 240.ms)
         .slideY(begin: 0.03, end: 0);

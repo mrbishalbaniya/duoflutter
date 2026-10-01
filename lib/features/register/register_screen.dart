@@ -105,22 +105,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       case 2:
         return StepBasicInfo(onContinue: controller.handleContinue, onBack: controller.prevStep);
       case 3:
-        return StepLocation(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 4:
-        return StepEducation(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 5:
-        return StepReligion(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 6:
-        return StepLifestyle(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 7:
-        return StepInterests(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 8:
-        return StepPreferences(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 9:
-        return StepAbout(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 10:
         return StepPhotos(onContinue: controller.handleContinue, onBack: controller.prevStep);
-      case 11:
+      case 4:
         return StepReview(
           onSubmit: () async {
             await controller.handleSubmit();

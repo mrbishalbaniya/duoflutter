@@ -4,12 +4,12 @@ class AppConfig {
 
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://duobackend.onrender.com/api',
+    defaultValue: 'http://localhost:8000/api',
   );
 
   static const wsBaseUrl = String.fromEnvironment(
     'WS_BASE_URL',
-    defaultValue: 'wss://duobackend.onrender.com',
+    defaultValue: 'ws://localhost:8000',
   );
 
   /// Builds a WebSocket [Uri] with a valid ws/wss scheme and default ports.
@@ -57,11 +57,11 @@ class AppConfig {
   static const googleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
     defaultValue:
-        '599462036385-39dkh9btr5cslp7faegprvmc3haca5ac.apps.googleusercontent.com',
+        '559209017498-t409cnkdpbul30mcmk8qovpjioq2o1h6.apps.googleusercontent.com',
   );
 
   /// Custom URL scheme used by [flutter_web_auth_2] on Android/iOS.
-  static const googleOAuthCallbackScheme = 'com.duo.duo_mobile';
+  static const googleOAuthCallbackScheme = 'com.duo.duomobile';
 
   /// OAuth `state` value that tells DuoBackend to return to the mobile app.
   static const googleMobileOAuthState = 'duo_mobile';

@@ -80,8 +80,10 @@ class GoogleAuthService {
       final callback = await FlutterWebAuth2.authenticate(
         url: authUrl.toString(),
         callbackUrlScheme: AppConfig.googleOAuthCallbackScheme,
+        // Keep the plugin's default intent flags: it launches the Custom Tab from
+        // the application context, which Android only allows with NEW_TASK.
         options: const FlutterWebAuth2Options(
-          intentFlags: 0,
+          intentFlags: defaultIntentFlags,
         ),
       );
 

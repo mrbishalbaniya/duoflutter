@@ -2,19 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
-import '../dialogs/settings_dialogs.dart';
+import '../../../map/widgets/location_privacy_section.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
 
 class SettingsPrivacySection extends StatelessWidget {
   const SettingsPrivacySection({
     super.key,
-    required this.onEditProfile,
     required this.animationIndex,
     this.visible = true,
   });
 
-  final VoidCallback onEditProfile;
   final int animationIndex;
   final bool visible;
 
@@ -30,31 +28,27 @@ class SettingsPrivacySection extends StatelessWidget {
             icon: Icons.map_outlined,
             title: 'Location privacy',
             description: 'Control who sees you on the map',
-            onTap: () => context.push(AppRoutes.map),
-          ),
-          const SettingsDivider(),
-          SettingsRow(
-            icon: Icons.tune_rounded,
-            title: 'Discovery preferences',
-            description: 'Age range, distance, and match filters',
-            onTap: onEditProfile,
+            // Open the real controls here (pushing the Map tab route would
+            // stack a second copy of that tab on top of Settings).
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const _LocationPrivacyScreen()),
+            ),
           ),
           const SettingsDivider(),
           SettingsRow(
             icon: Icons.shield_outlined,
             title: 'Chat privacy',
             description: 'Screenshot alerts and secure chat per conversation',
-            onTap: () => context.push(AppRoutes.chat),
+            // Secure chat / screenshot alerts live in each conversation's
+            // menu, so switch to the Chat tab.
+            onTap: () => context.go(AppRoutes.chat),
           ),
           const SettingsDivider(),
           SettingsRow(
             icon: Icons.block_outlined,
             title: 'Blocked users',
             description: 'Manage people you have blocked',
-            enabled: false,
-            showChevron: false,
-            trailing: _SoonBadge(),
-            onTap: () => showSettingsComingSoonDialog(context, title: 'Blocked users'),
+            onTap: () => context.push(AppRoutes.blockedUsers),
           ),
         ],
       ),
@@ -62,22 +56,16 @@ class SettingsPrivacySection extends StatelessWidget {
   }
 }
 
-class _SoonBadge extends StatelessWidget {
+class _LocationPrivacyScreen extends StatelessWidget {
+  const _LocationPrivacyScreen();
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        'Soon',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurfaceVariant,
-            ),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Location privacy')),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
+        children: const [LocationPrivacySection()],
       ),
     );
   }

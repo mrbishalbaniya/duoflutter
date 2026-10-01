@@ -3,8 +3,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 
-import '../../../core/theme/duo_gradients.dart';
 import '../../../core/theme/duo_theme.dart';
+import '../../../widgets/duo_ui.dart';
 import '../splash_preloader.dart';
 
 class SplashBackground extends StatelessWidget {
@@ -147,12 +147,9 @@ class SplashLogoMark extends StatelessWidget {
                     frameRate: FrameRate.max,
                   ),
                 ),
-                Container(
-                  width: 96,
-                  height: 96,
+                DecoratedBox(
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: DuoGradients.brandBr,
+                    borderRadius: BorderRadius.circular(26),
                     boxShadow: [
                       BoxShadow(
                         color: DuoColors.primary.withValues(alpha: isDark ? 0.45 : 0.28),
@@ -160,21 +157,13 @@ class SplashLogoMark extends StatelessWidget {
                         offset: const Offset(0, 14),
                       ),
                     ],
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: isDark ? 0.22 : 0.55),
-                      width: 2,
-                    ),
                   ),
-                  child: const Icon(
-                    Icons.favorite_rounded,
-                    color: Colors.white,
-                    size: 42,
-                  ),
+                  child: const DuoLogoMark(size: 116),
                 )
+                    // Visible from the first frame (no blank lead-in), with a light pop.
                     .animate()
-                    .fadeIn(duration: 650.ms, curve: Curves.easeOut)
                     .scale(
-                      begin: const Offset(0.72, 0.72),
+                      begin: const Offset(0.9, 0.9),
                       end: const Offset(1, 1),
                       duration: 900.ms,
                       curve: Curves.easeOutBack,
@@ -188,23 +177,6 @@ class SplashLogoMark extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ShaderMask(
-            shaderCallback: (bounds) => DuoGradients.brand.createShader(bounds),
-            child: Text(
-              'Duo',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 52,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -1.5,
-                height: 1,
-              ),
-            ),
-          )
-              .animate()
-              .fadeIn(delay: 220.ms, duration: 700.ms, curve: Curves.easeOut)
-              .slideY(begin: 0.18, end: 0, duration: 700.ms, curve: Curves.easeOutCubic),
-          const SizedBox(height: 10),
           Text(
             'Find your person',
             style: GoogleFonts.inter(
@@ -217,7 +189,7 @@ class SplashLogoMark extends StatelessWidget {
             ),
           )
               .animate()
-              .fadeIn(delay: 420.ms, duration: 650.ms)
+              .fadeIn(begin: 0.4, duration: 400.ms)
               .slideY(begin: 0.12, end: 0, duration: 650.ms, curve: Curves.easeOut),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duo_mobile/app.dart';
+import 'package:duo_mobile/core/theme/appearance.dart';
 import 'package:duo_mobile/core/theme/theme_controller.dart';
 import 'package:duo_mobile/features/auth/auth_controller.dart';
 import 'package:duo_mobile/features/onboarding/onboarding_controller.dart';
@@ -14,6 +15,7 @@ void main() {
       ProviderScope(
         overrides: [
           themeModeProvider.overrideWith((ref) => ThemeController.testing()),
+          appearanceProvider.overrideWith((ref) => AppearanceController.testing()),
           splashMinDurationProvider.overrideWith((ref) => Duration.zero),
           splashControllerProvider.overrideWith((ref) => SplashController.testing(ref)),
           onboardingControllerProvider.overrideWith(

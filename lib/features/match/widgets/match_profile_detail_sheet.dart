@@ -5,342 +5,354 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/media/media_url.dart';
 import '../../../core/models/user_models.dart';
 import '../../../core/providers/core_providers.dart';
-import '../../../core/theme/duo_theme.dart';
+import '../../profile/domain/public_profile.dart';
 
+/// Port of DuoFrontend `ProfileDetailSheet` (components/discover/profileDiscoverUi.tsx)
+/// shown from the Match card's info button: iOS-style grouped sheet, records a
+/// profile visit when opened.
 Future<void> showMatchProfileDetail(
   BuildContext context, {
   required DuoProfile profile,
+  String? subtitle,
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
+    // The sheet draws its own grabber; the theme's default handle doubled it.
+    showDragHandle: false,
     backgroundColor: Colors.transparent,
-    builder: (_) => MatchProfileDetailSheet(profile: profile),
+    builder: (_) => MatchProfileDetailSheet(profile: profile, subtitle: subtitle),
   );
 }
 
 class MatchProfileDetailSheet extends ConsumerStatefulWidget {
-  const MatchProfileDetailSheet({
-    super.key,
-    required this.profile,
-  });
+  const MatchProfileDetailSheet({super.key, required this.profile, this.subtitle});
 
   final DuoProfile profile;
 
+  /// Extra context line under the location (Discover: "Viewed your profile · 6m ago").
+  final String? subtitle;
+
   @override
-  ConsumerState<MatchProfileDetailSheet> createState() =>
-      _MatchProfileDetailSheetState();
+  ConsumerState<MatchProfileDetailSheet> createState() => _MatchProfileDetailSheetState();
 }
 
 class _MatchProfileDetailSheetState extends ConsumerState<MatchProfileDetailSheet> {
   @override
   void initState() {
     super.initState();
+    // Web: `api.recordProfileVisit(profile.id)` when the sheet opens, so the
+    // person sees you in their "Visited you" list.
     final profileId = widget.profile.id;
     if (profileId != null) {
-      Future.microtask(
-        () => ref.read(profileRepositoryProvider).recordVisit(profileId),
-      );
+      Future.microtask(() => ref.read(profileRepositoryProvider).recordVisit(profileId).catchError((_) {}));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.profile;
-    final photos = p.allPhotos
-        .map((url) => resolveMediaUrl(url) ?? url)
-        .where((url) => url.isNotEmpty)
-        .toList();
-    if (photos.isEmpty) {
-      final fallback = resolveProfilePhotoUrl(p);
-      if (fallback.isNotEmpty) photos.add(fallback);
-    }
-    final extraPhotos = photos.length > 1 ? photos.sublist(1) : <String>[];
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = dark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
+    final muted = scheme.onSurfaceVariant;
+    final accent = scheme.primary;
+    final firstName = p.displayName.split(' ').first;
 
-    final detailItems = <({String label, String value, IconData icon})>[
-      if (p.education != null && p.education!.isNotEmpty)
-        (label: 'Education', value: p.education!, icon: Icons.school_outlined),
-      if (p.occupation != null && p.occupation!.isNotEmpty)
-        (label: 'Occupation', value: p.occupation!, icon: Icons.work_outline_rounded),
-      if (p.religion != null && p.religion!.isNotEmpty)
-        (label: 'Religion', value: p.religion!, icon: Icons.account_balance_outlined),
-      if (p.workPreference != null && p.workPreference!.isNotEmpty)
-        (label: 'Work', value: p.workPreference!, icon: Icons.business_center_outlined),
-    ];
-
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.78,
-      minChildSize: 0.45,
-      maxChildSize: 0.94,
-      builder: (context, scrollController) {
-        return Material(
-          color: scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.zero,
-            children: [
-              const SizedBox(height: 8),
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              Stack(
+    return Container(
+      height: MediaQuery.sizeOf(context).height * 0.9,
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      child: Column(
+        children: [
+          // Grabber
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(color: muted.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          // Navbar: Close · First name · Done
+          SizedBox(
+            height: 52,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
                 children: [
-                  SizedBox(
-                    height: 220,
-                    width: double.infinity,
-                    child: photos.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: photos.first,
-                            fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) => Container(
-                              color: scheme.surfaceContainerHighest,
-                              child: const Icon(Icons.person, size: 80),
-                            ),
-                          )
-                        : Container(
-                            color: scheme.surfaceContainerHighest,
-                            child: const Icon(Icons.person, size: 80),
-                          ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close_rounded, size: 20, color: muted),
+                    label: const SizedBox.shrink(),
+                    style: TextButton.styleFrom(foregroundColor: muted, minimumSize: const Size(44, 44)),
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton.filledTonal(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
+                  Expanded(
+                    child: Text(
+                      firstName,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.2),
                     ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Done',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: accent)),
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _InfoCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${p.displayName}${p.age != null ? ', ${p.age}' : ''}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              if (p.isVerified)
-                                const Icon(Icons.verified_rounded, color: Colors.lightBlueAccent),
-                            ],
-                          ),
-                          if (p.location != null && p.location!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.location_on_rounded,
-                                      color: DuoColors.primary, size: 20),
-                                  const SizedBox(width: 4),
-                                  Expanded(child: Text(p.location!)),
-                                ],
-                              ),
-                            ),
-                          if (p.isVerified)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: DuoColors.primary.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.verified_rounded,
-                                        size: 16, color: DuoColors.primary),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Verified profile',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: DuoColors.primary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (p.bio != null && p.bio!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _InfoCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ABOUT',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.2,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(p.bio!, style: const TextStyle(height: 1.45)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (detailItems.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1.35,
-                        children: [
-                          for (final item in detailItems)
-                            _InfoCard(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(item.icon, size: 18, color: DuoColors.tertiary),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        item.label.toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    item.value,
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                    if (p.lifestyleTags.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _InfoCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'LIFESTYLE',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.2,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (final tag in p.lifestyleTags)
-                                  Chip(
-                                    label: Text(tag),
-                                    backgroundColor:
-                                        DuoColors.primary.withValues(alpha: 0.1),
-                                    side: BorderSide(
-                                      color: DuoColors.primary.withValues(alpha: 0.2),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (extraPhotos.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'MORE PHOTOS',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 3 / 4,
-                        children: [
-                          for (final url in extraPhotos)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+          Expanded(
+            child: ProfileDetailList(profile: widget.profile, subtitle: widget.subtitle),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.child});
 
-  final Widget child;
+/// The iOS grouped profile layout (hero, identity, about, details, photos,
+/// interests). Shared by the profile sheet and the user's own Profile tab.
+class ProfileDetailList extends StatelessWidget {
+  const ProfileDetailList({
+    super.key,
+    required this.profile,
+    this.subtitle,
+    this.footer = const [],
+    this.bottomPadding = 20,
+  });
+
+  final DuoProfile profile;
+  final String? subtitle;
+
+  /// Extra grouped rows after the profile content (own profile: settings links).
+  final List<Widget> footer;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: child,
+    final p = profile;
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // iOS grouped colours (web --dfs-* tokens).
+    final cardBg = dark ? const Color(0xFF1C1C1E) : Colors.white;
+    final muted = scheme.onSurfaceVariant;
+    final accent = scheme.primary;
+
+    final photos = p.allPhotos.map((u) => resolveMediaUrl(u) ?? u).where((u) => u.isNotEmpty).toList();
+    final hero = photos.isNotEmpty ? photos.first : '';
+    final more = photos.length > 1 ? photos.sublist(1) : const <String>[];
+    final details = buildPublicProfile(p);
+    final distance = p.previewDistanceKm;
+    final where = distance != null
+        ? (distance < 1 ? 'Less than 1 km away' : '${distance.round()} km away')
+        : (p.location ?? '').trim();
+    final age = '${p.age ?? ''}'.trim();
+
+    Widget caption(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+          child: Text(text, style: TextStyle(fontSize: 13, color: muted)),
+        );
+    Widget group(Widget child) => Container(
+          width: double.infinity,
+          decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14)),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        );
+    Widget text(String t) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Text(t, style: const TextStyle(fontSize: 16, height: 1.5)),
+        );
+    Widget chips() => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in details.interests)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: dark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(tag, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                ),
+            ],
+          ),
+        );
+    Widget photo(String url) => Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 4 / 5,
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.5),
+                errorWidget: (_, __, ___) => ColoredBox(color: cardBg),
+              ),
+            ),
+          ),
+        );
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPadding + MediaQuery.paddingOf(context).bottom),
+      children: [
+                // Hero
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 5,
+                    child: hero.isEmpty
+                        ? ColoredBox(
+                            color: cardBg,
+                            child: Icon(Icons.person, size: 72, color: muted),
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: hero,
+                            fit: BoxFit.cover,
+                            alignment: const Alignment(0, -0.5),
+                            errorWidget: (_, __, ___) =>
+                                ColoredBox(color: cardBg, child: Icon(Icons.person, size: 72, color: muted)),
+                          ),
+                  ),
+                ),
+                // Identity
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 2),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: p.displayName,
+                            children: [
+                              if (age.isNotEmpty)
+                                TextSpan(
+                                  text: ', $age',
+                                  style: TextStyle(fontWeight: FontWeight.w500, color: muted),
+                                ),
+                            ],
+                          ),
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.15),
+                        ),
+                      ),
+                      if (p.isVerified) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.verified, size: 22, color: accent),
+                      ],
+                    ],
+                  ),
+                ),
+                if (where.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+                    child: Row(
+                      children: [
+                        Icon(distance != null ? Icons.near_me_outlined : Icons.location_on_outlined,
+                            size: 17, color: accent),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(where,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 15, color: muted)),
+                        ),
+                      ],
+                    ),
+                  ),
+                if ((subtitle ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 16, color: muted),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, color: muted)),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (details.bio.isNotEmpty) ...[caption('About'), group(text(details.bio))],
+                if (details.lookingFor.isNotEmpty) ...[
+                  caption("What I'm looking for"),
+                  group(text(details.lookingFor)),
+                ],
+                for (final section in details.sections) ...[
+                  caption(section.title),
+                  group(
+                    Column(
+                      children: [
+                        for (var i = 0; i < section.rows.length; i++) ...[
+                          if (i > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 58),
+                              child: Divider(height: 1, thickness: 0.5, color: muted.withValues(alpha: 0.25)),
+                            ),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 50),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(section.rows[i].icon, size: 18, color: accent),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(section.rows[i].label, style: const TextStyle(fontSize: 16)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.45),
+                                    child: Text(
+                                      section.rows[i].value,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(fontSize: 15, color: muted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                if (details.interests.isNotEmpty && more.isEmpty) ...[caption('Interests'), group(chips())],
+                if (details.futureGoals.isNotEmpty) ...[caption('Future goals'), group(text(details.futureGoals))],
+                if (more.isNotEmpty) ...[
+                  caption('Photos'),
+                  for (var i = 0; i < more.length; i++) ...[
+                    photo(more[i]),
+                    // Web: interests sit right below the 2nd photo.
+                    if (i == 0 && details.interests.isNotEmpty) ...[caption('Interests'), group(chips())],
+                  ],
+                ],
+        ...footer,
+      ],
     );
   }
 }

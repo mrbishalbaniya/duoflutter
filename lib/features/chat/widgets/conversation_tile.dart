@@ -23,8 +23,8 @@ class ConversationTile extends StatelessWidget {
     final preview = typing
         ? 'Typing…'
         : (conversation.lastMessage?.isMine ?? false)
-            ? 'You: ${lastMessagePreview(conversation)}'
-            : lastMessagePreview(conversation);
+        ? 'You: ${lastMessagePreview(conversation)}'
+        : lastMessagePreview(conversation);
     final time = formatMessageTime(conversationActivityIso(conversation));
 
     return Material(
@@ -41,9 +41,12 @@ class ConversationTile extends StatelessWidget {
                   CircleAvatar(
                     radius: 26,
                     backgroundColor: scheme.surfaceContainerHighest,
-                    backgroundImage:
-                        photo.isNotEmpty ? CachedNetworkImageProvider(photo) : null,
-                    child: photo.isEmpty ? const Icon(Icons.person, size: 28) : null,
+                    backgroundImage: photo.isNotEmpty
+                        ? CachedNetworkImageProvider(photo)
+                        : null,
+                    child: photo.isEmpty
+                        ? const Icon(Icons.person, size: 28)
+                        : null,
                   ),
                   if (typing)
                     Positioned(
@@ -76,23 +79,35 @@ class ConversationTile extends StatelessWidget {
                                   conversation.displayName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                               ),
                               if (conversation.otherUserProfile.isVerified) ...[
                                 const SizedBox(width: 4),
-                                Icon(Icons.verified, size: 16, color: Colors.lightBlue.shade300),
+                                Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: Colors.lightBlue.shade300,
+                                ),
                               ],
                               if (conversation.isPinned) ...[
                                 const SizedBox(width: 4),
-                                Icon(Icons.push_pin, size: 14, color: DuoColors.primary),
+                                Icon(
+                                  Icons.push_pin,
+                                  size: 14,
+                                  color: DuoColors.primary,
+                                ),
                               ],
                               if (conversation.isMuted) ...[
                                 const SizedBox(width: 4),
-                                Icon(Icons.notifications_off_outlined,
-                                    size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                Icon(
+                                  Icons.notifications_off_outlined,
+                                  size: 14,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                               ],
                             ],
                           ),
@@ -100,8 +115,11 @@ class ConversationTile extends StatelessWidget {
                         if (time.isNotEmpty)
                           Text(
                             time,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
                       ],
@@ -114,18 +132,26 @@ class ConversationTile extends StatelessWidget {
                             preview,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
                                   color: typing
                                       ? DuoColors.primary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: typing ? FontWeight.w600 : FontWeight.w400,
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                  fontWeight: typing
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
                                 ),
                           ),
                         ),
                         if (conversation.unreadCount > 0)
                           Container(
                             margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: DuoColors.primary,
                               borderRadius: BorderRadius.circular(999),

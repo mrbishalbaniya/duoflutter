@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/api_exception.dart';
+
 import '../../core/providers/core_providers.dart';
 import '../auth/auth_controller.dart';
 import 'registration_models.dart';
@@ -26,7 +28,7 @@ class RegistrationController extends StateNotifier<RegistrationState> {
         json['data'] as Map<String, dynamic>? ?? {},
       );
       state = state.copyWith(
-        step: json['step'] as int? ?? 1,
+        step: ((json['step'] as int?) ?? 1).clamp(1, totalRegistrationSteps),
         accountSubStep: AccountSubStep.values[json['accountSubStep'] as int? ?? 0],
         data: data,
         accountCreated: json['accountCreated'] as bool? ?? false,
@@ -99,11 +101,17 @@ class RegistrationController extends StateNotifier<RegistrationState> {
       state = state.copyWith(isSubmitting: true);
       try {
         await createAccountIfNeeded();
-      } catch (_) {
-        state = state.copyWith(
-          isSubmitting: false,
-          error: 'Could not create your account. This email or phone may already be registered.',
-        );
+      } catch (e) {
+        final message = e is ApiException && e.message.trim().isNotEmpty
+            ? e.message
+            : 'Could not create your account. Check your email and password, or try again.';
+        state = state.copyWith(isSubmitting: false, error: message);
+        if (RegExp('verify your email', caseSensitive: false).hasMatch(message)) {
+          // Verification expired server-side; send them back for a new code.
+          patchData((d) => d.copyWith(otpVerified: false, verifiedEmail: ''));
+          setAccountSubStep(AccountSubStep.form);
+          goToStep(1);
+        }
         return;
       }
       state = state.copyWith(isSubmitting: false);

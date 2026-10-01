@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/storage/local_storage.dart';
+import 'core/theme/appearance.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/call/presentation/call_bridge.dart';
@@ -17,6 +18,7 @@ class DuoApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final appearance = ref.watch(appearanceProvider);
 
     return Builder(
       builder: (context) {
@@ -25,7 +27,7 @@ class DuoApp extends ConsumerWidget {
           ThemeMode.light => Brightness.light,
           ThemeMode.system => MediaQuery.platformBrightnessOf(context),
         };
-        final theme = brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
+        final theme = brightness == Brightness.dark ? AppTheme.dark(appearance) : AppTheme.light(appearance);
 
         return AnimatedTheme(
           duration: const Duration(milliseconds: 280),
@@ -34,8 +36,8 @@ class DuoApp extends ConsumerWidget {
           child: MaterialApp.router(
             title: 'Duo',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.light(),
-            darkTheme: AppTheme.dark(),
+            theme: AppTheme.light(appearance),
+            darkTheme: AppTheme.dark(appearance),
             themeMode: themeMode,
             routerConfig: router,
             builder: (context, child) {

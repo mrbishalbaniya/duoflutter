@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/providers/core_providers.dart';
+import '../../../core/theme/theme_extensions.dart';
 import '../domain/verification_domain.dart';
 import '../models/verification_models.dart';
 import 'verification_error_banner.dart';
@@ -111,123 +113,146 @@ class _VerificationCrossDeviceStepState extends ConsumerState<VerificationCrossD
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final duo = context.duo;
     final completed = _progress?.session?.livenessStepsCompleted?.length ?? 0;
     final total = widget.session.livenessSteps.length;
-    final expiry = DateFormat.yMMMd().add_jm().format(widget.session.expiresAt.toLocal());
+    final expiry = DateFormat.jm().format(widget.session.expiresAt.toLocal());
+    final onSelfie = _progress?.status == VerificationStatus.pending && completed >= total;
+    final statusText = onSelfie
+        ? 'Taking selfie on your phone…'
+        : completed > 0
+            ? 'Face check $completed of $total done'
+            : 'Waiting for your phone…';
+
+    Widget pill({required IconData icon, required String label, VoidCallback? onTap}) => Material(
+          color: scheme.secondary.withValues(alpha: 0.6),
+          shape: const StadiumBorder(),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        );
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: theme.colorScheme.secondary.withValues(alpha: 0.45),
-            border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Open this link on your phone or tablet — no login needed. This screen updates when verification finishes.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 8),
-              Text('Link expires $expiry', style: theme.textTheme.bodySmall),
-            ],
+        const SizedBox(height: 8),
+        Text(
+          'Scan with your phone',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Open your phone camera and point it at the code. No login needed.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 24),
+        // QR in a white card with a brand-gradient rim.
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              gradient: duo.brandGradient,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(color: scheme.primary.withValues(alpha: 0.2), blurRadius: 24, offset: const Offset(0, 10)),
+              ],
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
+              child: QrImageView(data: _handoffUrl, version: QrVersions.auto, size: 196, gapless: true),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        Text(
+          'Code expires at $expiry',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 20),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: theme.colorScheme.outline),
-              ),
-              child: QrImageView(
-                data: _handoffUrl,
-                version: QrVersions.auto,
-                size: 148,
-                gapless: true,
+            Expanded(
+              child: pill(
+                icon: _copied ? Icons.check_rounded : Icons.link_rounded,
+                label: _copied ? 'Copied' : 'Copy link',
+                onTap: _copyLink,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Verification link', style: theme.textTheme.labelSmall),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.outline),
-                    ),
-                    child: Text(_handoffUrl, style: theme.textTheme.bodySmall),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: _copyLink,
-                    icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded),
-                    label: Text(_copied ? 'Link copied' : 'Copy link'),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: (_emailSending || _emailSent) ? null : _sendEmail,
-                    icon: const Icon(Icons.mail_outline_rounded),
-                    label: Text(
-                      _emailSending
-                          ? 'Sending…'
-                          : _emailSent
-                              ? 'Email sent'
-                              : widget.userEmail != null
-                                  ? 'Email link to ${widget.userEmail}'
-                                  : 'Email link to me',
-                    ),
-                  ),
-                ],
+              child: Opacity(
+                opacity: _emailSending || _emailSent ? 0.7 : 1,
+                child: pill(
+                  icon: _emailSent ? Icons.mark_email_read_outlined : Icons.mail_outline_rounded,
+                  label: _emailSending ? 'Sending…' : _emailSent ? 'Email sent' : 'Email me',
+                  onTap: (_emailSending || _emailSent) ? null : _sendEmail,
+                ),
               ),
             ),
           ],
         ),
+        if (_emailSent && widget.userEmail != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sent to ${widget.userEmail}',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+        ],
         if (_emailError != null) ...[
           const SizedBox(height: 12),
           VerificationErrorBanner(message: _emailError!),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
+        // Live status from the phone.
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.colorScheme.outline),
+            color: scheme.secondary.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: scheme.primary.withValues(alpha: 0.1)),
           ),
-          child: Column(
+          child: Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Waiting on your other device', style: theme.textTheme.bodyMedium),
-                  Text('$completed/$total liveness steps', style: theme.textTheme.labelLarge),
-                ],
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+              )
+                  .animate(onPlay: (c) => c.repeat(reverse: true))
+                  .fade(begin: 0.35, end: 1, duration: 800.ms),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(statusText, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 8,
-                  value: total == 0 ? 0 : (completed / total).clamp(0, 1),
-                ),
-              ),
-              if (_progress?.status == VerificationStatus.pending && completed >= total) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Selfie capture in progress…',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              for (var i = 0; i < total; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 20,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    gradient: i < completed ? duo.brandGradient : null,
+                    color: i < completed ? null : scheme.outlineVariant.withValues(alpha: 0.3),
+                  ),
                 ),
               ],
             ],
@@ -238,9 +263,16 @@ class _VerificationCrossDeviceStepState extends ConsumerState<VerificationCrossD
           VerificationInfoBanner(message: _pollError!, tone: VerificationBannerTone.warning),
         ],
         const SizedBox(height: 16),
-        TextButton(
-          onPressed: widget.onUseThisDevice,
-          child: const Text('Use this device instead'),
+        Center(
+          child: TextButton.icon(
+            onPressed: widget.onUseThisDevice,
+            style: TextButton.styleFrom(
+              shape: const StadiumBorder(),
+              foregroundColor: scheme.onSurfaceVariant,
+            ),
+            icon: const Icon(Icons.photo_camera_outlined, size: 20),
+            label: const Text("Use this device's camera instead", style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
         ),
       ],
     );

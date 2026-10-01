@@ -56,7 +56,12 @@ class AuthController extends StateNotifier<AuthState> {
       state = AuthState(status: AuthStatus.authenticated, user: user);
       await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } catch (_) {
-      await _auth.logout();
+      // Expired/invalid session: the server-side logout call fails too (401),
+      // and its exception used to escape here, leaving auth "unknown" so the
+      // app sat on the splash screen forever. Local tokens are cleared either way.
+      try {
+        await _auth.logout();
+      } catch (_) {}
       state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }
@@ -65,6 +70,23 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(error: null);
     try {
       final user = await _auth.login(email: email, password: password);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+      await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
+    } on TwoFactorRequiredException {
+      rethrow;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      rethrow;
+    }
+  }
+
+  /// Web "Sign in with email code".
+  Future<int> requestLoginOtp(String email) => _auth.requestLoginOtp(email);
+
+  Future<void> loginWithOtp(String email, String otp) async {
+    state = state.copyWith(error: null);
+    try {
+      final user = await _auth.verifyLoginOtp(email: email, otp: otp);
       state = AuthState(status: AuthStatus.authenticated, user: user);
       await _ref.read(pushNotificationServiceProvider).syncIfEnabled();
     } on TwoFactorRequiredException {
@@ -165,8 +187,13 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       await _ref.read(pushNotificationServiceProvider).unregister();
     } catch (_) {}
-    await _auth.logout();
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    try {
+      await _auth.logout(); // tokens are cleared in its `finally`
+    } catch (_) {
+      // Offline / server error: the local session is gone anyway, so still sign out.
+    } finally {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 }
 

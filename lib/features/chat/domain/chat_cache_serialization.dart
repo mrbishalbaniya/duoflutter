@@ -47,8 +47,8 @@ abstract final class ChatCacheSerialization {
       isDeletedForEveryone: json['is_deleted_for_everyone'] as bool? ?? false,
       isDeletedForMe: json['is_deleted_for_me'] as bool? ?? false,
       reactions: _parseReactions(json['reactions']),
-      replyTo: json['reply_to'] is Map<String, dynamic>
-          ? json['reply_to'] as Map<String, dynamic>
+      replyTo: json['reply_to'] is Map
+          ? Map<String, dynamic>.from(json['reply_to'] as Map)
           : null,
       clientTempId: json['client_temp_id'] as String?,
       sendStatus: status,

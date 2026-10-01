@@ -6,9 +6,8 @@ import '../../../core/router/app_router.dart';
 import '../../../widgets/duo_ui.dart';
 import '../domain/verification_domain.dart';
 import '../models/verification_models.dart';
-import 'verification_error_banner.dart';
-import 'verification_timeline.dart';
 
+/// Result card, matching web VerificationFlow "result".
 class VerificationResultStep extends StatelessWidget {
   const VerificationResultStep({
     super.key,
@@ -25,151 +24,103 @@ class VerificationResultStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (title, subtitle, icon, tone) = switch (result.status) {
-      VerificationStatus.verified => (
-          'Verified Profile',
-          mode == VerificationMode.device
-              ? 'You can close this screen and return to your other device.'
-              : 'Your profile now shows a verified badge.',
-          Icons.verified_rounded,
-          VerificationBannerTone.success,
-        ),
-      VerificationStatus.underReview => (
-          'Under Review',
-          'Our team will review your submission shortly.',
-          Icons.hourglass_top_rounded,
-          VerificationBannerTone.warning,
-        ),
-      VerificationStatus.rejected => (
-          'Verification Failed',
-          'Please try again with better lighting and a clear front-facing photo.',
-          Icons.cancel_rounded,
-          VerificationBannerTone.warning,
-        ),
-      VerificationStatus.pending => (
-          'Pending',
-          'Your verification is still in progress.',
-          Icons.pending_outlined,
-          VerificationBannerTone.info,
-        ),
-    };
+    final scheme = Theme.of(context).colorScheme;
+    final verified = result.status == VerificationStatus.verified;
 
-    final cardColor = switch (result.status) {
-      VerificationStatus.verified => theme.colorScheme.primary.withValues(alpha: 0.1),
-      VerificationStatus.underReview => Colors.amber.withValues(alpha: 0.12),
-      VerificationStatus.rejected => theme.colorScheme.error.withValues(alpha: 0.08),
-      VerificationStatus.pending => theme.colorScheme.secondary,
+    final (Color tone, IconData icon, String title) = switch (result.status) {
+      VerificationStatus.verified => (const Color(0xFF10B981), Icons.verified_rounded, "You're verified"),
+      VerificationStatus.underReview => (const Color(0xFFF59E0B), Icons.hourglass_top_rounded, 'Under review'),
+      VerificationStatus.pending => (const Color(0xFFF59E0B), Icons.hourglass_top_rounded, 'Under review'),
+      VerificationStatus.rejected => (const Color(0xFFEF4444), Icons.close_rounded, "Couldn't verify you"),
     };
-
-    final borderColor = switch (result.status) {
-      VerificationStatus.verified => theme.colorScheme.primary.withValues(alpha: 0.3),
-      VerificationStatus.underReview => Colors.amber.withValues(alpha: 0.35),
-      VerificationStatus.rejected => theme.colorScheme.error.withValues(alpha: 0.25),
-      VerificationStatus.pending => theme.colorScheme.outline,
-    };
+    final message = mode == VerificationMode.device && verified
+        ? 'All done. You can close this and go back to your other device.'
+        : verified
+            ? 'Your profile now shows the verified badge.'
+            : result.status == VerificationStatus.rejected
+                ? 'Try again in good light, facing the camera.'
+                : "Our team will check it shortly. We'll let you know.";
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, size: 56, color: theme.colorScheme.primary)
-                  .animate()
-                  .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), curve: Curves.elasticOut),
-              const SizedBox(height: 12),
-              Text(title, style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.colorScheme.outline),
+            color: tone.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: tone.withValues(alpha: 0.3)),
           ),
           child: Column(
             children: [
-              _MetricRow(label: 'Face match', value: '${(result.similarityScore * 100).round()}%'),
-              _MetricRow(label: 'Liveness', value: '${(result.livenessScore * 100).round()}%'),
-              _MetricRow(label: 'Fraud risk', value: '${(result.fraudProbability * 100).round()}%'),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(color: tone.withValues(alpha: 0.16), shape: BoxShape.circle),
+                child: Icon(icon, size: 36, color: tone),
+              ).animate().scale(begin: const Offset(0.7, 0.7), curve: Curves.elasticOut, duration: 700.ms),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.5, color: scheme.onSurfaceVariant),
+              ),
+              if (!verified && result.rejectionReasons.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final reason in result.rejectionReasons)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.error_rounded, size: 17, color: tone),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(reason, style: const TextStyle(fontSize: 14))),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
-        ),
-        if (session != null) ...[
-          const SizedBox(height: 16),
-          VerificationTimeline(
-            currentStep: VerificationFlowStep.result,
-            livenessSteps: session!.livenessSteps,
-            completedSteps: result.session?.livenessStepsCompleted ?? const [],
-            resultStatus: result.status,
-          ),
-        ],
-        if (result.rejectionReasons.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          ...result.rejectionReasons.map(
-            (reason) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: VerificationInfoBanner(message: reason, tone: tone),
-            ),
-          ),
-        ],
-        const SizedBox(height: 20),
-        if (result.status != VerificationStatus.verified) ...[
-          OutlinedButton(
-            onPressed: onTryAgain,
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: const Text('Try Again'),
-          ),
-          const SizedBox(height: 12),
-        ],
+        ).animate().fadeIn(duration: 280.ms).slideY(begin: 0.04, end: 0),
+        const SizedBox(height: 24),
         DuoGradientButton(
-          label: mode == VerificationMode.device ? 'Done' : 'Back to Profile',
-          onPressed: () {
-            if (mode == VerificationMode.device) {
-              context.go(AppRoutes.verify);
-            } else {
-              context.go(AppRoutes.profile);
-            }
-          },
+          label: mode == VerificationMode.device ? 'Done' : 'Back to profile',
+          onPressed: () => context.go(mode == VerificationMode.device ? AppRoutes.verify : AppRoutes.profile),
         ),
-      ],
-    );
-  }
-}
-
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          Text(value, style: theme.textTheme.labelLarge),
+        if (!verified) ...[
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: onTryAgain,
+            style: TextButton.styleFrom(
+              minimumSize: const Size.fromHeight(46),
+              shape: const StadiumBorder(),
+              foregroundColor: scheme.primary,
+            ),
+            child: const Text('Try again', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
         ],
-      ),
+      ],
     );
   }
 }

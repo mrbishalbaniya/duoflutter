@@ -3,10 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
+import 'appearance.dart';
 import 'app_text_theme.dart';
 import 'theme_extensions.dart';
 
-ThemeData buildDarkTheme() {
+ThemeData buildDarkTheme([DuoAppearance appearance = DuoAppearance.standard]) {
   const tokens = DuoThemeTokens(
     accent: AppColors.accent,
     love: AppColors.love,
@@ -93,7 +94,8 @@ ThemeData buildDarkTheme() {
     surfaceDim: AppColors.surfaceDimDark,
   );
 
-  return buildDuoTheme(scheme, tokens, AppColors.backgroundDark);
+  final (themed, themedTokens, themedBg) = applyAppearance(scheme, tokens, AppColors.backgroundDark, appearance);
+  return buildDuoTheme(themed, themedTokens, themedBg);
 }
 
 ThemeData buildDuoTheme(ColorScheme scheme, DuoThemeTokens tokens, Color scaffoldBg) {

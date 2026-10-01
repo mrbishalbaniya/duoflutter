@@ -35,8 +35,12 @@ class ProfileEditPhotosSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Add up to 9 photos. Drag to reorder. Star marks your main photo.',
-          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, height: 1.35),
+          'Upload $profileMinPhotos–$profileMaxPhotos photos. Each photo is checked instantly with AI for face, quality, and safety.',
+          style: TextStyle(
+            fontSize: 12,
+            color: scheme.onSurfaceVariant,
+            height: 1.35,
+          ),
         ),
         const SizedBox(height: 12),
         if (photoError != null)
@@ -61,14 +65,17 @@ class ProfileEditPhotosSection extends StatelessWidget {
             ),
           ),
         if (photos.isEmpty)
-          _AddPhotoTile(onTap: analyzingPhotos ? null : onPickPhotos, analyzing: analyzingPhotos)
+          _AddPhotoTile(
+            onTap: analyzingPhotos ? null : onPickPhotos,
+            analyzing: analyzingPhotos,
+          )
         else
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             buildDefaultDragHandles: false,
             itemCount: photos.length,
-            onReorder: onReorder,
+            onReorderItem: onReorder,
             itemBuilder: (context, index) {
               final photo = photos[index];
               return _PhotoTile(
@@ -86,7 +93,7 @@ class ProfileEditPhotosSection extends StatelessWidget {
               );
             },
           ),
-        if (photos.isNotEmpty && photos.length < 9) ...[
+        if (photos.isNotEmpty && photos.length < profileMaxPhotos) ...[
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: analyzingPhotos ? null : onPickPhotos,
@@ -117,17 +124,26 @@ class _AddPhotoTile extends StatelessWidget {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.4),
+          ),
           color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_photo_alternate_outlined, size: 36, color: scheme.primary),
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 36,
+              color: scheme.primary,
+            ),
             const SizedBox(height: 8),
             Text(
               analyzing ? 'Analyzing…' : 'Add your first photo',
-              style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -162,10 +178,16 @@ class _PhotoTile extends StatelessWidget {
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 4,
+          ),
           leading: ReorderableDragStartListener(
             index: index,
-            child: Icon(Icons.drag_handle_rounded, color: scheme.onSurfaceVariant),
+            child: Icon(
+              Icons.drag_handle_rounded,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           title: GestureDetector(
             onTap: onTap,
@@ -174,7 +196,19 @@ class _PhotoTile extends StatelessWidget {
               child: SizedBox(
                 width: 56,
                 height: 72,
-                child: CachedNetworkImage(imageUrl: photo.url, fit: BoxFit.cover),
+                child: CachedNetworkImage(
+                  errorWidget: (_, __, ___) => const ColoredBox(
+                    color: Color(0x14000000),
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                  imageUrl: photo.url,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
@@ -189,8 +223,12 @@ class _PhotoTile extends StatelessWidget {
                 tooltip: 'Set as main photo',
                 onPressed: onSetPrimary,
                 icon: Icon(
-                  photo.isProfile ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: photo.isProfile ? DuoColors.warning : scheme.onSurfaceVariant,
+                  photo.isProfile
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  color: photo.isProfile
+                      ? DuoColors.warning
+                      : scheme.onSurfaceVariant,
                 ),
               ),
               IconButton(

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'partner_pref_options.dart';
+
 import '../../../core/models/user_models.dart';
 
 class ProfileField {
@@ -50,10 +52,12 @@ class ParsedPrefValues {
     this.futureGoals,
     this.fieldOfStudy,
     this.educationLevel,
+    this.raw = const {},
   });
 
   factory ParsedPrefValues.fromJson(Map<String, dynamic> json) {
     return ParsedPrefValues(
+      raw: Map<String, dynamic>.unmodifiable(json),
       caste: json['caste'] as String?,
       gotra: json['gotra'] as String?,
       horoscope: json['horoscope'] as String?,
@@ -88,7 +92,22 @@ class ParsedPrefValues {
   final String? fieldOfStudy;
   final String? educationLevel;
 
+  /// Every key saved in `pref_values`, including ones mobile has no field for
+  /// (web-only partner preferences). Re-sent on save so nothing is lost.
+  final Map<String, dynamic> raw;
+
+  String str(String key) {
+    final value = raw[key];
+    return value is String ? value : '';
+  }
+
+  List<String> list(String key) {
+    final value = raw[key];
+    return value is List ? value.whereType<String>().toList() : <String>[];
+  }
+
   Map<String, dynamic> toJson() => {
+        ...raw,
         if (caste != null) 'caste': caste,
         if (gotra != null) 'gotra': gotra,
         if (horoscope != null) 'horoscope': horoscope,
@@ -207,7 +226,6 @@ ProfileSections buildProfileSections(DuoUser user, DuoProfile profile) {
       ),
     ],
     education: [
-      ProfileField(label: 'Education', value: displayValue(profile.education)),
       ProfileField(
         label: 'Education level',
         value: displayValue(extra.educationLevel?.replaceAll('_', ' ')),
@@ -225,10 +243,12 @@ ProfileSections buildProfileSections(DuoUser user, DuoProfile profile) {
     ],
     background: [
       ProfileField(label: 'Caste', value: displayValue(extra.caste)),
+      ProfileField(label: 'Sub-caste / Clan', value: displayValue(extra.str('subCaste'))),
       ProfileField(label: 'Gotra', value: displayValue(extra.gotra)),
       ProfileField(label: 'Horoscope', value: displayValue(extra.horoscope)),
       ProfileField(label: 'Birth time', value: displayValue(extra.birthTime)),
       ProfileField(label: 'Birth place', value: displayValue(extra.birthPlace)),
+      ProfileField(label: 'Languages', value: displayValue(extra.list('languages').join(', '))),
     ],
     about: [
       ProfileField(label: 'Bio', value: displayValue(profile.bio, fallback: 'No bio yet')),
@@ -268,7 +288,7 @@ ProfileSections buildProfileSections(DuoUser user, DuoProfile profile) {
       ProfileField(label: 'Identity verified', value: displayValue(profile.isVerified)),
       ProfileField(label: 'Onboarding complete', value: displayValue(profile.isOnboarded)),
     ],
-    lifestyleTags: profile.lifestyleTags.map(formatLifestyleTag).toList(),
+    lifestyleTags: profile.lifestyleTags.map(formatLifestyleTagLabel).toList(),
     photos: profile.allPhotos,
   );
 }

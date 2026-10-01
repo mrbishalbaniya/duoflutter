@@ -31,6 +31,12 @@ class DiscoverEmptyState extends StatelessWidget {
           'When someone likes you, they will appear here.',
           'Update profile',
         ),
+      DiscoverTab.matched => (
+          Icons.favorite_outline,
+          'No matches yet',
+          'When you and someone like each other, they will appear here.',
+          'Go to Match',
+        ),
     };
 
     return ListView(

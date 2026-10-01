@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/models/wallet_models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/core_providers.dart';
-import '../../core/theme/duo_theme.dart';
-import '../../widgets/duo_ui.dart';
+import '../../core/router/app_router.dart';
+import '../../core/widgets/duo_coin.dart';
 import '../auth/auth_controller.dart';
 import 'domain/wallet_domain.dart';
 import 'providers/wallet_providers.dart';
 import 'services/esewa_payment_service.dart';
 import 'widgets/esewa_payment_webview.dart';
-import 'widgets/wallet_balance_card.dart';
+import 'widgets/payment_method_sheet.dart';
+import 'widgets/stripe_checkout_webview.dart';
+import 'widgets/wallet_gift_card_section.dart';
 import 'widgets/wallet_skeleton.dart';
-import 'widgets/wallet_topup_section.dart';
-import 'widgets/wallet_transaction_list.dart';
 
+const _creditGreen = Color(0xFF60BB46);
+
+/// Mirrors web `/wallet`: balance, buy coins (eSewa or card via Stripe),
+/// redeem a gift card and the latest transaction.
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
@@ -37,11 +43,53 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final walletResult = GoRouterState.of(context).uri.queryParameters['wallet'];
     if (walletResult != null) {
       ref.read(walletUiProvider.notifier).handleWalletReturn(walletResult);
-      context.replace('/wallet');
+      context.replace(AppRoutes.wallet);
     }
   }
 
-  Future<void> _startTopUp(int amount) async {
+  void _notice(String? message) => ref.read(walletUiProvider.notifier).setNotice(message);
+
+  Future<void> _buyPack(CoinPack pack, WalletPaymentMethods methods) async {
+    HapticFeedback.lightImpact();
+    final method = await showPaymentMethodSheet(context, pack: pack, methods: methods);
+    if (method == null || !mounted) return;
+    _notice(null);
+    if (method == PaymentMethod.stripe) {
+      await _payWithStripe(pack.coins);
+    } else {
+      await _payWithEsewa(pack.coins);
+    }
+  }
+
+  Future<void> _payWithStripe(int amount) async {
+    try {
+      final session = await ref.read(walletRepositoryProvider).initiateStripeTopUp(amount);
+      if (!mounted) return;
+      if (session.checkoutUrl.isEmpty) {
+        _notice('Could not start card payment.');
+        return;
+      }
+      final result = await Navigator.of(context).push<StripeCheckoutResult>(
+        MaterialPageRoute(builder: (_) => StripeCheckoutScreen(checkoutUrl: session.checkoutUrl)),
+      );
+      if (!mounted) return;
+      switch (result) {
+        case StripeCheckoutResult.success:
+          _notice('Coins added successfully.');
+        case StripeCheckoutResult.failed:
+          _notice('Coin purchase was not completed.');
+        case StripeCheckoutResult.canceled || null:
+          _notice('Payment was canceled.');
+      }
+      await ref.read(walletUiProvider.notifier).refreshAll();
+    } on ApiException catch (e) {
+      if (mounted) _notice(e.message);
+    } catch (_) {
+      if (mounted) _notice('Could not start card payment.');
+    }
+  }
+
+  Future<void> _payWithEsewa(int amount) async {
     final ui = ref.read(walletUiProvider.notifier);
     EsewaPaymentForm? form;
     try {
@@ -49,7 +97,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       if (!mounted) return;
 
       var toppedUp = false;
-      String? refId;
 
       if (_esewaService.supportsNativeSdk && form.mobileSdk?.isConfigured == true) {
         final nativeResult = await _esewaService.startNativePayment(form);
@@ -57,19 +104,18 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         if (!mounted) return;
 
         if (nativeResult.outcome == EsewaPaymentOutcome.success) {
-          refId = nativeResult.refId;
           try {
             final verified = await ref.read(walletRepositoryProvider).verifyPayment(
                   form.transactionUuid,
-                  refId: refId,
+                  refId: nativeResult.refId,
                 );
             toppedUp = verified['status'] == 'COMPLETE';
           } catch (_) {}
         } else if (nativeResult.outcome == EsewaPaymentOutcome.failure) {
-          ref.read(walletUiProvider.notifier).setNotice('Top-up was not completed.');
+          _notice('Coin purchase was not completed.');
           return;
         } else {
-          ref.read(walletUiProvider.notifier).setNotice('Top-up was cancelled.');
+          _notice('Payment was canceled.');
           return;
         }
       } else {
@@ -82,43 +128,31 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         toppedUp = success == true;
         if (success == null && form.transactionUuid.isNotEmpty) {
           try {
-            final verified = await ref
-                .read(walletRepositoryProvider)
-                .verifyPayment(form.transactionUuid);
+            final verified = await ref.read(walletRepositoryProvider).verifyPayment(form.transactionUuid);
             toppedUp = verified['status'] == 'COMPLETE';
           } catch (_) {}
         } else if (success == false) {
-          ref.read(walletUiProvider.notifier).setNotice('Top-up was not completed.');
+          _notice('Coin purchase was not completed.');
           return;
         }
       }
 
-      if (toppedUp) {
-        ref.read(walletUiProvider.notifier).setNotice('Coins added successfully.');
-        await ref.read(walletUiProvider.notifier).refreshAll();
-      } else {
-        ref.read(walletUiProvider.notifier).setNotice(
-              'Payment submitted. Pull to refresh if your balance has not updated yet.',
-            );
-        await ref.read(walletUiProvider.notifier).refreshAll();
-      }
+      _notice(toppedUp
+          ? 'Coins added successfully.'
+          : 'Payment submitted. Pull to refresh if your balance has not updated yet.');
+      await ref.read(walletUiProvider.notifier).refreshAll();
     } on ApiException catch (e) {
       ui.clearToppingUp();
-      if (mounted && e.statusCode != 404) {
-        ref.read(walletUiProvider.notifier).setNotice(e.message);
-      }
+      if (mounted && e.statusCode != 404) _notice(e.message);
     } catch (e) {
       ui.clearToppingUp();
       if (mounted) {
-        ref.read(walletUiProvider.notifier).setNotice(
-              e is UnsupportedError
-                  ? 'Native eSewa is not available on this device.'
-                  : 'Could not start eSewa top-up.',
-            );
+        _notice(e is UnsupportedError
+            ? 'Native eSewa is not available on this device.'
+            : 'Could not start eSewa payment.');
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -126,158 +160,284 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final ui = ref.watch(walletUiProvider);
     final user = ref.watch(authControllerProvider).user;
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: DuoAmbientBackground(
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      appBar: AppBar(
+        title: const Text('Wallet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        shape: Border(bottom: BorderSide(color: scheme.primary.withValues(alpha: 0.1))),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(walletUiProvider.notifier).refreshAll(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+          children: [
+            Text(
+              'Buy coins with eSewa or card and spend them on Duo Premium from Discover.',
+              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            if (ui.notice != null) ...[
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.3)),
+                ),
                 child: Row(
                   children: [
-                    const BackButton(),
-                    const Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            'DUO COINS',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.4,
-                              color: DuoColors.primary,
-                            ),
-                          ),
-                          Text(
-                            'Wallet',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Expanded(child: Text(ui.notice!, style: text.bodyMedium)),
                     IconButton(
-                      onPressed: () => ref.read(walletUiProvider.notifier).refreshAll(),
-                      icon: const Icon(Icons.refresh_rounded),
+                      tooltip: 'Dismiss',
+                      onPressed: () => _notice(null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
                     ),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
-                  'Buy coins with eSewa and spend them on Duo Premium from Discover.',
-                  style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
+              const SizedBox(height: 20),
+            ],
+            ...data.when(
+              loading: () => const [SizedBox(height: 420, child: WalletSkeleton())],
+              error: (e, _) => [
+                _WalletError(
+                  message: e is ApiException ? e.message : 'Could not load wallet.',
+                  onRetry: () => ref.invalidate(walletDataProvider),
                 ),
-              ),
-              if (ui.notice != null &&
-                  !(data.valueOrNull?.degraded == true &&
-                      ui.notice!.toLowerCase().contains('wallet')))
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Material(
-                    color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(ui.notice!)),
-                          IconButton(
-                            onPressed: () => ref.read(walletUiProvider.notifier).setNotice(null),
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                          ),
-                        ],
-                      ),
+              ],
+              data: (walletData) {
+                final wallet = walletData.wallet;
+                final balance = wallet.balance;
+                final packs = wallet.coinPacks.isNotEmpty ? wallet.coinPacks : CoinPack.defaults;
+                final expires = DateTime.tryParse(user?.profile.subscriptionExpiresAt ?? '');
+                return [
+                  if (walletData.degraded) ...[
+                    Text(
+                      walletData.degradedMessage ?? 'Wallet API unavailable. Backend redeploy in progress.',
+                      style: TextStyle(color: scheme.error),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+                  _BalanceCard(
+                    balance: balance,
+                    premiumUntil: (user?.profile.isPremium ?? false) && expires != null
+                        ? DateFormat.yMMMd().format(expires.toLocal())
+                        : null,
                   ),
-                ),
-              Expanded(
-                child: data.when(
-                  loading: () => const WalletSkeleton(),
-                  error: (e, _) => _WalletError(
-                    message: e is ApiException ? e.message : 'Could not load wallet.',
-                    fallbackBalance: user?.profile.walletBalance ?? 0,
-                    onRetry: () => ref.invalidate(walletDataProvider),
-                  ),
-                  data: (walletData) {
-                    final wallet = walletData.wallet;
-                    final balance = wallet.balance != 0
-                        ? wallet.balance
-                        : (user?.profile.walletBalance ?? wallet.balance);
-                    final presets = wallet.topUpPresets.isNotEmpty
-                        ? wallet.topUpPresets
-                        : const [500, 1000, 2000, 5000];
-
-                    return RefreshIndicator(
-                      onRefresh: () => ref.read(walletUiProvider.notifier).refreshAll(),
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                        children: [
-                          if (walletData.degraded)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Material(
-                                color: scheme.errorContainer.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(14),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Icon(
-                                        Icons.cloud_sync_rounded,
-                                        size: 20,
-                                        color: scheme.onErrorContainer,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          walletData.degradedMessage ??
-                                              'Wallet API unavailable. Backend redeploy in progress.',
-                                          style: TextStyle(
-                                            color: scheme.onErrorContainer,
-                                            height: 1.35,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                  const SizedBox(height: 24),
+                  const _Heading('Buy coins'),
+                  _Card(
+                    padding: const EdgeInsets.all(16),
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        final columns = c.maxWidth >= 480 ? 4 : 2;
+                        const gap = 8.0;
+                        final width = (c.maxWidth - gap * (columns - 1)) / columns;
+                        return Wrap(
+                          spacing: gap,
+                          runSpacing: gap,
+                          children: [
+                            for (final pack in packs)
+                              SizedBox(
+                                width: width,
+                                child: _PackButton(
+                                  pack: pack,
+                                  disabled: ui.busy,
+                                  onTap: () => _buyPack(pack, wallet.paymentMethods),
                                 ),
                               ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const _Heading('Redeem a gift card'),
+                  const _Card(padding: EdgeInsets.all(16), child: WalletGiftCardSection()),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      children: [
+                        const Expanded(child: _Heading('Recent activity', padded: false)),
+                        TextButton(
+                          onPressed: () => context.push(AppRoutes.walletTransactions),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          child: const Text('View all'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _Card(
+                    child: wallet.transactions.isNotEmpty
+                        ? _LatestTransactionRow(txn: wallet.transactions.first)
+                        : ListTile(
+                            title: Text(
+                              'No transactions yet',
+                              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
                             ),
-                          WalletBalanceCard(
-                            balance: balance,
-                            hidden: ui.balanceHidden,
-                            onToggleVisibility: () =>
-                                ref.read(walletUiProvider.notifier).toggleBalanceVisibility(),
-                            isPremium: user?.profile.isPremium ?? false,
-                            premiumExpiry: premiumExpiryLabel(
-                              user?.profile.subscriptionExpiresAt,
-                            ),
+                            trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+                            onTap: () => context.push(AppRoutes.walletTransactions),
                           ),
-                          const SizedBox(height: 22),
-                          WalletTopUpSection(
-                            presets: presets,
-                            busy: ui.busy,
-                            toppingUp: ui.toppingUp,
-                            onTopUp: _startTopUp,
-                          ),
-                          const SizedBox(height: 22),
-                          WalletTransactionList(
-                            transactions: wallet.transactions,
-                            query: ui.transactionQuery,
-                            onQueryChanged:
-                                ref.read(walletUiProvider.notifier).setTransactionQuery,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  ),
+                ];
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Heading extends StatelessWidget {
+  const _Heading(this.title, {this.padded = true});
+
+  final String title;
+  final bool padded;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.1,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+    return padded ? Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 12), child: label) : label;
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child, this.padding = EdgeInsets.zero});
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.secondaryContainer.withValues(alpha: 0.3),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: scheme.primary.withValues(alpha: 0.1)),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.balance, this.premiumUntil});
+
+  final int balance;
+  final String? premiumUntil;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.15)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.primary.withValues(alpha: 0.1),
+            scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your coins',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const DuoCoin(size: 34),
+              const SizedBox(width: 10),
+              // Counts up like web NumberFlow.
+              TweenAnimationBuilder<double>(
+                tween: Tween(end: balance.toDouble()),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) => Text(
+                  formatCoinAmount(value.round()),
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ],
+          ),
+          if (premiumUntil != null) ...[
+            const SizedBox(height: 12),
+            Text('Premium active until $premiumUntil', style: TextStyle(fontSize: 14, color: scheme.primary)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PackButton extends StatelessWidget {
+  const _PackButton({required this.pack, required this.disabled, required this.onTap});
+
+  final CoinPack pack;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Opacity(
+      opacity: disabled ? 0.6 : 1,
+      child: Material(
+        color: scheme.surface.withValues(alpha: 0.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.3)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: disabled ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const DuoCoin(size: 18),
+                    const SizedBox(width: 6),
+                    Text(formatCoinAmount(pack.coins), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatNprPrice(pack.priceNpr),
+                  style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -285,36 +445,80 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   }
 }
 
+class _LatestTransactionRow extends StatelessWidget {
+  const _LatestTransactionRow({required this.txn});
+
+  final WalletTransaction txn;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => context.push(AppRoutes.walletTransactions),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    txn.description.isNotEmpty
+                        ? txn.description
+                        : switch (txn.type) {
+                            'top_up' => 'Coin pack purchase',
+                            'gift_redeem' => 'Gift card redeemed',
+                            _ => 'Purchase',
+                          },
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    formatTxnDate(txn.createdAt),
+                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              formatTxnAmount(txn.amount),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: txn.isCredit ? _creditGreen : scheme.onSurface,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WalletError extends StatelessWidget {
-  const _WalletError({
-    required this.message,
-    required this.fallbackBalance,
-    required this.onRetry,
-  });
+  const _WalletError({required this.message, required this.onRetry});
 
   final String message;
-  final int fallbackBalance;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_off_rounded, size: 56, color: DuoColors.primary.withValues(alpha: 0.4)),
-            const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center),
-            if (fallbackBalance > 0) ...[
-              const SizedBox(height: 8),
-              Text('Cached balance: ${formatCoins(fallbackBalance)}'),
-            ],
-            const SizedBox(height: 20),
-            FilledButton(onPressed: onRetry, child: const Text('Try again')),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 56, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)),
+          const SizedBox(height: 16),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+        ],
       ),
     );
   }

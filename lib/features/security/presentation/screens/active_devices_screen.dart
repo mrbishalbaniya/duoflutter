@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/security_domain.dart';
 import '../../models/security_models.dart';
 import '../../providers/security_providers.dart';
+import '../../../../widgets/duo_ui.dart';
 import '../widgets/security_widgets.dart';
 
 class ActiveDevicesScreen extends ConsumerWidget {
@@ -30,20 +31,21 @@ class ActiveDevicesScreen extends ConsumerWidget {
       ),
       body: devices.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => DuoStateView.error(e, onRetry: () => _refresh(ref)),
         data: (list) {
           if (list.isEmpty) {
-            return Center(
-              child: Text(trustedOnly ? 'No trusted devices yet.' : 'No active devices found.'),
+            return RefreshIndicator(
+              onRefresh: () async => _refresh(ref),
+              child: DuoStateView(
+                icon: Icons.devices_other,
+                title: trustedOnly ? 'No trusted devices yet' : 'No active devices found',
+              ),
             );
           }
           final current = list.where((d) => d.isCurrent).toList();
           final others = list.where((d) => !d.isCurrent).toList();
           return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(activeDevicesProvider);
-              ref.invalidate(trustedDevicesProvider);
-            },
+            onRefresh: () async => _refresh(ref),
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -72,6 +74,12 @@ class ActiveDevicesScreen extends ConsumerWidget {
     );
   }
 
+  void _refresh(WidgetRef ref) {
+    ref.invalidate(activeDevicesProvider);
+    ref.invalidate(trustedDevicesProvider);
+    ref.invalidate(securityOverviewProvider);
+  }
+
   Widget _deviceCard(BuildContext context, WidgetRef ref, UserDevice d) {
     return DeviceCard(
       deviceName: d.deviceName,
@@ -89,12 +97,12 @@ class ActiveDevicesScreen extends ConsumerWidget {
           ),
           if (!d.isTrustedActive)
             TextButton(
-              onPressed: () => _trust(ref, d.id),
+              onPressed: () => _trust(context, ref, d.id),
               child: const Text('Trust'),
             ),
           if (d.isTrustedActive)
             TextButton(
-              onPressed: () => _untrust(ref, d.id),
+              onPressed: () => _untrust(context, ref, d.id),
               child: const Text('Untrust'),
             ),
           if (!d.isCurrent)
@@ -127,24 +135,35 @@ class ActiveDevicesScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (name == null || name.isEmpty) return;
-    await ref.read(securityRepositoryProvider).renameDevice(device.id, name);
-    ref.invalidate(activeDevicesProvider);
-    ref.invalidate(trustedDevicesProvider);
+    controller.dispose();
+    if (name == null || name.isEmpty || !context.mounted) return;
+    await runWithFeedback(
+      context,
+      () => ref.read(securityRepositoryProvider).renameDevice(device.id, name),
+      success: 'Device renamed.',
+    );
+    if (!context.mounted) return;
+    _refresh(ref);
   }
 
-  Future<void> _trust(WidgetRef ref, int id) async {
-    await ref.read(securityRepositoryProvider).trustDevice(id);
-    ref.invalidate(activeDevicesProvider);
-    ref.invalidate(trustedDevicesProvider);
-    ref.invalidate(securityOverviewProvider);
+  Future<void> _trust(BuildContext context, WidgetRef ref, int id) async {
+    await runWithFeedback(
+      context,
+      () => ref.read(securityRepositoryProvider).trustDevice(id),
+      success: 'Device trusted.',
+    );
+    if (!context.mounted) return;
+    _refresh(ref);
   }
 
-  Future<void> _untrust(WidgetRef ref, int id) async {
-    await ref.read(securityRepositoryProvider).untrustDevice(id);
-    ref.invalidate(activeDevicesProvider);
-    ref.invalidate(trustedDevicesProvider);
-    ref.invalidate(securityOverviewProvider);
+  Future<void> _untrust(BuildContext context, WidgetRef ref, int id) async {
+    await runWithFeedback(
+      context,
+      () => ref.read(securityRepositoryProvider).untrustDevice(id),
+      success: 'Device no longer trusted.',
+    );
+    if (!context.mounted) return;
+    _refresh(ref);
   }
 
   Future<void> _logout(WidgetRef ref, BuildContext context, int id, String name) async {
@@ -159,13 +178,14 @@ class ActiveDevicesScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (ok != true) return;
-    await ref.read(securityRepositoryProvider).logoutDevice(id);
-    ref.invalidate(activeDevicesProvider);
-    ref.invalidate(securityOverviewProvider);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device signed out.')));
-    }
+    if (ok != true || !context.mounted) return;
+    await runWithFeedback(
+      context,
+      () => ref.read(securityRepositoryProvider).logoutDevice(id),
+      success: 'Device signed out.',
+    );
+    if (!context.mounted) return;
+    _refresh(ref);
   }
 
   Future<void> _logoutOthers(BuildContext context, WidgetRef ref) async {
@@ -180,11 +200,14 @@ class ActiveDevicesScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (ok != true) return;
-    final revoked = await ref.read(securityRepositoryProvider).logoutAllDevices(keepCurrent: true);
-    ref.invalidate(activeDevicesProvider);
-    ref.invalidate(securityOverviewProvider);
-    if (context.mounted) {
+    if (ok != true || !context.mounted) return;
+    var revoked = 0;
+    final done = await runWithFeedback(context, () async {
+      revoked = await ref.read(securityRepositoryProvider).logoutAllDevices(keepCurrent: true);
+    });
+    if (!context.mounted) return;
+    _refresh(ref);
+    if (done && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Signed out $revoked other device(s).')),
       );

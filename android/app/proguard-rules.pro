@@ -8,3 +8,14 @@
 -dontwarn org.openjsse.javax.net.ssl.SSLParameters
 -dontwarn org.openjsse.javax.net.ssl.SSLSocket
 -dontwarn org.openjsse.net.ssl.OpenJSSE
+
+# flutter_webrtc: native code calls these classes via JNI; R8 stripping them makes
+# voice/video calls crash in release builds only.
+-keep class org.webrtc.** { *; }
+-keep class com.cloudwebrtc.webrtc.** { *; }
+-dontwarn org.webrtc.**
+
+# eSewa SDK (esewasdk-release.aar): request/response models are (de)serialized
+# reflectively; keep them so wallet top-up works in release.
+-keep class com.f1soft.** { *; }
+-dontwarn com.f1soft.**

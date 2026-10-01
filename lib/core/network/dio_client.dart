@@ -16,6 +16,21 @@ class AuthInterceptor extends QueuedInterceptor {
   final Dio _dio;
   final TokenStorage _tokenStorage;
   bool _refreshing = false;
+
+  /// Interceptor-free client for the refresh call and the retried request.
+  /// Sending them through [_dio] deadlocked: this is a QueuedInterceptor, so a
+  /// 401 from the refresh (expired session) waited in the queue behind the very
+  /// error that was awaiting it — getMe() never returned and the app hung on
+  /// the splash screen.
+  Dio get _plain => Dio(
+        BaseOptions(
+          baseUrl: _dio.options.baseUrl,
+          connectTimeout: _dio.options.connectTimeout,
+          receiveTimeout: _dio.options.receiveTimeout,
+          sendTimeout: _dio.options.sendTimeout,
+          headers: Map<String, dynamic>.from(_dio.options.headers),
+        ),
+      );
   Future<void>? _refreshFuture;
 
   @override
@@ -81,11 +96,19 @@ class AuthInterceptor extends QueuedInterceptor {
       throw StateError('no_refresh_token');
     }
 
-    final refreshResponse = await _dio.post<Map<String, dynamic>>(
-      '/auth/refresh/',
-      data: {'refresh': refresh},
-      options: Options(extra: {'skipAuthRefresh': true}),
-    );
+    final Response<Map<String, dynamic>> refreshResponse;
+    try {
+      refreshResponse = await _plain.post<Map<String, dynamic>>(
+        '/auth/refresh/',
+        data: {'refresh': refresh},
+      );
+    } on DioException catch (e) {
+      // Refresh token rejected: the session is over.
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 400) {
+        await _tokenStorage.clear();
+      }
+      rethrow;
+    }
 
     final access = refreshResponse.data?['access'] as String?;
     if (access == null) {
@@ -107,7 +130,7 @@ class AuthInterceptor extends QueuedInterceptor {
     }
     options.headers['Authorization'] = 'Bearer $token';
     try {
-      final response = await _dio.fetch<dynamic>(options);
+      final response = await _plain.fetch<dynamic>(options);
       handler.resolve(response);
     } on DioException catch (retryError) {
       if (retryError.response?.statusCode == 401) {

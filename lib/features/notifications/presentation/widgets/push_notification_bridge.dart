@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_router.dart';
 import '../../../auth/auth_controller.dart';
 import '../../../settings/providers/settings_providers.dart';
 import '../../providers/notifications_providers.dart';
@@ -50,7 +50,9 @@ class _PushNotificationBridgeState extends ConsumerState<PushNotificationBridge>
     }
 
     coordinator.bind(
-      router: GoRouter.of(context),
+      // This bridge lives in MaterialApp.builder, i.e. *above* the Router, so
+      // GoRouter.of(context) throws here; use the app's router instance directly.
+      router: ref.read(routerProvider),
       ref: ref,
       onIngest: (item) async {
         await ref.read(notificationLocalStoreProvider).upsert(item);

@@ -1,25 +1,39 @@
 import '../../../core/models/match_models.dart';
 import '../../../core/models/user_models.dart';
+import '../../../core/models/wallet_models.dart';
 
-enum DiscoverTab { visitors, sent, received }
+enum DiscoverTab { visitors, sent, received, matched }
 
-enum PremiumSheetVariant { likes, visitors }
+enum PremiumSheetVariant {
+  likes(SubscriptionFeature.whoLikedYou),
+  visitors(SubscriptionFeature.visitedYou),
+  rewind(SubscriptionFeature.rewind),
+  unlimitedLikes(SubscriptionFeature.unlimitedLikes);
+
+  const PremiumSheetVariant(this.feature);
+
+  /// Backend feature whose plans this sheet sells.
+  final String feature;
+}
 
 class DiscoverData {
   const DiscoverData({
     required this.visitors,
     required this.sent,
     required this.received,
+    this.matches = const [],
   });
 
   final PaywalledList<VisitedProfileEntry> visitors;
   final List<LikedProfileEntry> sent;
   final PaywalledList<LikedProfileEntry> received;
+  final List<MatchSession> matches;
 
   int countFor(DiscoverTab tab) => switch (tab) {
         DiscoverTab.visitors => visitors.count > 0 ? visitors.count : visitors.results.length,
         DiscoverTab.sent => sent.length,
         DiscoverTab.received => received.count > 0 ? received.count : received.results.length,
+        DiscoverTab.matched => matches.length,
       };
 }
 
@@ -50,6 +64,7 @@ String interactionTimeLabel({
     'received' => action == SwipeAction.superlike
         ? 'Super like received · $when'
         : 'Like received · $when',
+    'matched' => 'Matched · $when',
     _ => when,
   };
 }

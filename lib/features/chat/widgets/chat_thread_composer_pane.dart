@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../domain/chat_emoji_utils.dart';
+import '../domain/chat_location.dart';
 import '../providers/chat_thread_controller.dart';
 import '../services/chat_debug_log.dart';
 import 'chat_composer.dart';
+import 'location_message_card.dart';
 
 /// Composer pane — rebuilds only on composer/voice state, not on every message.
 class ChatThreadComposerPane extends ConsumerStatefulWidget {
@@ -25,9 +28,77 @@ class ChatThreadComposerPane extends ConsumerStatefulWidget {
       _ChatThreadComposerPaneState();
 }
 
-class _ChatThreadComposerPaneState extends ConsumerState<ChatThreadComposerPane> {
+class _ChatThreadComposerPaneState
+    extends ConsumerState<ChatThreadComposerPane> {
   late final ChatEmojiRecentStore _recentStore;
   List<String> _recentEmojis = const [];
+  bool _sharingLocation = false;
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Web `handleShareLocation` + `confirmShareLocation`: get a GPS fix, preview it
+  /// with the address, then send `buildLocationMessage(...)` as a normal message.
+  Future<void> _shareLocation() async {
+    if (_sharingLocation) return;
+    setState(() => _sharingLocation = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _toast('Turn on location services to share your location.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _toast('Location access is blocked. Allow it in app settings.');
+        await Geolocator.openAppSettings();
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        _toast('Location permission is needed to share your location.');
+        return;
+      }
+      final Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 15),
+          ),
+        );
+      } catch (_) {
+        _toast('Finding your location took too long. Try again.');
+        return;
+      }
+      if (!mounted) return;
+      final convo = ref
+          .read(chatThreadControllerProvider(widget.conversationId))
+          .conversation;
+      final choice = await showShareLocationSheet(
+        context,
+        lat: position.latitude,
+        lng: position.longitude,
+        recipientName: convo?.displayName,
+      );
+      if (!choice.send || !mounted) return;
+      await ref
+          .read(chatThreadControllerProvider(widget.conversationId).notifier)
+          .send(
+            buildLocationMessage(
+              position.latitude,
+              position.longitude,
+              choice.address,
+            ),
+          );
+    } finally {
+      if (mounted) setState(() => _sharingLocation = false);
+    }
+  }
 
   @override
   void initState() {
@@ -68,8 +139,9 @@ class _ChatThreadComposerPaneState extends ConsumerState<ChatThreadComposerPane>
         ),
       ),
     );
-    final notifier =
-        ref.read(chatThreadControllerProvider(widget.conversationId).notifier);
+    final notifier = ref.read(
+      chatThreadControllerProvider(widget.conversationId).notifier,
+    );
 
     return ChatComposer(
       controller: widget.controller,
@@ -85,6 +157,8 @@ class _ChatThreadComposerPaneState extends ConsumerState<ChatThreadComposerPane>
       onCancelReply: () => notifier.setReplyingTo(null),
       onPickImage: notifier.pickImage,
       onPickCamera: () => notifier.pickImage(source: ImageSource.camera),
+      onShareLocation: _shareLocation,
+      sharingLocation: _sharingLocation,
       showEmojiPicker: slice.$2,
       onOpenEmojiPicker: notifier.openEmojiPicker,
       onCloseEmojiPicker: notifier.closeEmojiPicker,

@@ -93,6 +93,9 @@ class GlobeCameraCommand {
   final int token;
 }
 
+/// Zoom at which the whole globe fits the phone screen.
+const double kGlobeOverviewZoom = 1.5;
+
 enum GlobeCameraAction { zoomIn, zoomOut, resetNorth, recenter }
 
 class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
@@ -229,7 +232,7 @@ class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
         widget.userCoordinates.longitude,
         widget.userCoordinates.latitude,
       ],
-      'zoom': 2.2,
+      'zoom': kGlobeOverviewZoom,
       'styleKey': baseMapIdToStyleKey(activeBaseMapId(widget.enabledLayers)),
       'themeBrightness':
           widget.themeBrightness == Brightness.dark ? 'dark' : 'light',
@@ -324,10 +327,12 @@ class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
     };
 
     if (fitInitial) {
-      state['fitBounds'] = {
+      // Open on the whole globe, centred on the user (not zoomed into the city).
+      state['flyTo'] = {
         'lat': widget.userCoordinates.latitude,
         'lng': widget.userCoordinates.longitude,
-        'radiusKm': 20,
+        'zoom': kGlobeOverviewZoom,
+        'pitch': 0,
       };
     }
 

@@ -194,6 +194,14 @@ final mapWeatherAmbienceProvider =
   return ref.read(mapWeatherServiceProvider).fetchCurrent(coords);
 });
 
+/// Real current weather for the top-left chip. Unlike the globe ambience
+/// provider this never substitutes a default (null when unavailable).
+final mapCurrentTemperatureProvider =
+    FutureProvider.autoDispose<({double temperature, String main, String description})?>((ref) async {
+  final coords = await ref.watch(userCoordinatesProvider.future);
+  return ref.read(mapWeatherServiceProvider).fetchTemperature(coords);
+});
+
 final mapViewportProvider =
     StateProvider.autoDispose<MapViewport?>((ref) => null);
 
@@ -401,6 +409,13 @@ final mapMatchRefreshProvider = Provider.autoDispose<void>((ref) {
     ref.invalidate(mapMatchesProvider);
   });
   ref.onDispose(timer.cancel);
+});
+
+/// Name of the city the user is in (top-right of the map); null if unknown.
+final mapCurrentCityProvider = FutureProvider.autoDispose<String?>((ref) async {
+  ref.keepAlive();
+  final coords = await ref.watch(userCoordinatesProvider.future);
+  return ref.read(mapRepositoryProvider).reverseCity(coords);
 });
 
 final mapGeocodeSuggestionsProvider =

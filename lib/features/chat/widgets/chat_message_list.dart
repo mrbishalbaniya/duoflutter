@@ -1,5 +1,6 @@
 import 'chat_media_viewer.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../domain/chat_message_list_entry.dart';
 import 'chat_message_bubble.dart';
@@ -58,21 +59,21 @@ class ChatMessageListTile extends StatelessWidget {
             ChatSystemMessageBubble(message: entry.message)
           else
             ChatMessageBubble(
-            conversationId: conversationId,
-            messageKey: entry.stableKey,
-            fallbackMessage: entry.message,
-            showAvatar: entry.showAvatar,
-            isGrouped: entry.isGrouped,
-            otherPhoto: otherPhoto,
-            maxBubbleWidth: maxBubbleWidth,
-            animateEntrance: animateEntrance,
-            onReply: onReply,
-            onReact: onReact,
-            onDeleteForMe: onDeleteForMe,
-            onDeleteForEveryone: onDeleteForEveryone,
-            onRetry: onRetry,
-            onImageTap: onImageTap,
-          ),
+              conversationId: conversationId,
+              messageKey: entry.stableKey,
+              fallbackMessage: entry.message,
+              showAvatar: entry.showAvatar,
+              isGrouped: entry.isGrouped,
+              otherPhoto: otherPhoto,
+              maxBubbleWidth: maxBubbleWidth,
+              animateEntrance: animateEntrance,
+              onReply: onReply,
+              onReact: onReact,
+              onDeleteForMe: onDeleteForMe,
+              onDeleteForEveryone: onDeleteForEveryone,
+              onRetry: onRetry,
+              onImageTap: onImageTap,
+            ),
         ],
       ),
     );
@@ -141,7 +142,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
     return ListView.builder(
       controller: widget.scrollController,
       reverse: true,
-      cacheExtent: 720,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(720),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       findChildIndexCallback: (Key key) {
@@ -167,8 +168,8 @@ class _ChatMessageListState extends State<ChatMessageList> {
         }
 
         final entry = entries[entries.length - 1 - index];
-        final shouldAnimate = _allowEntranceAnimation &&
-            !_animatedKeys.contains(entry.stableKey);
+        final shouldAnimate =
+            _allowEntranceAnimation && !_animatedKeys.contains(entry.stableKey);
         if (shouldAnimate) {
           _animatedKeys.add(entry.stableKey);
         }

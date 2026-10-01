@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import 'user_models.dart';
+import '../media/media_url.dart' show localizeMediaUrl;
 
 class ChatMessage extends Equatable {
   const ChatMessage({
@@ -29,7 +30,7 @@ class ChatMessage extends Equatable {
     return ChatMessage(
       id: json['id'] as int? ?? 0,
       content: json['content'] as String? ?? '',
-      imageUrl: json['image_url'] as String?,
+      imageUrl: switch (json['image_url']) { final String u => localizeMediaUrl(u), _ => null },
       messageType: json['message_type'] as String? ?? 'text',
       eventCode: json['event_code'] as String?,
       timestamp: (json['timestamp'] ?? json['created_at'] ?? '').toString(),
@@ -42,7 +43,7 @@ class ChatMessage extends Equatable {
       isDeletedForEveryone: json['is_deleted_for_everyone'] as bool? ?? false,
       isDeletedForMe: json['is_deleted_for_me'] as bool? ?? false,
       reactions: _parseReactions(json['reactions']),
-      replyTo: json['reply_to'] as Map<String, dynamic>?,
+      replyTo: json['reply_to'] is Map ? Map<String, dynamic>.from(json['reply_to'] as Map) : null,
       clientTempId: json['client_temp_id'] as String?,
     );
   }
@@ -177,8 +178,8 @@ ChatMessage? _parseLastMessage(dynamic raw) {
       isMine: false,
     );
   }
-  if (raw is Map<String, dynamic>) {
-    return ChatMessage.fromJson(raw);
+  if (raw is Map) {
+    return ChatMessage.fromJson(Map<String, dynamic>.from(raw));
   }
   return null;
 }
@@ -209,8 +210,11 @@ class Conversation extends Equatable {
       publicId: json['public_id']?.toString() ?? json['id'].toString(),
       matchId: json['match_id'] as int?,
       matchCreatedAt: json['match_created_at'] as String?,
-      otherUserProfile: profileRaw is Map<String, dynamic>
-          ? DuoProfile.fromJson(profileRaw)
+      // `is Map` (not Map<String, dynamic>): conversations restored from the
+      // on-device cache come back as Map<dynamic, dynamic>, which used to fall
+      // through to the 'Chat' placeholder name with no photo.
+      otherUserProfile: profileRaw is Map
+          ? DuoProfile.fromJson(Map<String, dynamic>.from(profileRaw))
           : const DuoProfile(fullName: 'Chat'),
       otherUserNickname: json['other_user_nickname'] as String?,
       lastMessage: _parseLastMessage(json['last_message']),

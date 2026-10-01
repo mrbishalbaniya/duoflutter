@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/security_providers.dart';
 import '../widgets/security_widgets.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class BiometricLoginScreen extends ConsumerStatefulWidget {
   const BiometricLoginScreen({super.key});
@@ -30,7 +31,7 @@ class _BiometricLoginScreenState extends ConsumerState<BiometricLoginScreen> {
       appBar: AppBar(title: const Text('Biometric Login')),
       body: caps.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => DuoStateView.error(e, onRetry: () => ref.invalidate(biometricCapabilitiesProvider)),
         data: (capabilities) {
           if (!capabilities.supported) {
             return const Center(

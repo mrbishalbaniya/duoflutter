@@ -25,23 +25,32 @@ import '../services/voice_recording_service.dart';
 import 'chat_providers.dart';
 
 final chatThreadControllerProvider = StateNotifierProvider.autoDispose
-    .family<ChatThreadController, ChatThreadState, String>((ref, conversationId) {
-  final currentUserId = ref.watch(authControllerProvider.select((s) => s.user?.id));
-  final controller = ChatThreadController(
-    conversationId: conversationId,
-    currentUserId: currentUserId,
-    repository: ref.read(chatRepositoryProvider),
-    chatCache: ref.read(chatCacheServiceProvider),
-    onConversationsChanged: () => ref
-        .read(conversationsListProvider(const ConversationListFilter()).notifier)
-        .scheduleRefresh(),
-  );
-  ref.onDispose(controller.dispose);
-  ref.listen(appLifecycleProvider, (_, next) {
-    controller.setAppInBackground(next != AppLifecycleState.resumed);
-  });
-  return controller;
-});
+    .family<ChatThreadController, ChatThreadState, String>((
+      ref,
+      conversationId,
+    ) {
+      final currentUserId = ref.watch(
+        authControllerProvider.select((s) => s.user?.id),
+      );
+      final controller = ChatThreadController(
+        conversationId: conversationId,
+        currentUserId: currentUserId,
+        repository: ref.read(chatRepositoryProvider),
+        chatCache: ref.read(chatCacheServiceProvider),
+        onConversationsChanged: () => ref
+            .read(
+              conversationsListProvider(
+                const ConversationListFilter(),
+              ).notifier,
+            )
+            .scheduleRefresh(),
+      );
+      ref.onDispose(controller.dispose);
+      ref.listen(appLifecycleProvider, (_, next) {
+        controller.setAppInBackground(next != AppLifecycleState.resumed);
+      });
+      return controller;
+    });
 
 class _PendingSend {
   const _PendingSend({
@@ -106,7 +115,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     }
   }
 
-  String get _activeConversationId => state.conversation?.publicId ?? conversationId;
+  String get _activeConversationId =>
+      state.conversation?.publicId ?? conversationId;
 
   String? get _wsPublicId {
     final id = state.conversation?.publicId.trim();
@@ -149,11 +159,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   void _touchCache(List<ChatMessage> messages, {bool? hasMore}) {
     final key = _activeConversationId;
     if (key.isEmpty) return;
-    chatCache.writeMessages(
-      key,
-      messages,
-      hasMore: hasMore ?? state.hasMore,
-    );
+    chatCache.writeMessages(key, messages, hasMore: hasMore ?? state.hasMore);
   }
 
   List<ChatMessage> _sortedVisible(List<ChatMessage> messages) {
@@ -161,7 +167,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     return sorted.where((m) => m.isVisible).toList(growable: false);
   }
 
-  ChatThreadState _withMessages(ChatThreadState base, List<ChatMessage> messages) {
+  ChatThreadState _withMessages(
+    ChatThreadState base,
+    List<ChatMessage> messages,
+  ) {
     final visible = _sortedVisible(messages);
     return base.copyWith(
       messages: messages,
@@ -249,7 +258,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       visibleMessages: visible,
       listEntries: buildMessageListEntries(visible),
       messagesByKey: buildMessagesByKey(visible),
-      isOtherUserTyping: conversation?.isOtherUserTyping ?? state.isOtherUserTyping,
+      isOtherUserTyping:
+          conversation?.isOtherUserTyping ?? state.isOtherUserTyping,
       hasMore: hasMore,
       loading: false,
       initialScrollPending: initialScroll && visible.isNotEmpty,
@@ -289,10 +299,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       conversationId: _activeConversationId,
     );
 
-    final sent = _ws.send({
-      'type': 'security_event',
-      'event_code': eventCode,
-    });
+    final sent = _ws.send({'type': 'security_event', 'event_code': eventCode});
     if (sent) return;
 
     try {
@@ -372,10 +379,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
       Future<ChatMessagesPage?> fetchMessages() async {
         final sw = Stopwatch()..start();
-        ChatDebugLog.apiRequest(
-          endpoint: 'messages',
-          conversationId: primary,
-        );
+        ChatDebugLog.apiRequest(endpoint: 'messages', conversationId: primary);
         try {
           final result = await repository.getMessages(primary, limit: pageSize);
           ChatDebugLog.apiResponse(
@@ -557,7 +561,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
     switch (event.type) {
       case 'chat_message':
-        _onIncomingMessage(ChatMessage.fromWsJson(event.data, currentUserId: currentUserId));
+        _onIncomingMessage(
+          ChatMessage.fromWsJson(event.data, currentUserId: currentUserId),
+        );
       case 'typing_status':
         final userId = event.data['user_id'] as int?;
         if (userId != null && userId == currentUserId) return;
@@ -597,7 +603,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final messages = List<ChatMessage>.from(state.messages);
     if (msg.clientTempId != null) {
       _clearPendingAck(msg.clientTempId!);
-      final idx = messages.indexWhere((m) => m.clientTempId == msg.clientTempId);
+      final idx = messages.indexWhere(
+        (m) => m.clientTempId == msg.clientTempId,
+      );
       if (idx >= 0) {
         final optimistic = messages[idx];
         messages[idx] = ChatMessage.fromWsJson(
@@ -720,8 +728,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       if (_disposed) return;
       _noteHttpSuccess();
       if (kDebugMode) {
-        debugPrint('[ChatThread] poll ok ${sw.elapsedMilliseconds}ms '
-            'count=${page.results.length}');
+        debugPrint(
+          '[ChatThread] poll ok ${sw.elapsedMilliseconds}ms '
+          'count=${page.results.length}',
+        );
       }
       final merged = _mergeMessages(state.messages, page.results);
       if (merged.length != state.messages.length ||
@@ -748,7 +758,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final merged = List<ChatMessage>.from(existing);
     for (final msg in incoming) {
       if (msg.clientTempId != null) {
-        final idx = merged.indexWhere((m) => m.clientTempId == msg.clientTempId);
+        final idx = merged.indexWhere(
+          (m) => m.clientTempId == msg.clientTempId,
+        );
         if (idx >= 0) {
           merged[idx] = msg.copyWith(sendStatus: MessageSendStatus.sent);
           continue;
@@ -778,10 +790,15 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   Future<void> loadEarlier() async {
-    if (state.loadingEarlier || !state.hasMore || state.messages.isEmpty) return;
+    if (state.loadingEarlier || !state.hasMore || state.messages.isEmpty) {
+      return;
+    }
     state = state.copyWith(loadingEarlier: true);
     try {
-      final oldest = state.messages.firstWhere((m) => m.id > 0, orElse: () => state.messages.first);
+      final oldest = state.messages.firstWhere(
+        (m) => m.id > 0,
+        orElse: () => state.messages.first,
+      );
       final page = await repository.getMessages(
         _activeConversationId,
         before: oldest.id.toString(),
@@ -790,10 +807,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       if (_disposed) return;
       final merged = sortMessages([...page.results, ...state.messages]);
       _commitMessages(merged);
-      state = state.copyWith(
-        hasMore: page.hasMore,
-        loadingEarlier: false,
-      );
+      state = state.copyWith(hasMore: page.hasMore, loadingEarlier: false);
       _touchCache(merged, hasMore: page.hasMore);
       _noteHttpSuccess();
     } catch (_) {
@@ -810,7 +824,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     if (state.loadingEarlier || !state.hasMore) return;
     final now = DateTime.now();
     if (_lastPaginationAt != null &&
-        now.difference(_lastPaginationAt!) < const Duration(milliseconds: 500)) {
+        now.difference(_lastPaginationAt!) <
+            const Duration(milliseconds: 500)) {
       return;
     }
     _lastPaginationAt = now;
@@ -828,7 +843,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _typingStopTimer = Timer(const Duration(milliseconds: 2500), stopTyping);
 
     final now = DateTime.now();
-    final shouldSignal = !_isTypingActive ||
+    final shouldSignal =
+        !_isTypingActive ||
         _lastTypingSignalAt == null ||
         now.difference(_lastTypingSignalAt!) >= const Duration(seconds: 2);
 
@@ -848,7 +864,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   void _emitTyping(bool isTyping) {
-    ChatDebugLog.typing(isTyping: isTyping, conversationId: _activeConversationId);
+    ChatDebugLog.typing(
+      isTyping: isTyping,
+      conversationId: _activeConversationId,
+    );
     final payload = <String, dynamic>{
       'type': 'typing',
       'is_typing': isTyping,
@@ -876,12 +895,13 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }) async {
     final replyTarget = replyToId != null
         ? state.messages.cast<ChatMessage?>().firstWhere(
-              (m) => m?.id == replyToId,
-              orElse: () => state.replyingTo,
-            )
+            (m) => m?.id == replyToId,
+            orElse: () => state.replyingTo,
+          )
         : state.replyingTo;
 
-    final tempId = existingTempId ??
+    final tempId =
+        existingTempId ??
         'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
     final sendStarted = started ?? (Stopwatch()..start());
 
@@ -919,10 +939,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       );
 
       state = _withMessages(
-        state.copyWith(
-          clearReplyingTo: true,
-          showEmojiPicker: false,
-        ),
+        state.copyWith(clearReplyingTo: true, showEmojiPicker: false),
         sortMessages([...state.messages, optimistic]),
       );
       _touchCache(state.messages);
@@ -965,7 +982,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _pendingAckTimers[tempId] = Timer(_ackTimeout, () async {
       if (_disposed) return;
       final stillPending = state.messages.any(
-        (m) => m.clientTempId == tempId && m.sendStatus == MessageSendStatus.pending,
+        (m) =>
+            m.clientTempId == tempId &&
+            m.sendStatus == MessageSendStatus.pending,
       );
       if (stillPending) {
         try {
@@ -1029,7 +1048,8 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     final file = await _picker.pickImage(source: source, imageQuality: 85);
     if (file == null) return;
 
-    final tempId = 'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+    final tempId =
+        'tmp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
     final optimistic = ChatMessage(
       id: -DateTime.now().millisecondsSinceEpoch,
       content: '',
@@ -1061,7 +1081,12 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         );
         _patchMessages(messages);
       }
-      await _sendPayload(content: '', imageUrl: imageUrl, existingTempId: tempId, started: sendStarted);
+      await _sendPayload(
+        content: '',
+        imageUrl: imageUrl,
+        existingTempId: tempId,
+        started: sendStarted,
+      );
     } on ApiException catch (e) {
       _markFailed(tempId, e.message, sendStarted);
       state = state.copyWith(error: e.message);
@@ -1191,10 +1216,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       final audioUrl = await repository.uploadChatImage(path);
       await _sendPayload(content: voiceMessageLabel, imageUrl: audioUrl);
       await recorder?.cancel();
-      state = state.copyWith(
-        voiceDraftReady: false,
-        voiceRecordingSeconds: 0,
-      );
+      state = state.copyWith(voiceDraftReady: false, voiceRecordingSeconds: 0);
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message, voiceDraftReady: true);
     } catch (e) {
@@ -1212,7 +1234,9 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _voiceRecordingTimer?.cancel();
     _voiceRecordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_disposed || !state.isRecording) return;
-      state = state.copyWith(voiceRecordingSeconds: state.voiceRecordingSeconds + 1);
+      state = state.copyWith(
+        voiceRecordingSeconds: state.voiceRecordingSeconds + 1,
+      );
     });
   }
 
@@ -1226,9 +1250,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       final updated = await repository.reactToMessage(msg.id, emoji);
       _ws.send({'type': 'message_reaction', 'id': msg.id, 'emoji': emoji});
       _patchMessages(
-        state.messages
-            .map((m) => m.id == msg.id ? updated : m)
-            .toList(),
+        state.messages.map((m) => m.id == msg.id ? updated : m).toList(),
         cache: false,
       );
     } on ApiException catch (e) {
@@ -1272,20 +1294,22 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
   }
 
   void retryFailed(ChatMessage msg, void Function(String) setText) {
-    final payload = msg.clientTempId != null ? _failedSends[msg.clientTempId!] : null;
+    final payload = msg.clientTempId != null
+        ? _failedSends[msg.clientTempId!]
+        : null;
     _commitMessages(
-      state.messages
-          .where((m) => m.clientTempId != msg.clientTempId)
-          .toList(),
+      state.messages.where((m) => m.clientTempId != msg.clientTempId).toList(),
       cache: false,
     );
     if (payload != null) {
       if (payload.imageUrl.isNotEmpty) {
-        unawaited(_sendPayload(
-          content: payload.content,
-          imageUrl: payload.imageUrl,
-          replyToId: payload.replyToId,
-        ));
+        unawaited(
+          _sendPayload(
+            content: payload.content,
+            imageUrl: payload.imageUrl,
+            replyToId: payload.replyToId,
+          ),
+        );
       } else {
         setText(payload.content);
         send(payload.content);
@@ -1437,13 +1461,11 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
 
   Map<String, int> _parseReactionsMap(dynamic raw) {
     if (raw is! Map) return const {};
-    return raw.map(
-      (key, value) {
-        if (value is List) return MapEntry('$key', value.length);
-        if (value is num) return MapEntry('$key', value.toInt());
-        return MapEntry('$key', 0);
-      },
-    );
+    return raw.map((key, value) {
+      if (value is List) return MapEntry('$key', value.length);
+      if (value is num) return MapEntry('$key', value.toInt());
+      return MapEntry('$key', 0);
+    });
   }
 
   void setAppInBackground(bool inBackground) {

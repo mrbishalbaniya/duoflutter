@@ -327,14 +327,9 @@
       function fitInitialViewport(center) {
         if (!map || !center || initialFitDone) return;
         const [lng, lat] = center;
-        const bounds = lngLatBoundsForRadiusKm(lat, lng, 20);
         initialFitDone = true;
-        map.fitBounds(bounds, {
-          padding: { top: 120, bottom: 220, left: 40, right: 40 },
-          duration: FLY_DURATION_MS,
-          easing: FLY_EASE,
-          essential: true,
-        });
+        // Whole globe, centred on screen at the user's location.
+        map.jumpTo({ center: [lng, lat], zoom: map.getZoom(), pitch: 0, bearing: 0 });
       }
 
       function clearMarkers() {

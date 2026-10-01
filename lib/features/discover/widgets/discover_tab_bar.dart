@@ -44,6 +44,7 @@ class DiscoverTabBar extends ConsumerWidget {
         DiscoverTab.visitors => 'Visited',
         DiscoverTab.sent => 'Sent',
         DiscoverTab.received => 'Liked you',
+        DiscoverTab.matched => 'Matched',
       };
 }
 
@@ -72,41 +73,36 @@ class _TabChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            child: Column(
-              children: [
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: selected
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (count > 0)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : DuoColors.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      count > 99 ? '99+' : '$count',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: selected ? Colors.white : DuoColors.primary,
+            // Count as a tiny superscript after the label: "Sent³".
+            child: Text.rich(
+              TextSpan(
+                text: label,
+                children: [
+                  if (count > 0)
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.top,
+                      child: Transform.translate(
+                        offset: const Offset(1.5, -5),
+                        child: Text(
+                          count > 99 ? '99+' : '$count',
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: selected ? Colors.white.withValues(alpha: 0.9) : DuoColors.primary,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ),

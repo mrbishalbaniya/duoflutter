@@ -25,7 +25,8 @@ class CallControls extends StatelessWidget {
       children: [
         _btn(Icons.mic, onToggleMic),
         if (isVideo) _btn(Icons.videocam, onToggleVideo),
-        if (isVideo && onSwitchCamera != null) _btn(Icons.cameraswitch, onSwitchCamera!),
+        if (isVideo && onSwitchCamera != null)
+          _btn(Icons.cameraswitch, onSwitchCamera!),
         _btn(Icons.volume_up, onToggleSpeaker),
         FloatingActionButton(
           backgroundColor: Colors.red,

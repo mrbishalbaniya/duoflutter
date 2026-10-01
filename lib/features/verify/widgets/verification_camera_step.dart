@@ -7,8 +7,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/duo_theme.dart';
+import '../../../core/theme/theme_extensions.dart';
 import '../../../widgets/duo_ui.dart';
 import '../domain/verification_domain.dart';
+import '../models/verification_models.dart';
 import '../domain/verification_face_guide.dart';
 import '../providers/verification_providers.dart';
 import '../verification_controller.dart';
@@ -90,7 +92,6 @@ class _VerificationCameraStepState extends ConsumerState<VerificationCameraStep>
     final camera = ref.watch(verificationCameraServiceProvider);
     final controller = camera.controller;
     final livenessStep = state.currentLivenessStep;
-    final livenessInfo = livenessStep != null ? livenessStepCatalog[livenessStep] : null;
 
     final guideState = deriveFaceGuideState(
       cameraReady: state.cameraReady,
@@ -116,13 +117,7 @@ class _VerificationCameraStepState extends ConsumerState<VerificationCameraStep>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StageHeader(
-          stageLabel: stageLabel,
-          title: widget.isSelfie ? 'Selfie' : (livenessInfo?.title ?? 'Liveness'),
-          stepLabel: widget.isSelfie
-              ? null
-              : 'Step ${state.livenessIndex + 1} of ${state.session?.livenessSteps.length ?? 4}',
-        ),
+        _StageHeader(state: state, isSelfie: widget.isSelfie),
         const SizedBox(height: 10),
         Expanded(
           flex: 8,
@@ -234,50 +229,70 @@ class _VerificationCameraStepState extends ConsumerState<VerificationCameraStep>
   }
 }
 
+/// Web-style header: liveness step dots, then the move's title and hint.
 class _StageHeader extends StatelessWidget {
-  const _StageHeader({
-    required this.stageLabel,
-    required this.title,
-    this.stepLabel,
-  });
+  const _StageHeader({required this.state, required this.isSelfie});
 
-  final String stageLabel;
-  final String title;
-  final String? stepLabel;
+  final VerificationState state;
+  final bool isSelfie;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
+    final scheme = theme.colorScheme;
+    final steps = state.session?.livenessSteps ?? const <LivenessStep>[];
+    final info = state.currentLivenessStep != null ? livenessStepCatalog[state.currentLivenessStep] : null;
+
+    return Column(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (!isSelfie && steps.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                stageLabel.toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: DuoColors.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              for (var i = 0; i < steps.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                Builder(builder: (context) {
+                  final done = state.completedSteps.contains(steps[i]);
+                  final current = i == state.livenessIndex;
+                  return Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: done ? context.duo.brandGradient : null,
+                      border: done
+                          ? null
+                          : Border.all(
+                              color: current ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.4),
+                            ),
+                    ),
+                    child: Icon(
+                      done ? Icons.check_rounded : livenessStepCatalog[steps[i]]!.icon,
+                      size: 16,
+                      color: done
+                          ? Colors.white
+                          : current
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                  );
+                }),
+              ],
             ],
           ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          isSelfie ? 'Final selfie' : (info?.title ?? 'Face check'),
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
-        if (stepLabel != null)
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.secondary,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Text(stepLabel!, style: theme.textTheme.labelMedium),
-            ),
-          ),
+        const SizedBox(height: 2),
+        Text(
+          isSelfie ? 'Look straight at the camera and hold still.' : (info?.hint ?? ''),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+        ),
       ],
     );
   }

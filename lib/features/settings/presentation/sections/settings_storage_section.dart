@@ -6,6 +6,7 @@ import '../../services/settings_storage_service.dart';
 import '../dialogs/settings_dialogs.dart';
 import '../widgets/settings_row.dart';
 import '../widgets/settings_section.dart';
+import '../../../../widgets/duo_ui.dart';
 
 class SettingsStorageSection extends ConsumerWidget {
   const SettingsStorageSection({
@@ -64,13 +65,12 @@ class SettingsStorageSection extends ConsumerWidget {
               final confirmed = await showClearCacheDialog(context);
               if (confirmed != true || !context.mounted) return;
               HapticFeedback.mediumImpact();
-              await ref.read(settingsStorageServiceProvider).clearCaches();
+              await runWithFeedback(
+                context,
+                () => ref.read(settingsStorageServiceProvider).clearCaches(),
+                success: 'Cache cleared successfully',
+              );
               ref.invalidate(settingsStorageInfoProvider);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cache cleared successfully')),
-                );
-              }
             },
           ),
         ],

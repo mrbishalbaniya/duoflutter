@@ -5,19 +5,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/network/api_exception.dart';
+import '../../core/network/otp_cooldown_exception.dart';
+import '../../core/network/two_factor_exception.dart';
+import '../../core/providers/core_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/duo_theme.dart';
+import '../../core/widgets/otp_code_input.dart';
 import '../../widgets/duo_ui.dart';
 import '../../widgets/google_sign_in_button.dart';
-import '../security/presentation/dialogs/two_factor_login_dialog.dart';
+import '../security/models/security_models.dart';
 import '../security/providers/security_providers.dart';
 import 'auth_controller.dart';
 import 'domain/login_domain.dart';
 import 'providers/login_providers.dart';
+import 'widgets/auth_text_field.dart';
 import 'widgets/login_alert_banner.dart';
 import 'widgets/login_brand_header.dart';
 import 'widgets/login_footer_links.dart';
 
+enum _AuthMode { password, otp }
+
+/// Mirrors web `/login`: password sign-in, "Sign in with email code",
+/// inline two-factor step, Google, plus mobile biometrics.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,8 +39,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _otpEmailController = TextEditingController();
+  final _twoFactorController = TextEditingController();
+  final _otpKey = GlobalKey<OtpCodeInputState>();
+  late final _cooldown = ResendCountdown(() {
+    if (mounted) setState(() {});
+  });
+
   bool _obscurePassword = true;
   bool _biometricAvailable = false;
+  bool _accountDeleted = false;
+
+  _AuthMode _mode = _AuthMode.password;
+  bool _otpSent = false;
+  bool _otpSending = false;
+  bool _otpVerifying = false;
+  OtpStatus _otpStatus = OtpStatus.idle;
+  String _otpError = '';
+  String _otpResendMessage = '';
+
+  TwoFactorLoginChallenge? _twoFactor;
+  bool _twoFactorBusy = false;
+  bool _resendingTwoFactor = false;
+  String _twoFactorMessage = '';
 
   @override
   void initState() {
@@ -45,9 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final bio = ref.read(biometricAuthServiceProvider);
     final enabled = await bio.isLocallyEnabled();
     final caps = await bio.getCapabilities();
-    if (mounted) {
-      setState(() => _biometricAvailable = enabled && caps.supported);
-    }
+    if (mounted) setState(() => _biometricAvailable = enabled && caps.supported);
   }
 
   void _readQueryParams() {
@@ -55,52 +84,170 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (params['reset'] == 'success') {
       ref.read(loginControllerProvider.notifier).showPasswordResetBanner();
     }
+    if (params['deleted'] == '1') setState(() => _accountDeleted = true);
   }
 
   @override
   void dispose() {
+    _cooldown.stop();
     _emailController.dispose();
     _passwordController.dispose();
+    _otpEmailController.dispose();
+    _twoFactorController.dispose();
     super.dispose();
   }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // --- Password -----------------------------------------------------------
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
-
     final controller = ref.read(loginControllerProvider.notifier);
     final success = await controller.signInWithEmail(
       email: _emailController.text,
       password: _passwordController.text,
     );
     if (!mounted) return;
-
     if (success) {
       HapticFeedback.mediumImpact();
       _navigateAfterAuth();
       return;
     }
+    final challenge = ref.read(loginControllerProvider).pendingChallenge;
+    if (challenge != null) setState(() => _twoFactor = challenge);
+  }
 
-    final ui = ref.read(loginControllerProvider);
-    final challenge = ui.pendingChallenge;
-    if (challenge == null) return;
+  // --- Two-factor (inline, like web) -----------------------------------------
 
-    final code = await showTwoFactorLoginDialog(
-      context,
-      challenge: challenge,
-      onResendEmailOtp: controller.resendTwoFactorOtp,
-    );
-    if (!mounted || code == null || code.isEmpty) {
-      controller.clearChallenge();
-      return;
-    }
-
-    final verified = await controller.completeTwoFactor(code);
-    if (verified && mounted) {
+  Future<void> _submitTwoFactor() async {
+    final challenge = _twoFactor;
+    final code = _twoFactorController.text.trim();
+    if (challenge == null || code.isEmpty) return;
+    setState(() => _twoFactorBusy = true);
+    try {
+      await ref.read(authControllerProvider.notifier).completeTwoFactorLogin(
+            challengeToken: challenge.challengeToken,
+            code: code,
+          );
+      if (!mounted) return;
       HapticFeedback.mediumImpact();
       _navigateAfterAuth();
+    } on ApiException catch (e) {
+      if (mounted) _toast(e.message);
+    } catch (_) {
+      if (mounted) _toast('Invalid verification code.');
+    } finally {
+      if (mounted) setState(() => _twoFactorBusy = false);
     }
   }
+
+  Future<void> _resendTwoFactor() async {
+    final challenge = _twoFactor;
+    if (challenge == null) return;
+    setState(() {
+      _resendingTwoFactor = true;
+      _twoFactorMessage = '';
+    });
+    try {
+      await ref.read(authRepositoryProvider).sendTwoFactorLoginOtp(challenge.challengeToken);
+      if (mounted) setState(() => _twoFactorMessage = 'A new code was sent to your email.');
+    } catch (_) {
+      if (mounted) setState(() => _twoFactorMessage = 'Could not resend the code. Please try again.');
+    } finally {
+      if (mounted) setState(() => _resendingTwoFactor = false);
+    }
+  }
+
+  void _backToPassword() {
+    ref.read(loginControllerProvider.notifier).clearChallenge();
+    setState(() {
+      _twoFactor = null;
+      _twoFactorController.clear();
+      _twoFactorMessage = '';
+    });
+  }
+
+  // --- Email code -------------------------------------------------------------
+
+  Future<void> _sendLoginOtp({bool resend = false}) async {
+    final email = _otpEmailController.text.trim();
+    if (email.isEmpty) {
+      _toast('Email is required.');
+      return;
+    }
+    if (resend && (_cooldown.seconds > 0 || _otpSending)) return;
+    setState(() {
+      _otpSending = true;
+      _otpResendMessage = '';
+    });
+    try {
+      final retry = await ref.read(authControllerProvider.notifier).requestLoginOtp(email);
+      if (!mounted) return;
+      setState(() {
+        _otpSent = true;
+        _otpStatus = OtpStatus.idle;
+        _otpError = '';
+        if (resend) _otpResendMessage = 'A new code was sent to your email.';
+      });
+      _cooldown.start(retry);
+    } on OtpCooldownException catch (e) {
+      // A code was sent recently: let them enter it; the countdown shows the wait.
+      if (!mounted) return;
+      setState(() => _otpSent = true);
+      _cooldown.start(e.retryAfter);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (resend) {
+        setState(() => _otpResendMessage = 'Could not resend the code. Please try again.');
+      } else {
+        _toast(e.message.isNotEmpty ? e.message : 'Could not send login code. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _otpSending = false);
+    }
+  }
+
+  Future<void> _verifyLoginOtp(String code) async {
+    if (code.length != 6 || _otpVerifying) return;
+    setState(() => _otpVerifying = true);
+    try {
+      await ref.read(authControllerProvider.notifier).loginWithOtp(_otpEmailController.text.trim(), code);
+      if (!mounted) return;
+      setState(() => _otpStatus = OtpStatus.success);
+      HapticFeedback.mediumImpact();
+      _navigateAfterAuth();
+    } on TwoFactorRequiredException catch (e) {
+      if (mounted) setState(() => _twoFactor = e.challenge);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otpStatus = OtpStatus.error;
+        _otpError = e.message.isNotEmpty ? e.message : 'Invalid or expired code.';
+      });
+      _otpKey.currentState?.clear();
+    } finally {
+      if (mounted) setState(() => _otpVerifying = false);
+    }
+  }
+
+  void _switchMode(_AuthMode mode) {
+    ref.read(loginControllerProvider.notifier).clearError();
+    _cooldown.stop();
+    setState(() {
+      _mode = mode;
+      _otpSent = false;
+      _otpStatus = OtpStatus.idle;
+      _otpError = '';
+      _otpResendMessage = '';
+      if (mode == _AuthMode.password) _otpEmailController.clear();
+    });
+  }
+
+  // --- Other sign-in methods ---------------------------------------------------
 
   Future<void> _signInWithBiometric() async {
     HapticFeedback.lightImpact();
@@ -122,21 +269,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _navigateAfterAuth() {
     final user = ref.read(authControllerProvider).user;
-    final next = sanitizeNextPath(GoRouterState.of(context).uri.queryParameters['next']);
-
-    if (next != null) {
-      context.go(next);
+    final onboarded = user?.profile.isOnboarded ?? false;
+    if (!onboarded) {
+      context.go(AppRoutes.register);
       return;
     }
-
-    final onboarded = user?.profile.isOnboarded ?? false;
-    context.go(onboarded ? AppRoutes.match : AppRoutes.register);
+    final next = sanitizeNextPath(GoRouterState.of(context).uri.queryParameters['next']);
+    context.go(next ?? AppRoutes.match);
   }
 
   @override
   Widget build(BuildContext context) {
     final ui = ref.watch(loginControllerProvider);
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final twoFactor = _twoFactor;
+
+    final title = twoFactor != null
+        ? 'Two-factor verification'
+        : _mode == _AuthMode.otp
+            ? 'Sign in with a code'
+            : 'Welcome back';
+    final subtitle = twoFactor != null
+        ? (twoFactor.methods.contains('totp')
+            ? 'Enter the 6-digit code from your authenticator app.'
+            : 'Enter the 6-digit code we emailed you.')
+        : _mode == _AuthMode.otp
+            ? (_otpSent
+                ? 'Enter the 6-digit code we sent to ${_otpEmailController.text.trim()}.'
+                : "Enter your email and we'll send you a one-time login code.")
+            : 'Please enter your details to continue';
+
+    final Widget body;
+    if (twoFactor != null) {
+      body = _twoFactorForm(twoFactor, scheme);
+    } else if (_mode == _AuthMode.otp) {
+      body = _otpForm(scheme, ui);
+    } else {
+      body = _passwordForm(scheme, ui);
+    }
 
     return Scaffold(
       body: DuoAmbientBackground(
@@ -146,199 +317,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               return SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - 32,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 24),
-                        const LoginBrandHeader(),
-                        const SizedBox(height: 40),
-                        Expanded(
-                          child: Center(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        children: [
+                          const SizedBox(height: 24),
+                          const LoginBrandHeader(),
+                          const SizedBox(height: 40),
+                          Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 440),
                               child: DuoGlassCard(
                                 padding: const EdgeInsets.all(28),
-                                child: Form(
-                                  key: _formKey,
-                                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      Text(
-                                        'Welcome back',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(fontWeight: FontWeight.w800),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Please enter your details to continue',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                              color: scheme.onSurfaceVariant,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      AnimatedSwitcher(
-                                        duration: const Duration(milliseconds: 240),
-                                        child: ui.showPasswordResetSuccess
-                                            ? const Padding(
-                                                key: ValueKey('success'),
-                                                padding: EdgeInsets.only(bottom: 16),
-                                                child: LoginSuccessBanner(
-                                                  message:
-                                                      'Your password has been updated. Sign in with your new password.',
-                                                ),
-                                              )
-                                            : const SizedBox.shrink(key: ValueKey('no-success')),
-                                      ),
-                                      if (ui.error != null) ...[
-                                        LoginErrorBanner(message: ui.error!),
-                                        const SizedBox(height: 16),
-                                      ],
-                                      _LoginField(
-                                        controller: _emailController,
-                                        label: 'Email',
-                                        hint: 'you@example.com',
-                                        icon: Icons.person_outline,
-                                        keyboardType: TextInputType.emailAddress,
-                                        autofillHints: const [AutofillHints.email],
-                                        textInputAction: TextInputAction.next,
-                                        validator: validateLoginEmail,
-                                        enabled: !ui.isBusy,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(title, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                                    const SizedBox(height: 6),
+                                    Text(subtitle, style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+                                    const SizedBox(height: 24),
+                                    if (ui.showPasswordResetSuccess) ...[
+                                      const LoginSuccessBanner(
+                                        message: 'Your password has been updated. Sign in with your new password.',
                                       ),
                                       const SizedBox(height: 16),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Password',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: scheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          TextButton(
-                                            onPressed: ui.isBusy
-                                                ? null
-                                                : () => context.push(AppRoutes.forgotPassword),
-                                            style: TextButton.styleFrom(
-                                              padding: EdgeInsets.zero,
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                            child: Text(
-                                              'Forgot password?',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w700,
-                                                color: DuoColors.accent,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _LoginField(
-                                        controller: _passwordController,
-                                        label: '',
-                                        hint: 'Your password',
-                                        icon: Icons.lock_outline,
-                                        obscureText: _obscurePassword,
-                                        autofillHints: const [AutofillHints.password],
-                                        textInputAction: TextInputAction.done,
-                                        validator: validateLoginPassword,
-                                        enabled: !ui.isBusy,
-                                        onFieldSubmitted: (_) => _submit(),
-                                        suffix: IconButton(
-                                          icon: Icon(
-                                            _obscurePassword
-                                                ? Icons.visibility_off_outlined
-                                                : Icons.visibility_outlined,
-                                            size: 20,
-                                          ),
-                                          onPressed: ui.isBusy
-                                              ? null
-                                              : () => setState(
-                                                    () => _obscurePassword = !_obscurePassword,
-                                                  ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      DuoGradientButton(
-                                        label: ui.isLoading ? 'Signing in…' : 'Login',
-                                        loading: ui.isLoading,
-                                        onPressed: ui.isBusy ? null : _submit,
-                                      ),
-                                      if (_biometricAvailable) ...[
-                                        const SizedBox(height: 12),
-                                        OutlinedButton.icon(
-                                          onPressed: ui.isBusy ? null : _signInWithBiometric,
-                                          icon: ui.isBiometricLoading
-                                              ? const SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                                )
-                                              : const Icon(Icons.fingerprint_rounded),
-                                          label: Text(
-                                            ui.isBiometricLoading
-                                                ? 'Verifying…'
-                                                : 'Sign in with biometrics',
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(height: 24),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Divider(
-                                              color: scheme.outline.withValues(alpha: 0.25),
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                                            child: Text(
-                                              'OR',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    letterSpacing: 1.4,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: scheme.onSurfaceVariant,
-                                                  ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Divider(
-                                              color: scheme.outline.withValues(alpha: 0.25),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 20),
-                                      if (AppConfig.isGoogleAuthConfigured)
-                                        GoogleSignInButton(
-                                          loading: ui.isGoogleLoading,
-                                          enabled: !ui.isBusy,
-                                          onPressed: _signInWithGoogle,
-                                        )
-                                      else
-                                        Text(
-                                          'Google sign-in is not configured for this build.',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                        ),
                                     ],
-                                  ),
+                                    if (_accountDeleted) ...[
+                                      const LoginSuccessBanner(
+                                        message: 'Your account has been deactivated. Sorry to see you go.',
+                                      ),
+                                      const SizedBox(height: 16),
+                                    ],
+                                    if (ui.error != null && twoFactor == null) ...[
+                                      LoginErrorBanner(message: ui.error!),
+                                      const SizedBox(height: 16),
+                                    ],
+                                    AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 220),
+                                      child: KeyedSubtree(
+                                        key: ValueKey('${twoFactor != null}-$_mode-$_otpSent'),
+                                        child: body,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               )
                                   .animate()
@@ -346,35 +369,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   .slideY(begin: 0.06, end: 0, duration: 400.ms),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              'New to Duo?',
-                              style: TextStyle(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: ui.isBusy ? null : () => context.push(AppRoutes.register),
-                              child: Text(
-                                'Create an account',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: DuoColors.accent,
+                          if (twoFactor == null) ...[
+                            const SizedBox(height: 24),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  'New to Duo?',
+                                  style: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                                 ),
-                              ),
+                                TextButton(
+                                  onPressed: ui.isBusy ? null : () => context.push(AppRoutes.register),
+                                  child: Text(
+                                    'Create an account',
+                                    style: TextStyle(fontWeight: FontWeight.w800, color: DuoColors.accent),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                        const Spacer(),
-                        const LoginFooterLinks(),
-                      ],
-                    ),
+                        ],
+                      ),
+                      const LoginFooterLinks(),
+                    ],
                   ),
                 ),
               );
@@ -384,86 +402,278 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
-}
 
-class _LoginField extends StatelessWidget {
-  const _LoginField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.keyboardType,
-    this.obscureText = false,
-    this.autofillHints,
-    this.textInputAction,
-    this.validator,
-    this.enabled = true,
-    this.suffix,
-    this.onFieldSubmitted,
-  });
+  Widget _orDivider(ColorScheme scheme) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Row(
+          children: [
+            Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.25))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'OR',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: scheme.outline.withValues(alpha: 0.25))),
+          ],
+        ),
+      );
 
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final TextInputType? keyboardType;
-  final bool obscureText;
-  final Iterable<String>? autofillHints;
-  final TextInputAction? textInputAction;
-  final String? Function(String?)? validator;
-  final bool enabled;
-  final Widget? suffix;
-  final ValueChanged<String>? onFieldSubmitted;
+  /// Dark pill like the web "Sign in with email code" / "Use your password" buttons.
+  Widget _altButton({required IconData icon, required String label, VoidCallback? onPressed}) {
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: const Color(0xFF131314),
+          foregroundColor: const Color(0xFFE3E3E3),
+          side: const BorderSide(color: Color(0xFF747775)),
+          shape: const StadiumBorder(),
+        ),
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget _google(LoginUiState ui, {bool disabled = false}) {
+    if (!AppConfig.isGoogleAuthConfigured) {
+      return Text(
+        'Google sign-in is not configured for this build.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      );
+    }
+    return GoogleSignInButton(
+      loading: ui.isGoogleLoading,
+      enabled: !ui.isBusy && !disabled,
+      onPressed: _signInWithGoogle,
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (label.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurfaceVariant,
+  Widget _passwordForm(ColorScheme scheme, LoginUiState ui) {
+    return Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AuthTextField(
+            controller: _emailController,
+            label: 'Email',
+            hint: 'you@example.com',
+            icon: Icons.person_outline,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.next,
+            validator: validateLoginEmail,
+            enabled: !ui.isBusy,
+          ),
+          const SizedBox(height: 16),
+          AuthTextField(
+            controller: _passwordController,
+            label: 'Password',
+            hint: 'Your password',
+            icon: Icons.lock_outline,
+            obscureText: _obscurePassword,
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.done,
+            validator: validateLoginPassword,
+            enabled: !ui.isBusy,
+            onFieldSubmitted: (_) => _submit(),
+            suffix: IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+              onPressed: ui.isBusy ? null : () => setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: ui.isBusy ? null : () => context.push(AppRoutes.forgotPassword),
+              child: Text(
+                'Forgot password?',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: DuoColors.accent),
               ),
             ),
           ),
-        ],
-        TextFormField(
-          controller: controller,
-          enabled: enabled,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          autofillHints: autofillHints,
-          textInputAction: textInputAction,
-          validator: validator,
-          onFieldSubmitted: onFieldSubmitted,
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: scheme.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.35)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.35)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: scheme.primary.withValues(alpha: 0.55), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          const SizedBox(height: 8),
+          DuoGradientButton(
+            label: ui.isLoading ? 'Signing in...' : 'Login',
+            loading: ui.isLoading,
+            onPressed: ui.isBusy ? null : _submit,
           ),
+          if (_biometricAvailable) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: ui.isBusy ? null : _signInWithBiometric,
+              icon: ui.isBiometricLoading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.fingerprint_rounded),
+              label: Text(ui.isBiometricLoading ? 'Verifying…' : 'Sign in with biometrics'),
+            ),
+          ],
+          _orDivider(scheme),
+          _altButton(
+            icon: Icons.alternate_email_rounded,
+            label: 'Sign in with email code',
+            onPressed: ui.isBusy ? null : () => _switchMode(_AuthMode.otp),
+          ),
+          const SizedBox(height: 12),
+          _google(ui),
+        ],
+      ),
+    );
+  }
+
+  Widget _otpForm(ColorScheme scheme, LoginUiState ui) {
+    final busy = _otpSending || _otpVerifying;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_otpSent) ...[
+          AuthTextField(
+            controller: _otpEmailController,
+            label: 'Email',
+            hint: 'you@example.com',
+            icon: Icons.mail_outline,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.send,
+            enabled: !_otpSending,
+            onFieldSubmitted: (_) => _sendLoginOtp(),
+          ),
+          const SizedBox(height: 24),
+          DuoGradientButton(
+            label: _otpSending ? 'Sending...' : 'Send login code',
+            loading: _otpSending,
+            onPressed: _otpSending ? null : _sendLoginOtp,
+          ),
+        ] else ...[
+          OtpCodeInput(
+            key: _otpKey,
+            status: _otpStatus,
+            errorMessage: _otpError,
+            disabled: _otpVerifying,
+            onComplete: _verifyLoginOtp,
+          ),
+          if (_otpResendMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _otpResendMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: DuoColors.accent),
+              ),
+            ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () {
+                  _cooldown.stop();
+                  setState(() {
+                    _otpSent = false;
+                    _otpStatus = OtpStatus.idle;
+                    _otpError = '';
+                    _otpResendMessage = '';
+                  });
+                },
+                child: Text(
+                  'Use a different email',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _otpSending || _cooldown.seconds > 0 ? null : () => _sendLoginOtp(resend: true),
+                child: Text(
+                  _otpSending
+                      ? 'Sending...'
+                      : _cooldown.seconds > 0
+                          ? 'Resend code in ${_cooldown.seconds}s'
+                          : 'Resend code',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+        _orDivider(scheme),
+        _altButton(
+          icon: Icons.lock_outline,
+          label: 'Use your password instead',
+          onPressed: busy ? null : () => _switchMode(_AuthMode.password),
+        ),
+        const SizedBox(height: 12),
+        _google(ui, disabled: busy),
+      ],
+    );
+  }
+
+  Widget _twoFactorForm(TwoFactorLoginChallenge challenge, ColorScheme scheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AuthTextField(
+          controller: _twoFactorController,
+          label: 'Verification code',
+          hint: '000000',
+          icon: Icons.password_rounded,
+          textInputAction: TextInputAction.done,
+          enabled: !_twoFactorBusy,
+          onFieldSubmitted: (_) => _submitTwoFactor(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Text(
+            'You can also enter one of your backup recovery codes.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+        ),
+        if (_twoFactorMessage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: Text(
+              _twoFactorMessage,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: DuoColors.accent),
+            ),
+          ),
+        const SizedBox(height: 24),
+        ListenableBuilder(
+          listenable: _twoFactorController,
+          builder: (context, _) => DuoGradientButton(
+            label: _twoFactorBusy ? 'Verifying...' : 'Verify and sign in',
+            loading: _twoFactorBusy,
+            onPressed: _twoFactorBusy || _twoFactorController.text.trim().isEmpty ? null : _submitTwoFactor,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _backToPassword,
+              child: Text(
+                'Back to login',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
+              ),
+            ),
+            const Spacer(),
+            if (challenge.methods.contains('email'))
+              TextButton(
+                onPressed: _resendingTwoFactor ? null : _resendTwoFactor,
+                child: Text(
+                  _resendingTwoFactor ? 'Sending...' : 'Resend code',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DuoColors.accent),
+                ),
+              ),
+          ],
         ),
       ],
     );
