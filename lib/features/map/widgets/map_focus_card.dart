@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/providers/core_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/duo_theme.dart';
 import '../map_models.dart';
@@ -32,12 +33,34 @@ class MapFocusCard extends ConsumerWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  void _openChat(BuildContext context, WidgetRef ref) {
-    final map = ref.read(matchConversationIdsProvider).valueOrNull;
-    final conversationId = map?[profile.matchId];
+  /// Opens this person's conversation. The lookup provider was only read (never
+  /// loaded), so it was always empty and every tap fell back to the chat list.
+  Future<void> _openChat(BuildContext context, WidgetRef ref) async {
+    String? conversationId;
+    try {
+      final ids = await ref.read(matchConversationIdsProvider.future);
+      conversationId = ids[profile.matchId];
+    } catch (_) {}
+    if (conversationId == null) {
+      // Cached list may predate this match (or the lookup failed): ask the server.
+      try {
+        final fresh = await ref.read(chatRepositoryProvider).getConversations();
+        for (final c in fresh) {
+          if (c.matchId == profile.matchId) {
+            conversationId = c.publicId;
+            break;
+          }
+        }
+        ref.invalidate(matchConversationIdsProvider);
+      } catch (_) {}
+    }
+    if (!context.mounted) return;
     if (conversationId != null) {
       context.push('/chat/$conversationId');
     } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't open this chat. Showing all chats.")),
+      );
       context.go(AppRoutes.chat);
     }
   }

@@ -1,3 +1,4 @@
+import '../security/screen_security.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -95,6 +96,9 @@ abstract final class AppRoutes {
   static const permissionPersonalize = '/setup/personalize';
 }
 
+/// Screens that show other members' photos and profiles.
+const _screenshotProtectedRoutes = {AppRoutes.match, AppRoutes.discover, AppRoutes.matchCelebration};
+
 final routerProvider = Provider<GoRouter>((ref) {
   // Build the router ONCE. It used to `ref.watch` auth/splash/onboarding/
   // permission state, so every profile refresh (e.g. saving Match filters)
@@ -102,7 +106,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   // open sheets/awaits were orphaned and Match stayed "filters open" (frozen)
   // until relaunch. Redirect reads the latest values; _AuthRefreshListenable
   // re-runs it whenever they change.
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: _AuthRefreshListenable(ref),
     redirect: (context, state) {
@@ -422,6 +426,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // No screenshots while other members' profiles are on screen.
+  void syncScreenSecurity() {
+    final path = router.routerDelegate.currentConfiguration.uri.path;
+    if (_screenshotProtectedRoutes.contains(path)) {
+      ScreenSecurity.acquire(router);
+    } else {
+      ScreenSecurity.release(router);
+    }
+  }
+
+  router.routerDelegate.addListener(syncScreenSecurity);
+  ref.onDispose(() {
+    router.routerDelegate.removeListener(syncScreenSecurity);
+    ScreenSecurity.release(router);
+  });
+  return router;
 });
 
 class _AuthRefreshListenable extends ChangeNotifier {

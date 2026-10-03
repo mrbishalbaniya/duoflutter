@@ -194,6 +194,7 @@ class RegistrationStepNavigation extends StatelessWidget {
     this.loading = false,
     this.disableNext = false,
     this.showBack = true,
+    this.showNext = true,
   });
 
   final VoidCallback? onBack;
@@ -202,6 +203,9 @@ class RegistrationStepNavigation extends StatelessWidget {
   final bool loading;
   final bool disableNext;
   final bool showBack;
+
+  /// False hides the primary button entirely (e.g. until a required photo is verified).
+  final bool showNext;
 
   @override
   Widget build(BuildContext context) {
@@ -241,6 +245,7 @@ class RegistrationStepNavigation extends StatelessWidget {
       padding: const EdgeInsets.only(top: 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          if (!showNext) return hasBack ? back : const SizedBox.shrink();
           if (!hasBack) return next;
           if (constraints.maxWidth < 560) {
             return Column(

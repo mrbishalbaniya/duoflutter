@@ -26,13 +26,22 @@ class PhotoRepository {
   Future<PhotoUploadResult> uploadAndAnalyzePhoto(
     File file, {
     bool isPrimary = false,
+    /// Reused on every retry so the server can replay a finished result (web parity).
+    String? idempotencyKey,
+    /// Bytes sent / total while the file uploads (before AI analysis starts).
+    ProgressCallback? onSendProgress,
   }) async {
     final formData = FormData.fromMap({
       'image': await MultipartFile.fromFile(file.path, filename: file.path.split(Platform.pathSeparator).last),
       if (isPrimary) 'is_primary': 'true',
     });
 
-    final response = await _client.upload<Map<String, dynamic>>('/photos/upload/', formData);
+    final response = await _client.upload<Map<String, dynamic>>(
+      '/photos/upload/',
+      formData,
+      onSendProgress: onSendProgress,
+      headers: idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
+    );
     final data = response.data ?? {};
     final analysis = data['analysis'] as Map<String, dynamic>?;
     final faceDetected = analysis?['face_detected'] as bool? ?? false;

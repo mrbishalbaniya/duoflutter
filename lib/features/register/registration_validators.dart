@@ -331,8 +331,10 @@ int _mapDistanceKm(String distance) {
   final approved = photos
       .where((p) => p.status == RegistrationPhotoStatus.approved && (p.imageUrl?.isNotEmpty ?? false))
       .toList();
-  if (approved.length < 2) {
-    throw StateError('Upload and verify at least 2 photos on the Photos step.');
+  if (approved.length < minRegistrationPhotos) {
+    throw StateError(
+      'Upload and verify at least $minRegistrationPhotos photo${minRegistrationPhotos == 1 ? '' : 's'} on the Photos step.',
+    );
   }
   final profilePhoto = approved.firstWhere((p) => p.isProfile, orElse: () => approved.first);
   final galleryUrls = <String>[];

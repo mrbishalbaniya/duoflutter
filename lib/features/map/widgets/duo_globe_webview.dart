@@ -96,6 +96,9 @@ class GlobeCameraCommand {
 /// Zoom at which the whole globe fits the phone screen.
 const double kGlobeOverviewZoom = 1.5;
 
+/// Opening zoom: city level around the user, so nearby matches are visible.
+const double kMapInitialZoom = 12;
+
 enum GlobeCameraAction { zoomIn, zoomOut, resetNorth, recenter }
 
 class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
@@ -232,8 +235,11 @@ class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
         widget.userCoordinates.longitude,
         widget.userCoordinates.latitude,
       ],
-      'zoom': kGlobeOverviewZoom,
-      'styleKey': baseMapIdToStyleKey(activeBaseMapId(widget.enabledLayers)),
+      'zoom': kMapInitialZoom,
+      'styleKey': baseMapIdToStyleKey(
+        activeBaseMapId(widget.enabledLayers),
+        dark: widget.themeBrightness == Brightness.dark,
+      ),
       'themeBrightness':
           widget.themeBrightness == Brightness.dark ? 'dark' : 'light',
       'layers': widget.enabledLayers,
@@ -317,7 +323,10 @@ class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
     if (!_pageLoaded) return;
 
     final state = <String, dynamic>{
-      'styleKey': baseMapIdToStyleKey(activeBaseMapId(widget.enabledLayers)),
+      'styleKey': baseMapIdToStyleKey(
+        activeBaseMapId(widget.enabledLayers),
+        dark: widget.themeBrightness == Brightness.dark,
+      ),
       'themeBrightness':
           widget.themeBrightness == Brightness.dark ? 'dark' : 'light',
       'layers': widget.enabledLayers,
@@ -327,11 +336,11 @@ class DuoGlobeWebViewState extends State<DuoGlobeWebView> {
     };
 
     if (fitInitial) {
-      // Open on the whole globe, centred on the user (not zoomed into the city).
+      // Open zoomed in on the user's city.
       state['flyTo'] = {
         'lat': widget.userCoordinates.latitude,
         'lng': widget.userCoordinates.longitude,
-        'zoom': kGlobeOverviewZoom,
+        'zoom': kMapInitialZoom,
         'pitch': 0,
       };
     }

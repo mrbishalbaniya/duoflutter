@@ -219,24 +219,6 @@ class _MapPreview extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              right: 6,
-              bottom: 4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: dark ? Colors.black54 : Colors.white70,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
-                  '© OpenStreetMap',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: dark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),

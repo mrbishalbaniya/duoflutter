@@ -151,19 +151,23 @@ class ChatPrivacySettings {
   const ChatPrivacySettings({
     required this.notifyScreenshots,
     required this.secureChat,
+    required this.filterOffensive,
   });
 
   final bool notifyScreenshots;
   final bool secureChat;
+  final bool filterOffensive;
 }
 
 Future<ChatPrivacySettings?> showPrivacySettingsDialog(
   BuildContext context, {
   required bool notifyScreenshots,
   required bool secureChat,
+  required bool filterOffensive,
 }) {
   var notify = notifyScreenshots;
   var secure = secureChat;
+  var filter = filterOffensive;
 
   return showDialog<ChatPrivacySettings>(
     context: context,
@@ -194,6 +198,16 @@ Future<ChatPrivacySettings?> showPrivacySettingsDialog(
               ),
               contentPadding: EdgeInsets.zero,
             ),
+            SwitchListTile(
+              value: filter,
+              onChanged: (value) => setState(() => filter = value),
+              title: const Text('Filter offensive language'),
+              subtitle: const Text(
+                'Hides swearing and insults sent to you in this chat. '
+                'Threats, harassment and hate are always blocked.',
+              ),
+              contentPadding: EdgeInsets.zero,
+            ),
           ],
         ),
         actions: [
@@ -207,6 +221,7 @@ Future<ChatPrivacySettings?> showPrivacySettingsDialog(
               ChatPrivacySettings(
                 notifyScreenshots: notify,
                 secureChat: secure,
+                filterOffensive: filter,
               ),
             ),
             child: const Text('Save'),

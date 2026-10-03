@@ -95,36 +95,101 @@ class RegistrationController extends StateNotifier<RegistrationState> {
     setAccountCreated(true);
   }
 
-  Future<void> handleContinue() async {
-    state = state.copyWith(clearError: true);
-    if (state.step == 2 && !state.accountCreated) {
-      state = state.copyWith(isSubmitting: true);
+  bool get _isSignedIn =>
+      _ref.read(authControllerProvider).status == AuthStatus.authenticated;
+
+  /// Makes sure a signed-in account exists before anything that needs auth
+  /// (leaving step 2, uploading photos). The saved "account created" flag can
+  /// outlive the login itself (expired token, logout, reinstall), so the real
+  /// session is checked instead of trusting the flag. Returns true when signed in.
+  Future<bool> ensureAccount() async {
+    if (state.accountCreated && _isSignedIn) return true;
+
+    if (state.data.signedUpWithGoogle) {
+      // Google sign-up cannot be redone silently; send them back to step 1.
+      state = state.copyWith(accountCreated: false);
+      patchData((d) => d.copyWith(signedUpWithGoogle: false, otpVerified: false, verifiedEmail: ''));
+      setAccountSubStep(AccountSubStep.form);
+      goToStep(1);
+      state = state.copyWith(
+        isSubmitting: false,
+        error: 'Your Google session ended. Sign up with Google again to continue.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(accountCreated: false, isSubmitting: true, clearError: true);
+    _persist();
+    try {
       try {
         await createAccountIfNeeded();
-      } catch (e) {
-        final message = e is ApiException && e.message.trim().isNotEmpty
-            ? e.message
-            : 'Could not create your account. Check your email and password, or try again.';
-        state = state.copyWith(isSubmitting: false, error: message);
-        if (RegExp('verify your email', caseSensitive: false).hasMatch(message)) {
-          // Verification expired server-side; send them back for a new code.
-          patchData((d) => d.copyWith(otpVerified: false, verifiedEmail: ''));
-          setAccountSubStep(AccountSubStep.form);
-          goToStep(1);
-        }
-        return;
+      } on ApiException catch (e) {
+        // The account was made in an earlier attempt: sign back in with the
+        // same email and password instead of failing.
+        final exists = RegExp('already exists', caseSensitive: false).hasMatch('${e.raw ?? e.message}');
+        if (!exists || state.data.password.isEmpty) rethrow;
+        await _ref
+            .read(authControllerProvider.notifier)
+            .login(registrationEmail(state.data), state.data.password);
+        setAccountCreated(true);
       }
-      state = state.copyWith(isSubmitting: false);
+    } catch (e) {
+      final raw = e is ApiException ? e.raw : null;
+      final fieldError = raw is Map ? _firstFieldError(raw, const ['password', 'email']) : null;
+      final message = fieldError?.message ??
+          (e is ApiException && e.message.trim().isNotEmpty
+              ? e.message
+              : 'Could not create your account. Check your email and password, or try again.');
+      state = state.copyWith(isSubmitting: false, error: message);
+      if (fieldError != null) {
+        // Password/email problems can only be fixed on the account form.
+        if (fieldError.field == 'password') {
+          patchData((d) => d.copyWith(password: '', confirmPassword: ''));
+        }
+        setAccountSubStep(AccountSubStep.form);
+        goToStep(1);
+        state = state.copyWith(error: message);
+      } else if (RegExp('verify your email', caseSensitive: false).hasMatch(message)) {
+        // Verification expired server-side; send them back for a new code.
+        patchData((d) => d.copyWith(otpVerified: false, verifiedEmail: ''));
+        setAccountSubStep(AccountSubStep.form);
+        goToStep(1);
+        state = state.copyWith(error: message);
+      }
+      return false;
     }
+    state = state.copyWith(isSubmitting: false);
+    return true;
+  }
+
+  Future<void> handleContinue() async {
+    state = state.copyWith(clearError: true);
+    if (state.step == 2 && !await ensureAccount()) return;
     nextStep();
+  }
+
+  /// First server validation message for one of [fields], e.g. "This password is too common."
+  ({String field, String message})? _firstFieldError(Map raw, List<String> fields) {
+    for (final field in fields) {
+      final value = raw[field];
+      final text = value is List && value.isNotEmpty ? '${value.first}' : (value is String ? value : '');
+      if (text.trim().isEmpty) continue;
+      final message = field == 'password' && !text.toLowerCase().contains('password')
+          ? 'Password: $text'
+          : text;
+      return (field: field, message: message);
+    }
+    return null;
   }
 
   Future<void> handleSubmit() async {
     state = state.copyWith(clearError: true, isSubmitting: true);
     try {
-      if (!state.accountCreated) {
-        await createAccountIfNeeded();
+      if (!await ensureAccount()) {
+        state = state.copyWith(isSubmitting: false);
+        return;
       }
+      state = state.copyWith(isSubmitting: true);
       final photoUrls = collectRegistrationPhotoUrls(state.data.photos);
       final payload = mapRegistrationToProfile(
         state.data,

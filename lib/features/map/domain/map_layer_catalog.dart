@@ -88,25 +88,20 @@ const mapLayerCategories = <MapLayerCategory>[
 const defaultBaseMapId = 'base-standard-street';
 
 const mapLayerCatalog = <MapLayerDefinition>[
+  // "Map" follows the app theme: dark map in dark mode, light map in light mode.
   MapLayerDefinition(
     id: 'base-standard-street',
     categoryId: MapLayerCategoryId.base,
-    label: 'Standard Street',
+    label: 'Map',
     icon: Icons.map_outlined,
     defaultOn: true,
+    keywords: ['street', 'standard', 'dark', 'light', 'night'],
   ),
   MapLayerDefinition(
     id: 'base-satellite',
     categoryId: MapLayerCategoryId.base,
     label: 'Satellite',
     icon: Icons.satellite_alt_outlined,
-  ),
-  MapLayerDefinition(
-    id: 'base-night',
-    categoryId: MapLayerCategoryId.base,
-    label: 'Dark Mode',
-    icon: Icons.dark_mode_outlined,
-    keywords: ['night', 'dark'],
   ),
   MapLayerDefinition(
     id: 'globe-atmosphere',
@@ -167,40 +162,6 @@ const mapLayerCatalog = <MapLayerDefinition>[
     categoryId: MapLayerCategoryId.duo,
     label: 'Your Location',
     icon: Icons.my_location,
-    defaultOn: true,
-  ),
-  MapLayerDefinition(
-    id: 'duo-activity-heatmap',
-    categoryId: MapLayerCategoryId.duo,
-    label: 'Live Activity Heatmap',
-    icon: Icons.local_fire_department_outlined,
-    defaultOn: true,
-    description: 'Glowing social activity zones',
-  ),
-  MapLayerDefinition(
-    id: 'duo-activity-trending',
-    categoryId: MapLayerCategoryId.duo,
-    label: 'Trending Zones',
-    icon: Icons.whatshot_outlined,
-  ),
-  MapLayerDefinition(
-    id: 'duo-activity-nearby',
-    categoryId: MapLayerCategoryId.duo,
-    label: 'Nearby Activity',
-    icon: Icons.near_me_outlined,
-    defaultOn: true,
-  ),
-  MapLayerDefinition(
-    id: 'duo-activity-events',
-    categoryId: MapLayerCategoryId.duo,
-    label: 'Events',
-    icon: Icons.celebration_outlined,
-  ),
-  MapLayerDefinition(
-    id: 'duo-activity-friends',
-    categoryId: MapLayerCategoryId.duo,
-    label: 'Friends Activity',
-    icon: Icons.group_outlined,
     defaultOn: true,
   ),
   MapLayerDefinition(
@@ -278,21 +239,20 @@ bool isLayerEnabled(Map<String, bool> enabled, String id, {bool fallback = true}
   return enabled[id] ?? fallback;
 }
 
+/// Activity overlays (heatmap, trending, nearby, events, friends) were removed
+/// from Map settings, so they are always off.
 ActivityLayerFlags activityFlagsFromLayers(Map<String, bool> enabled) {
-  return ActivityLayerFlags(
-    live: isLayerEnabled(enabled, 'duo-activity-heatmap'),
-    trending: isLayerEnabled(enabled, 'duo-activity-trending'),
-    nearby: isLayerEnabled(enabled, 'duo-activity-nearby'),
-    events: isLayerEnabled(enabled, 'duo-activity-events'),
-    friends: isLayerEnabled(enabled, 'duo-activity-friends'),
+  return const ActivityLayerFlags(
+    live: false,
+    trending: false,
+    nearby: false,
+    events: false,
+    friends: false,
   );
 }
 
-String baseMapIdToStyleKey(String baseMapId) {
-  return switch (baseMapId) {
-    'base-satellite' => 'satellite',
-    'base-night' => 'dark',
-    'base-light' => 'light',
-    _ => 'voyager',
-  };
+/// Satellite is the only manual choice; otherwise the map matches the app theme.
+String baseMapIdToStyleKey(String baseMapId, {required bool dark}) {
+  if (baseMapId == 'base-satellite') return 'satellite';
+  return dark ? 'dark' : 'voyager';
 }

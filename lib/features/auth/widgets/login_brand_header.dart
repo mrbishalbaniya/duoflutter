@@ -1,32 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-/// Brand block from DuoFrontend `/login` header.
+import '../../../core/theme/duo_gradients.dart';
+
+/// Compact brand block for the login screen: small logo + "Duo" wordmark.
 class LoginBrandHeader extends StatelessWidget {
   const LoginBrandHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Image.asset(
-            'assets/brand/duo_logo.png',
-            width: 112,
-            height: 112,
-            fit: BoxFit.cover,
-          ),
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset('assets/brand/duo_logo.png', width: 44, height: 44, fit: BoxFit.cover),
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Find your digital heirloom',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
+        const SizedBox(width: 10),
+        ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) => DuoGradients.brand.createShader(bounds),
+          child: const Text(
+            'Duo',
+            style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1),
+          ),
         ),
       ],
     )

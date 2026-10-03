@@ -1,3 +1,5 @@
+import '../../core/theme/duo_gradients.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -173,10 +175,11 @@ class MapScreen extends ConsumerWidget {
               !loadingMatches &&
               !userLocation.isLoading &&
               userLocation.hasValue)
+            // Sits just above the nav bar; the arrow points at the Match tab (centre).
             Positioned(
               left: 16,
               right: 16,
-              top: MediaQuery.sizeOf(context).height * 0.22,
+              bottom: MediaQuery.paddingOf(context).bottom + 2,
               child: const _EmptyMatchesCard(),
             ),
           // Match avatars: one horizontal row above the bottom navigation bar.
@@ -213,30 +216,51 @@ class _EmptyMatchesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Match with someone to see them on the map.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: scheme.surface.withValues(alpha: 0.94),
+          elevation: 6,
+          shadowColor: Colors.black38,
+          shape: StadiumBorder(side: BorderSide(color: scheme.primary.withValues(alpha: 0.35))),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () => context.go(AppRoutes.match),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.favorite_rounded, size: 18, color: scheme.primary),
+                  const SizedBox(width: 8),
+                  const Flexible(
+                    child: Text(
+                      'Match to see people here',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(gradient: DuoGradients.brand, borderRadius: BorderRadius.circular(999)),
+                    child: const Text(
+                      'Start',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => context.go(AppRoutes.match),
-              child: const Text('Start matching'),
-            ),
-          ],
+          ),
         ),
-      ),
+        // Bouncing arrow guiding to the Match tab right below.
+        Icon(Icons.keyboard_double_arrow_down_rounded, size: 30, color: scheme.primary)
+            .animate(onPlay: (c) => c.repeat(reverse: true))
+            .moveY(begin: -2, end: 6, duration: 700.ms, curve: Curves.easeInOut),
+      ],
     );
   }
 }

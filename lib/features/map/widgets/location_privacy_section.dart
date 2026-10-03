@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/user_models.dart';
@@ -7,6 +8,8 @@ import '../../auth/auth_controller.dart';
 import '../domain/map_domain.dart';
 import '../map_models.dart';
 import '../providers/map_providers.dart';
+import '../../../core/media/media_url.dart';
+import 'friend_picker_screen.dart';
 
 LocationPrivacySettings privacyFromProfile(DuoProfile profile) {
   return LocationPrivacySettings(
@@ -40,6 +43,8 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
   }
 
   Future<void> _persist(LocationPrivacySettings next) async {
+    if (_saving) return;
+    final previous = _settings;
     setState(() {
       _settings = next;
       _saving = true;
@@ -62,21 +67,31 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Could not save location privacy.';
+          _settings = previous; // undo: nothing was saved
+          _error = 'Could not save. Check your connection and try again.';
           _saving = false;
         });
       }
     }
   }
 
-  void _toggleFriend(int userId) {
-    final ids = List<int>.from(_settings.visibilityFriendIds);
-    if (ids.contains(userId)) {
-      ids.remove(userId);
-    } else {
-      ids.add(userId);
-    }
-    _persist(_settings.copyWith(visibilityFriendIds: ids));
+  Future<void> _pickFriends(
+    LocationVisibilityMode mode,
+    List<MapProfile> matches, {
+    required List<int> initial,
+  }) async {
+    final except = mode == LocationVisibilityMode.friendsExcept;
+    final picked = await showFriendPicker(
+      context,
+      title: except ? 'Hide my location from' : 'Share my location with',
+      subtitle: except
+          ? 'Everyone except the people you pick can see your location.'
+          : 'Only the people you pick can see your location.',
+      friends: matches,
+      initialSelected: initial,
+    );
+    if (picked == null || !mounted) return; // closed: keep the current setting
+    await _persist(_settings.copyWith(visibility: mode, visibilityFriendIds: picked));
   }
 
   @override
@@ -96,16 +111,15 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
               ),
         ),
         const SizedBox(height: 8),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Ghost mode', style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('When enabled, your friends cannot see your location'),
-          value: ghostMode,
-          activeThumbColor: DuoColors.primary,
-          onChanged: _saving
-              ? null
-              : (v) => _persist(_settings.copyWith(ghostMode: v)),
+        _GhostModeCard(
+          enabled: ghostMode,
+          saving: _saving,
+          onChanged: (v) {
+            HapticFeedback.mediumImpact();
+            _persist(_settings.copyWith(ghostMode: v));
+          },
         ),
+        const SizedBox(height: 12),
         AnimatedOpacity(
           opacity: ghostMode ? 0.4 : 1,
           duration: const Duration(milliseconds: 200),
@@ -127,14 +141,13 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
                 RadioGroup<LocationVisibilityMode>(
                   groupValue: _settings.visibility,
                   onChanged: (v) {
-                    if (v == null) return;
-                    _persist(
-                      _settings.copyWith(
-                        visibility: v,
-                        visibilityFriendIds:
-                            v == LocationVisibilityMode.friends ? const [] : _settings.visibilityFriendIds,
-                      ),
-                    );
+                    if (v == null || v == _settings.visibility) return;
+                    if (v == LocationVisibilityMode.friends) {
+                      _persist(_settings.copyWith(visibility: v, visibilityFriendIds: const []));
+                    } else {
+                      // Switching mode starts a fresh selection.
+                      _pickFriends(v, matches, initial: const []);
+                    }
                   },
                   child: Column(
                     children: LocationVisibilityMode.values.map((mode) {
@@ -160,22 +173,13 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
                         ),
                   ),
                   const SizedBox(height: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 180),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final item in matches)
-                          if (item.profile.userId != null)
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              value: _settings.visibilityFriendIds
-                                  .contains(item.profile.userId),
-                              onChanged: (_) => _toggleFriend(item.profile.userId!),
-                              title: Text(item.profile.displayName),
-                              controlAffinity: ListTileControlAffinity.leading,
-                            ),
-                      ],
+                  _SelectedFriendsSummary(
+                    friends: matches,
+                    selectedIds: _settings.visibilityFriendIds,
+                    onEdit: () => _pickFriends(
+                      _settings.visibility,
+                      matches,
+                      initial: _settings.visibilityFriendIds,
                     ),
                   ),
                 ],
@@ -196,15 +200,7 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
               style: TextStyle(color: DuoColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           )
-        else if (_saving)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
+
       ],
     );
   }
@@ -223,4 +219,171 @@ class _LocationPrivacySectionState extends ConsumerState<LocationPrivacySection>
             'Only selected matches can see you',
           ),
       };
+}
+
+/// Ghost mode toggle: whole card is tappable, state is obvious at a glance,
+/// and a spinner replaces the switch while saving.
+class _GhostModeCard extends StatelessWidget {
+  const _GhostModeCard({required this.enabled, required this.saving, required this.onChanged});
+
+  final bool enabled;
+  final bool saving;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      decoration: BoxDecoration(
+        color: enabled
+            ? DuoColors.primary.withValues(alpha: 0.12)
+            : scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: enabled ? DuoColors.primary.withValues(alpha: 0.45) : scheme.outlineVariant.withValues(alpha: 0.18),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: saving ? null : () => onChanged(!enabled),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: enabled ? DuoColors.primary : scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    enabled ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: enabled ? Colors.white : scheme.onSurfaceVariant,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enabled ? 'Ghost mode is on' : 'Ghost mode',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        enabled
+                            ? "You're hidden. No one can see your location."
+                            : 'Hide your location from everyone on the map.',
+                        style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 60,
+                  child: Center(
+                    child: saving
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
+                        : Switch(
+                            value: enabled,
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: DuoColors.primary,
+                            onChanged: onChanged,
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact summary under the visibility options: overlapping photos, count, Edit.
+class _SelectedFriendsSummary extends StatelessWidget {
+  const _SelectedFriendsSummary({required this.friends, required this.selectedIds, required this.onEdit});
+
+  final List<MapProfile> friends;
+  final List<int> selectedIds;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final chosen = [
+      for (final f in friends)
+        if (f.profile.userId != null && selectedIds.contains(f.profile.userId)) f,
+    ];
+    final shown = chosen.take(4).toList();
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              if (shown.isEmpty)
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  child: Icon(Icons.person_add_alt_rounded, size: 18, color: scheme.onSurfaceVariant),
+                )
+              else
+                SizedBox(
+                  width: 36.0 + (shown.length - 1) * 22,
+                  height: 36,
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < shown.length; i++)
+                        Positioned(
+                          left: i * 22.0,
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: scheme.surface,
+                            child: CircleAvatar(
+                              radius: 16,
+                              backgroundColor: scheme.surfaceContainerHighest,
+                              foregroundImage: NetworkImage(resolveProfilePhotoUrl(shown[i].profile)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  chosen.isEmpty
+                      ? 'No one selected yet'
+                      : chosen.length == 1
+                          ? chosen.first.profile.displayName
+                          : '${chosen.first.profile.displayName} and ${chosen.length - 1} more',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(chosen.isEmpty ? 'Choose' : 'Edit'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -449,16 +449,6 @@ class _PrefGroupedPickerState extends State<PrefGroupedPicker> {
           widget.label,
           trailing: widget.selected.isEmpty ? 'Any' : '${widget.selected.length} selected',
         ),
-        if (widget.selected.isNotEmpty) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final item in widget.selected) PrefChip(label: '$item  ✕', active: true, onTap: () => _toggle(item)),
-            ],
-          ),
-          const SizedBox(height: 10),
-        ],
         TextField(
           onChanged: (v) => setState(() => _query = v),
           decoration: InputDecoration(
@@ -481,7 +471,14 @@ class _PrefGroupedPickerState extends State<PrefGroupedPicker> {
         if (groups.isEmpty)
           Text('No matches', style: TextStyle(color: scheme.onSurfaceVariant))
         else
-          for (final (title, items) in showAll ? groups : groups.take(1)) ...[
+          // Selections stay highlighted in place (like Education & Career). When
+          // collapsed, also keep any group that holds a selection visible.
+          for (final (title, items) in showAll
+              ? groups
+              : [
+                  for (var i = 0; i < groups.length; i++)
+                    if (i == 0 || groups[i].$2.any(widget.selected.contains)) groups[i],
+                ]) ...[
             Padding(
               padding: const EdgeInsets.only(top: 6, bottom: 8),
               child: Text(

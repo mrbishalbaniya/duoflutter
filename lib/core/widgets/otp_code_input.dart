@@ -131,14 +131,20 @@ class OtpCodeInputState extends State<OtpCodeInput> with SingleTickerProviderSta
               offset: Offset(math.sin(_shake.value * math.pi * 6) * 8 * (1 - _shake.value), 0),
               child: child,
             ),
-            child: Row(
+            child: LayoutBuilder(builder: (context, constraints) {
+              // Fit all boxes in the available width (narrow phones / big text).
+              const gap = 8.0;
+              final avail = constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
+              final boxW = math.min(46.0, (avail - gap * (widget.length - 1)) / widget.length);
+              final boxH = math.min(56.0, boxW * 1.25);
+              return Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 for (var i = 0; i < widget.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
+                  if (i > 0) const SizedBox(width: gap),
                   SizedBox(
-                    width: 46,
-                    height: 56,
+                    width: boxW,
+                    height: boxH,
                     child: Focus(
                       onKeyEvent: (_, e) => _onKey(i, e),
                       child: TextField(
@@ -174,7 +180,8 @@ class OtpCodeInputState extends State<OtpCodeInput> with SingleTickerProviderSta
                   ),
                 ],
               ],
-            ),
+            );
+            }),
           ),
           if (error && widget.errorMessage.isNotEmpty)
             Padding(

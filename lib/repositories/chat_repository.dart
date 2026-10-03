@@ -132,6 +132,7 @@ class ChatRepository {
     bool? pinned,
     bool? notifyScreenshots,
     bool? secureChat,
+    bool? filterOffensive,
   }) async {
     await _client.patch('/chat/conversations/$conversationId/settings/', data: {
       if (nickname != null) 'nickname': nickname,
@@ -140,6 +141,7 @@ class ChatRepository {
       if (pinned != null) 'is_pinned': pinned,
       if (notifyScreenshots != null) 'notify_screenshots': notifyScreenshots,
       if (secureChat != null) 'secure_chat': secureChat,
+      if (filterOffensive != null) 'filter_offensive': filterOffensive,
     });
   }
 

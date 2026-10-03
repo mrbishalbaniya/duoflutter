@@ -1,3 +1,4 @@
+import '../domain/chat_moderation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -589,6 +590,15 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         _onMessagesRead(event.data);
       case 'poll_messages':
         _pollLatestMessages();
+      case 'error':
+        final tempId = event.data['client_temp_id'] as String?;
+        if (isModerationWsError(event.data)) {
+          if (tempId != null) {
+            _rejectForModeration(tempId, moderationMessage(event.data));
+          } else {
+            state = state.copyWith(error: moderationMessage(event.data));
+          }
+        }
     }
   }
 
@@ -970,10 +980,10 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       _noteHttpSuccess();
       _scheduleConversationsChanged();
     } on ApiException catch (e) {
-      _markFailed(tempId, e.message, sendStarted);
+      _markFailed(tempId, e, sendStarted);
       _noteHttpFailure();
     } catch (e) {
-      _markFailed(tempId, e.toString(), sendStarted);
+      _markFailed(tempId, e, sendStarted);
     }
   }
 
@@ -990,7 +1000,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         try {
           await _commitViaHttp(tempId, started);
         } catch (e) {
-          _markFailed(tempId, e.toString(), started);
+          _markFailed(tempId, e, started);
         }
       }
     });
@@ -1021,7 +1031,12 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     _noteHttpSuccess();
   }
 
-  void _markFailed(String tempId, String error, Stopwatch started) {
+  void _markFailed(String tempId, Object errorObj, Stopwatch started) {
+    if (isModerationRejection(errorObj)) {
+      _rejectForModeration(tempId, moderationMessage(errorObj));
+      return;
+    }
+    final error = errorObj is ApiException ? errorObj.message : errorObj.toString();
     _clearPendingAck(tempId);
     ChatDebugLog.sendFailure(
       tempId: tempId,
@@ -1038,6 +1053,18 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
       cache: false,
     );
     state = state.copyWith(error: error);
+  }
+
+  /// The server refused the text: retrying cannot succeed, so drop the
+  /// optimistic bubble (it was never saved or delivered) and explain why.
+  void _rejectForModeration(String tempId, String message) {
+    _clearPendingAck(tempId);
+    _failedSends.remove(tempId);
+    _patchMessages(
+      state.messages.where((m) => m.clientTempId != tempId).toList(),
+      cache: false,
+    );
+    state = state.copyWith(error: message);
   }
 
   void _clearPendingAck(String tempId) {
@@ -1088,7 +1115,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         started: sendStarted,
       );
     } on ApiException catch (e) {
-      _markFailed(tempId, e.message, sendStarted);
+      _markFailed(tempId, e, sendStarted);
       state = state.copyWith(error: e.message);
     } finally {
       if (!_disposed) state = state.copyWith(uploading: false);
@@ -1351,6 +1378,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
     bool? pinned,
     bool? notifyScreenshots,
     bool? secureChat,
+    bool? filterOffensive,
   }) async {
     final convo = state.conversation;
     if (convo == null) return;
@@ -1361,6 +1389,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
         pinned: pinned,
         notifyScreenshots: notifyScreenshots,
         secureChat: secureChat,
+        filterOffensive: filterOffensive,
       );
       state = state.copyWith(
         conversation: convo.copyWith(
@@ -1368,6 +1397,7 @@ class ChatThreadController extends StateNotifier<ChatThreadState> {
           isPinned: pinned ?? convo.isPinned,
           notifyScreenshots: notifyScreenshots ?? convo.notifyScreenshots,
           secureChat: secureChat ?? convo.secureChat,
+          filterOffensive: filterOffensive ?? convo.filterOffensive,
         ),
       );
       _syncScreenCapture();

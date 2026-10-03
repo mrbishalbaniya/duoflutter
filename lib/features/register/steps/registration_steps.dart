@@ -1,19 +1,15 @@
-import 'dart:io';
+import '../../../core/widgets/osm_map_preview.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/core_providers.dart';
-import '../../../core/theme/duo_gradients.dart';
-import '../../../repositories/photo_repository.dart';
 import '../../match/services/match_location_service.dart';
 import '../about/about_quality.dart';
 import '../about/about_widgets.dart';
 import '../registration_constants.dart';
 import '../registration_controller.dart';
-import '../registration_models.dart';
 import '../registration_validators.dart';
 import '../widgets/registration_widgets.dart';
 
@@ -60,6 +56,8 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
             (d) => d.copyWith(
               gpsEnabled: true,
               currentLocation: detected.label,
+              latitude: detected.latitude,
+              longitude: detected.longitude,
               country: detected.country,
               province: detected.province,
               district: detected.district,
@@ -81,8 +79,8 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
       _location = DetectedLocation(
         label: d.currentLocation.isNotEmpty ? d.currentLocation : '${d.municipality}, ${d.country}',
         city: d.municipality,
-        latitude: 0,
-        longitude: 0,
+        latitude: d.latitude ?? 0,
+        longitude: d.longitude ?? 0,
         country: d.country,
         province: d.province,
         district: d.district,
@@ -142,14 +140,38 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
     await widget.onContinue();
   }
 
+  /// "Kathmandu Metropolitan City" -> "Kathmandu", "Bagamati Province" -> "Bagamati".
+  static String _shortPlace(String value) {
+    return value
+        .replaceAll(
+          RegExp(r'\s+(Sub-?Metropolitan City|Metropolitan City|Rural Municipality|Municipality|Province|District)$',
+              caseSensitive: false),
+          '',
+        )
+        .trim();
+  }
+
   Widget _locationCard(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final loc = _location;
+    final hasCoords = loc != null && (loc.latitude != 0 || loc.longitude != 0);
+    // Short address: "Kathmandu" + "Bagamati, Nepal" (no repeated names or admin suffixes).
+    final city = loc == null
+        ? ''
+        : _shortPlace(loc.municipality.isNotEmpty
+            ? loc.municipality
+            : (loc.city.isNotEmpty ? loc.city : loc.district.isNotEmpty ? loc.district : loc.label.split(',').first));
+    final title = loc != null
+        ? city
+        : _gpsLoading
+            ? 'Detecting your location…'
+            : 'Location not shared yet';
     final area = loc == null
-        ? 'We show people near you. Only your area is visible.'
-        : <String>{loc.district, loc.province, loc.country}
-            .where((p) => p.isNotEmpty && p != loc.municipality)
+        ? 'We show people near you. Only your area is visible, never your exact address.'
+        : <String>{_shortPlace(loc.province), loc.country.trim()}
+            .where((p) => p.isNotEmpty && p.toLowerCase() != city.toLowerCase())
             .join(', ');
+
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -160,88 +182,95 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 176,
-            color: scheme.surfaceContainerHigh.withValues(alpha: 0.6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  loc != null
-                      ? Icons.location_on_rounded
-                      : _gpsLoading
-                          ? Icons.travel_explore_rounded
-                          : Icons.location_off_rounded,
-                  size: 36,
-                  color: loc != null ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  loc != null
-                      ? 'Location shared'
-                      : _gpsLoading
-                          ? 'Finding your location…'
-                          : 'Location not shared yet',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant),
-                ),
-              ],
+          if (hasCoords)
+            OsmMapPreview(lat: loc.latitude, lng: loc.longitude, zoom: 14)
+          else
+            Container(
+              height: 140,
+              color: scheme.surfaceContainerHigh.withValues(alpha: 0.6),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _gpsLoading
+                      ? const SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3))
+                      : Icon(
+                          loc != null ? Icons.location_on_rounded : Icons.location_off_rounded,
+                          size: 36,
+                          color: loc != null ? scheme.primary : scheme.onSurfaceVariant,
+                        ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _gpsLoading
+                        ? 'Finding your location…'
+                        : (loc != null ? 'Tap "Detect again" to show the map' : 'Map appears once location is shared'),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
-          ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.location_on_rounded, color: scheme.primary),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    loc != null ? Icons.location_on_rounded : Icons.location_searching_rounded,
+                    color: scheme.primary,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        loc != null
-                            ? (loc.municipality.isNotEmpty ? loc.municipality : loc.label)
-                            : _gpsLoading
-                                ? 'Detecting…'
-                                : 'Allow location access',
+                        title,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                       ),
-                      Text(
-                        area,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-                      ),
+                      if (area.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          area,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, height: 1.35, color: scheme.onSurfaceVariant),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                loc != null
-                    ? OutlinedButton.icon(
-                        onPressed: _gpsLoading ? null : _detect,
-                        style: OutlinedButton.styleFrom(
-                          shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: const Text('Detect again'),
-                      )
-                    : FilledButton.icon(
-                        onPressed: _gpsLoading ? null : _detect,
-                        style: FilledButton.styleFrom(
-                          shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        icon: _gpsLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.my_location_rounded, size: 18),
-                        label: const Text('Detect'),
-                      ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: SizedBox(
+              height: 46,
+              child: loc != null
+                  ? OutlinedButton.icon(
+                      onPressed: _gpsLoading ? null : _detect,
+                      style: OutlinedButton.styleFrom(shape: const StadiumBorder()),
+                      icon: _gpsLoading
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.my_location_rounded, size: 18),
+                      label: Text(_gpsLoading ? 'Detecting…' : 'Detect again'),
+                    )
+                  : FilledButton.icon(
+                      onPressed: _gpsLoading ? null : _detect,
+                      style: FilledButton.styleFrom(shape: const StadiumBorder()),
+                      icon: _gpsLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.my_location_rounded, size: 18),
+                      label: Text(_gpsLoading ? 'Detecting…' : 'Detect my location'),
+                    ),
             ),
           ),
           if ((_error ?? _gpsError) != null)
@@ -1330,453 +1359,3 @@ class _StepAboutState extends ConsumerState<StepAbout> {
 }
 
 // --- Step 10: Photos ---
-
-class StepPhotos extends ConsumerStatefulWidget {
-  const StepPhotos({super.key, required this.onContinue, required this.onBack});
-
-  final Future<void> Function() onContinue;
-  final VoidCallback onBack;
-
-  @override
-  ConsumerState<StepPhotos> createState() => _StepPhotosState();
-}
-
-class _StepPhotosState extends ConsumerState<StepPhotos> {
-  late List<RegistrationPhoto> _photos;
-  bool _analyzing = false;
-  String? _error;
-  final _picker = ImagePicker();
-
-  @override
-  void initState() {
-    super.initState();
-    _photos = List<RegistrationPhoto>.from(ref.read(registrationControllerProvider).data.photos);
-  }
-
-  Future<void> _pickPhotos() async {
-    if (_photos.length >= maxRegistrationPhotos) return;
-    final files = await _picker.pickMultiImage(imageQuality: 85, limit: maxRegistrationPhotos - _photos.length);
-    if (files.isEmpty) return;
-
-    final reg = ref.read(registrationControllerProvider);
-    if (!reg.accountCreated && !reg.data.signedUpWithGoogle) {
-      setState(() => _error = 'Complete account setup (steps 1–2) before uploading photos.');
-      return;
-    }
-
-    setState(() {
-      _analyzing = true;
-      _error = null;
-    });
-
-    try {
-      final repo = ref.read(photoRepositoryProvider);
-      var uploaded = List<RegistrationPhoto>.from(_photos);
-      final isFirst = uploaded.isEmpty;
-
-      for (var i = 0; i < files.length && uploaded.length < maxRegistrationPhotos; i++) {
-        final file = files[i];
-        final isPrimary = isFirst && i == 0 && !uploaded.any((p) => p.isProfile);
-        final result = await repo.uploadAndAnalyzePhoto(File(file.path), isPrimary: isPrimary);
-        final uploadError = getPhotoUploadError(result, fileName: file.name);
-        if (uploadError != null) throw Exception(uploadError);
-
-        uploaded.add(RegistrationPhoto(
-          id: '${DateTime.now().millisecondsSinceEpoch}-${file.name}-$i',
-          fileName: file.name,
-          localPath: file.path,
-          isProfile: isPrimary,
-          imageUrl: result.imageUrl,
-          status: RegistrationPhotoStatus.approved,
-        ));
-      }
-
-      if (uploaded.isNotEmpty && !uploaded.any((p) => p.isProfile)) {
-        uploaded[0] = uploaded[0].copyWith(isProfile: true);
-      }
-
-      setState(() => _photos = uploaded);
-    } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _analyzing = false);
-    }
-  }
-
-  void _removePhoto(String id) {
-    setState(() {
-      var next = _photos.where((p) => p.id != id).toList();
-      if (next.isNotEmpty && !next.any((p) => p.isProfile)) {
-        next[0] = next[0].copyWith(isProfile: true);
-      }
-      _photos = next;
-      _error = null;
-    });
-  }
-
-  void _setProfile(String id) {
-    setState(() {
-      _photos = _photos.map((p) => p.copyWith(isProfile: p.id == id)).toList();
-    });
-  }
-
-  Future<void> _submit() async {
-    final error = validatePhotos(_photos);
-    if (error != null) {
-      setState(() => _error = error);
-      return;
-    }
-    ref.read(registrationControllerProvider.notifier).patchData((d) => d.copyWith(photos: _photos));
-    await widget.onContinue();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final approvedCount = _photos.where((p) => p.status == RegistrationPhotoStatus.approved).length;
-
-    return RegistrationStepCard(
-      title: 'Photos',
-      subtitle:
-          'Upload $minRegistrationPhotos–$maxRegistrationPhotos photos. Each photo is checked instantly with AI for face, quality, and safety.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              for (var i = 0; i < maxRegistrationPhotos; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                Expanded(child: _photoSlot(context, i)),
-              ],
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            '$approvedCount of $minRegistrationPhotos required verified photos'
-            '${_analyzing ? ' · verification in progress…' : ''}',
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-          ),
-          RegistrationFieldError(message: _error),
-          RegistrationStepNavigation(
-            onBack: widget.onBack,
-            onNext: _submit,
-            loading: _analyzing,
-            nextLabel: _analyzing ? 'Analyzing…' : 'Continue',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _photoSlot(BuildContext context, int index) {
-    final scheme = Theme.of(context).colorScheme;
-    final photo = index < _photos.length ? _photos[index] : null;
-    final radius = BorderRadius.circular(20);
-
-    if (photo == null) {
-      final isNext = index == _photos.length;
-      return AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Material(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          shape: RoundedRectangleBorder(
-            borderRadius: radius,
-            side: BorderSide(color: scheme.primary.withValues(alpha: isNext ? 0.35 : 0.15), width: 1.5),
-          ),
-          child: InkWell(
-            borderRadius: radius,
-            onTap: _analyzing ? null : _pickPhotos,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_analyzing && isNext)
-                  const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
-                else
-                  Icon(Icons.add_a_photo_outlined, size: 28, color: scheme.primary),
-                const SizedBox(height: 8),
-                Text(
-                  _analyzing && isNext ? 'Verifying…' : 'Upload',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final approved = photo.status == RegistrationPhotoStatus.approved;
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          border: Border.all(
-            color: photo.isProfile ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.3),
-            width: photo.isProfile ? 2 : 1,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              photo.localPath != null
-                  ? Image.file(File(photo.localPath!), fit: BoxFit.cover)
-                  : photo.imageUrl != null
-                      ? Image.network(photo.imageUrl!, fit: BoxFit.cover)
-                      : ColoredBox(color: scheme.surfaceContainerHighest),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black54],
-                    stops: [0.55, 1],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 6,
-                left: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: approved ? Colors.green.shade600 : scheme.surface,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(approved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
-                          size: 11, color: approved ? Colors.white : scheme.onSurface),
-                      const SizedBox(width: 3),
-                      Text(
-                        approved ? 'Verified' : 'Verifying',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: approved ? Colors.white : scheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 4,
-                right: 4,
-                child: Material(
-                  color: Colors.black45,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => _removePhoto(photo.id),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close_rounded, size: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 6,
-                right: 6,
-                bottom: 6,
-                child: photo.isProfile
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        decoration: BoxDecoration(
-                          gradient: DuoGradients.brand,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          'Profile photo',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
-                        ),
-                      )
-                    : InkWell(
-                        onTap: () => _setProfile(photo.id),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Set profile',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- Step 11: Review ---
-
-class StepReview extends ConsumerWidget {
-  const StepReview({
-    super.key,
-    required this.onSubmit,
-    required this.onBack,
-    required this.onEditStep,
-    this.loading = false,
-  });
-
-  final Future<void> Function() onSubmit;
-  final VoidCallback onBack;
-  final ValueChanged<int> onEditStep;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(registrationControllerProvider).data;
-    final scheme = Theme.of(context).colorScheme;
-    RegistrationPhoto? profilePhoto;
-    for (final photo in data.photos) {
-      if (photo.isProfile) {
-        profilePhoto = photo;
-        break;
-      }
-    }
-    profilePhoto ??= data.photos.isNotEmpty ? data.photos.first : null;
-
-    return RegistrationStepCard(
-      title: 'Review your profile',
-      subtitle: 'Check everything before you start matching across Nepal.',
-      child: Column(
-        children: [
-          if (profilePhoto != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: AspectRatio(
-                aspectRatio: 16 / 7,
-                child: profilePhoto.localPath != null
-                    ? Image.file(File(profilePhoto.localPath!), fit: BoxFit.cover)
-                    : ColoredBox(color: scheme.surfaceContainerHighest),
-              ),
-            ),
-          const SizedBox(height: 16),
-          _ReviewSection(title: registrationStepLabels[1]!, step: 1, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Phone', value: data.phone.isEmpty ? '—' : data.phone),
-            _ReviewRow(label: 'Email', value: data.email.isEmpty ? 'Not provided' : data.email),
-          ]),
-          const SizedBox(height: 12),
-          _ReviewSection(title: registrationStepLabels[2]!, step: 2, onEdit: onEditStep, children: [
-            _ReviewRow(label: 'Name', value: '${data.firstName} ${data.lastName}'.trim()),
-            _ReviewRow(label: 'Gender', value: labelForOption(genderOptions, data.gender)),
-            _ReviewRow(label: 'Date of birth', value: data.dateOfBirth),
-            _ReviewRow(label: 'Height', value: "${data.heightFeet}'${data.heightInches}\""),
-            _ReviewRow(label: 'Relationship goal', value: labelForOption(relationshipGoalOptions, data.relationshipGoal)),
-            _ReviewRow(label: 'Country', value: data.country),
-            _ReviewRow(label: 'Province', value: data.province),
-            _ReviewRow(label: 'District', value: data.district),
-            _ReviewRow(label: 'Municipality / City', value: data.municipality),
-            _ReviewRow(label: 'Current location', value: data.currentLocation),
-          ]),
-          const SizedBox(height: 12),
-          _ReviewSection(title: registrationStepLabels[3]!, step: 3, onEdit: onEditStep, children: [
-            _ReviewRow(
-              label: 'Verified photos',
-              value: '${data.photos.where((p) => p.status == RegistrationPhotoStatus.approved).length} photo(s)',
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-            ),
-            child: Text(
-              'You can add your education, religion, lifestyle, interests, partner preferences, and '
-              'bio anytime from your profile after you finish signing up.',
-              style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-            ),
-          ),
-          RegistrationStepNavigation(
-            onBack: onBack,
-            onNext: onSubmit,
-            nextLabel: 'Submit & Start Matching',
-            loading: loading,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewSection extends StatelessWidget {
-  const _ReviewSection({required this.title, required this.step, required this.onEdit, required this.children});
-
-  final String title;
-  final int step;
-  final ValueChanged<int> onEdit;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.15)),
-        color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18))),
-              OutlinedButton(
-                onPressed: () => onEdit(step),
-                style: OutlinedButton.styleFrom(
-                  shape: const StadiumBorder(),
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                ),
-                child: const Text('Edit'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewRow extends StatelessWidget {
-  const _ReviewRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
-          const SizedBox(height: 2),
-          Text(value.isEmpty ? '—' : value, style: TextStyle(fontSize: 14, color: scheme.onSurface)),
-        ],
-      ),
-    );
-  }
-}

@@ -310,7 +310,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     return Scaffold(
-      body: DuoAmbientBackground(
+      body: SizedBox.expand(
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {

@@ -1,3 +1,4 @@
+import '../auth/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -5,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
-import '../../widgets/duo_ui.dart';
 import 'registration_controller.dart';
 import 'registration_models.dart';
 import 'steps/registration_steps.dart';
 import 'steps/step_account.dart';
+import 'steps/step_photos.dart';
+import 'steps/step_review.dart';
 import 'widgets/registration_widgets.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -34,10 +36,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     return Scaffold(
-      body: DuoAmbientBackground(
+      body: SizedBox.expand(
         child: Column(
           children: [
-            _RegisterHeader(onClose: () => context.go(AppRoutes.login)),
+            _RegisterHeader(onClose: _close),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -96,6 +98,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
+  /// A signed-in member who hasn't finished onboarding is always routed back
+  /// to /register, so just navigating to /login did nothing. Sign out first.
+  Future<void> _close() async {
+    final auth = ref.read(authControllerProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      context.go(AppRoutes.login);
+      return;
+    }
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave registration?'),
+        content: const Text(
+          "You'll be signed out. Your progress is saved, so you can log in later to finish your profile.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Stay')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Leave')),
+        ],
+      ),
+    );
+    if (leave != true || !mounted) return;
+    await ref.read(authControllerProvider.notifier).logout();
+    if (mounted) context.go(AppRoutes.login);
+  }
+
   Widget _buildStep(RegistrationState reg) {
     final controller = ref.read(registrationControllerProvider.notifier);
 
@@ -137,10 +165,6 @@ class _RegisterHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
         child: Row(
           children: [
-            const DuoBrandLogo(size: 28)
-                .animate()
-                .fadeIn(duration: 320.ms)
-                .scale(begin: const Offset(0.92, 0.92), end: const Offset(1, 1)),
             const Spacer(),
             IconButton(
               onPressed: () {

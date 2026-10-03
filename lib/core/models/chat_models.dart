@@ -200,6 +200,7 @@ class Conversation extends Equatable {
     this.isPinned = false,
     this.notifyScreenshots = true,
     this.secureChat = false,
+    this.filterOffensive = true,
     this.matchCreatedAt,
   });
 
@@ -226,6 +227,7 @@ class Conversation extends Equatable {
       isPinned: json['is_pinned'] as bool? ?? false,
       notifyScreenshots: json['notify_screenshots'] as bool? ?? true,
       secureChat: json['secure_chat'] as bool? ?? false,
+      filterOffensive: json['filter_offensive'] as bool? ?? true,
     );
   }
 
@@ -243,6 +245,9 @@ class Conversation extends Equatable {
   final bool isPinned;
   final bool notifyScreenshots;
   final bool secureChat;
+
+  /// Hide profanity/insults sent to me in this chat (server-enforced).
+  final bool filterOffensive;
   final String? matchCreatedAt;
 
   String get displayName =>
@@ -260,6 +265,7 @@ class Conversation extends Equatable {
     bool? isPinned,
     bool? notifyScreenshots,
     bool? secureChat,
+    bool? filterOffensive,
     ChatMessage? lastMessage,
     String? lastMessageAt,
   }) =>
@@ -278,6 +284,7 @@ class Conversation extends Equatable {
         isPinned: isPinned ?? this.isPinned,
         notifyScreenshots: notifyScreenshots ?? this.notifyScreenshots,
         secureChat: secureChat ?? this.secureChat,
+        filterOffensive: filterOffensive ?? this.filterOffensive,
         matchCreatedAt: matchCreatedAt,
       );
 

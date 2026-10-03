@@ -226,11 +226,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     context,
                     notifyScreenshots: convo.notifyScreenshots,
                     secureChat: convo.secureChat,
+                    filterOffensive: convo.filterOffensive,
                   );
                   if (settings != null) {
                     await notifier.updateSettings(
                       notifyScreenshots: settings.notifyScreenshots,
                       secureChat: settings.secureChat,
+                      filterOffensive: settings.filterOffensive,
                     );
                   }
                 },

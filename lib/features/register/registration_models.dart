@@ -103,6 +103,8 @@ class RegistrationData extends Equatable {
     this.district = '',
     this.municipality = '',
     this.currentLocation = '',
+    this.latitude,
+    this.longitude,
     this.gpsEnabled = false,
     this.educationLevel = '',
     this.fieldOfStudy = '',
@@ -158,6 +160,8 @@ class RegistrationData extends Equatable {
   final String district;
   final String municipality;
   final String currentLocation;
+  final double? latitude;
+  final double? longitude;
   final bool gpsEnabled;
   final String educationLevel;
   final String fieldOfStudy;
@@ -211,6 +215,8 @@ class RegistrationData extends Equatable {
     String? district,
     String? municipality,
     String? currentLocation,
+    double? latitude,
+    double? longitude,
     bool? gpsEnabled,
     String? educationLevel,
     String? fieldOfStudy,
@@ -264,6 +270,8 @@ class RegistrationData extends Equatable {
       district: district ?? this.district,
       municipality: municipality ?? this.municipality,
       currentLocation: currentLocation ?? this.currentLocation,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       gpsEnabled: gpsEnabled ?? this.gpsEnabled,
       educationLevel: educationLevel ?? this.educationLevel,
       fieldOfStudy: fieldOfStudy ?? this.fieldOfStudy,
@@ -318,6 +326,8 @@ class RegistrationData extends Equatable {
       'district': district,
       'municipality': municipality,
       'currentLocation': currentLocation,
+      'latitude': latitude,
+      'longitude': longitude,
       'gpsEnabled': gpsEnabled,
       'educationLevel': educationLevel,
       'fieldOfStudy': fieldOfStudy,
@@ -371,6 +381,8 @@ class RegistrationData extends Equatable {
       district: json['district'] as String? ?? '',
       municipality: json['municipality'] as String? ?? '',
       currentLocation: json['currentLocation'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       gpsEnabled: json['gpsEnabled'] as bool? ?? false,
       educationLevel: json['educationLevel'] as String? ?? '',
       fieldOfStudy: json['fieldOfStudy'] as String? ?? '',
@@ -426,6 +438,8 @@ class RegistrationData extends Equatable {
         district,
         municipality,
         currentLocation,
+        latitude,
+        longitude,
         gpsEnabled,
         educationLevel,
         fieldOfStudy,

@@ -84,6 +84,7 @@ abstract final class ChatCacheSerialization {
       'is_pinned': conversation.isPinned,
       'notify_screenshots': conversation.notifyScreenshots,
       'secure_chat': conversation.secureChat,
+      'filter_offensive': conversation.filterOffensive,
     };
   }
 

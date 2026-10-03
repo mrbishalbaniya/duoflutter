@@ -34,6 +34,7 @@ class InsightsScreen extends ConsumerStatefulWidget {
 class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   late int? _matchId = widget.initialMatchId;
   MatchSession? _match;
+  DuoProfile? _otherPreview;
   Object? _error;
   bool _loading = false;
   int _generation = 0;
@@ -75,8 +76,13 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Widget build(BuildContext context) {
     final me = ref.watch(authControllerProvider).user?.profile;
     final fromChat = widget.initialMatchId != null;
-    final other = _match?.otherUserProfile;
+    // The insights response can take a while (AI analysis); until it arrives,
+    // show the person from the matches list instead of a "?" placeholder.
+    final listed = ref.watch(insightsMatchesProvider).valueOrNull;
+    final other = _match?.otherUserProfile ??
+        listed?.where((m) => m.id == _matchId).firstOrNull?.otherUserProfile;
     final otherName = (other?.displayName.isNotEmpty ?? false) ? other!.displayName : 'Your match';
+    _otherPreview = other;
 
     Widget body;
     if (!fromChat) {
@@ -144,7 +150,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
   Widget _content(DuoProfile? me, String otherName) {
     if (_loading && _match == null || (_matchId != null && _match == null && _error == null)) {
-      return _AnalysingLoader(me: me, other: _match?.otherUserProfile);
+      return _AnalysingLoader(me: me, other: _otherPreview);
     }
     if (_error != null && _match == null) {
       return DuoStateView(

@@ -246,12 +246,18 @@ class DioClient {
     }
   }
 
-  Future<Response<T>> upload<T>(String path, FormData formData) async {
+  Future<Response<T>> upload<T>(
+    String path,
+    FormData formData, {
+    ProgressCallback? onSendProgress,
+    Map<String, String>? headers,
+  }) async {
     try {
       return await dio.post<T>(
         path,
         data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+        options: Options(contentType: 'multipart/form-data', headers: headers),
+        onSendProgress: onSendProgress,
       );
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

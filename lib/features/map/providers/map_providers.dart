@@ -115,11 +115,8 @@ class MapLayerNotifier extends StateNotifier<MapLayerState> {
       for (final layer in baseMapStyles()) {
         enabled[layer.id] = false;
       }
-      enabled[baseStyle == 'satellite'
-          ? 'base-satellite'
-          : baseStyle == 'light'
-              ? 'base-standard-street'
-              : 'base-night'] = true;
+      // Dark/light now follow the app theme; only satellite is a manual choice.
+      enabled[baseStyle == 'satellite' ? 'base-satellite' : 'base-standard-street'] = true;
     }
     final activity = raw['activity'];
     if (activity is Map) {

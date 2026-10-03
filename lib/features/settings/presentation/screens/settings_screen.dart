@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/router/app_router.dart';
-import '../../../../widgets/duo_ui.dart';
 import '../../../auth/auth_controller.dart';
 import '../../domain/settings_domain.dart';
 import '../../models/settings_search.dart';
@@ -80,7 +79,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const SettingsAppBar(),
-      body: DuoAmbientBackground(
+      body: SizedBox.expand(
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {

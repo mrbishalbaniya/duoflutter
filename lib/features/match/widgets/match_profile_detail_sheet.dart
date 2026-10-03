@@ -1,3 +1,4 @@
+import '../../../core/security/screen_security.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,12 +43,20 @@ class _MatchProfileDetailSheetState extends ConsumerState<MatchProfileDetailShee
   @override
   void initState() {
     super.initState();
+    // Another member's full profile: block screenshots while it is open.
+    ScreenSecurity.acquire(this);
     // Web: `api.recordProfileVisit(profile.id)` when the sheet opens, so the
     // person sees you in their "Visited you" list.
     final profileId = widget.profile.id;
     if (profileId != null) {
       Future.microtask(() => ref.read(profileRepositoryProvider).recordVisit(profileId).catchError((_) {}));
     }
+  }
+
+  @override
+  void dispose() {
+    ScreenSecurity.release(this);
+    super.dispose();
   }
 
   @override
